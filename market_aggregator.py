@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-KO-Scanner Market Aggregator v1.0
+KO-Scanner Market Aggregator v2.0
 ==================================
 Zentraler Daten-Aggregator für die KO-Scanner Investment Suite.
 Läuft als GitHub Actions Cron-Job (täglich 22:15 UTC nach US-Schluss).
+Version 2.0: DE-Märkte (DAX40, MDAX, TecDAX, EuroStoxx), Sektor-Watchlisten,
+robustes Datenladen mit Fallback-Perioden.
 
 Ablauf:
   1. Lädt OHLCV-Daten für alle ~600 Ticker via yfinance (parallel)
@@ -79,6 +81,53 @@ NASDAQ100_EXTRA = [
     "VRSK","VRSN","WDAY","XEL","ZS",
 ]
 
+# ── DEUTSCHE MÄRKTE ───────────────────────────────────────────────────────────
+DAX40_TICKERS = [
+    "ADS.DE","AIR.DE","ALV.DE","BAS.DE","BAYN.DE","BMW.DE","BNR.DE",
+    "CBK.DE","CON.DE","1COV.DE","DBK.DE","DB1.DE","DHL.DE","DTE.DE",
+    "EOAN.DE","FRE.DE","HEI.DE","HEN3.DE","IFX.DE","INL.DE","LIN.DE",
+    "MBG.DE","MRK.DE","MTX.DE","MUV2.DE","P911.DE","PAH3.DE","PUMA.DE",
+    "QIA.DE","RHM.DE","RWE.DE","SAP.DE","SHL.DE","SIE.DE","SY1.DE",
+    "VNA.DE","VOW3.DE","ZAL.DE","ENR.DE","DHER.DE",
+]
+
+MDAX_TICKERS = [
+    "AFX.DE","AG1.DE","AIXA.DE","ARND.DE","BC8.DE","BOSS.DE","COP.DE",
+    "CSCO.DE","DEQ.DE","DWS.DE","EVD.DE","EVK.DE","FNTN.DE","GFK.DE",
+    "HAG.DE","HHFA.DE","HNR1.DE","HOT.DE","JEN.DE","KGX.DE","KSB.DE",
+    "LEG.DE","MDNT.DE","NDA.DE","NOEJ.DE","O2D.DE","PBB.DE","PSM.DE",
+    "SDAX.DE","SFQ.DE","SGL.DE","SKB.DE","SLT.DE","SMT.DE","STRN.DE",
+    "SY1.DE","TAG.DE","TLX.DE","TUI1.DE","UTDI.DE","WAF.DE","WCH.DE",
+]
+
+TECDAX_TICKERS = [
+    "AIXA.DE","ARND.DE","BB1.DE","CSCO.DE","EVNT.DE","FNTN.DE","IFX.DE",
+    "INH.DE","KNEBV.HE","NDX1.DE","NFON.DE","NTT.DE","PFV.DE","PSM.DE",
+    "QIAGEN.DE","RIB.DE","S92.DE","SAP.DE","SFQ.DE","SHL.DE","SIE.DE",
+    "SOW.DE","SRT3.DE","TPVG.DE","UTDI.DE","WAF.DE","WIB.DE","ZAL.DE",
+]
+
+EUROSTOXX_TICKERS = [
+    "ASML.AS","SAN.MC","OR.PA","MC.PA","SU.PA","BNP.PA","AIR.PA",
+    "DG.PA","RI.PA","CS.PA","SAP.DE","SIE.DE","ALV.DE","MBG.DE",
+    "PHIA.AS","ING.AS","RDSA.AS","ABN.AS","NN.AS","ADYEN.AS",
+    "ENI.MI","ENEL.MI","ISP.MI","UCG.MI","TIT.MI","STM.MI",
+    "NOVN.SW","ROG.SW","NESN.SW","AZN.L","SHEL.L","HSBA.L",
+]
+
+# ── SEKTOR-WATCHLISTEN ────────────────────────────────────────────────────────
+SECTOR_WATCHLISTS = {
+    "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET"],
+    "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML"],
+    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","RHM.DE"],
+    "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY"],
+    "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP"],
+    "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW"],
+    "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE"],
+    "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS"],
+    "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL"],
+}
+
 SECTOR_ETFS = [
     "SPY","QQQ","IWM","DIA","VTI","VEA","VWO","EFA",
     "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
@@ -100,8 +149,15 @@ CRYPTO_TICKERS = [
 def build_ticker_universe():
     seen = set()
     result = []
-    for t in SP500_TICKERS + NASDAQ100_EXTRA + SECTOR_ETFS + CRYPTO_TICKERS:
-        if t not in seen:
+    # Alle Quellen zusammenführen
+    all_sources = (
+        SP500_TICKERS + NASDAQ100_EXTRA +
+        DAX40_TICKERS + MDAX_TICKERS + TECDAX_TICKERS + EUROSTOXX_TICKERS +
+        SECTOR_ETFS + CRYPTO_TICKERS +
+        [t for wl in SECTOR_WATCHLISTS.values() for t in wl]
+    )
+    for t in all_sources:
+        if t and t not in seen:
             seen.add(t)
             result.append(t)
     return result
@@ -332,10 +388,21 @@ def process_ticker(ticker, hist_df):
         if hist_df is None or len(hist_df) < 30:
             return {"sym": ticker, "error": "insufficient_data", "bars": len(hist_df) if hist_df is not None else 0}
 
-        closes  = list(hist_df["Close"].dropna())
-        highs   = list(hist_df["High"].dropna())
-        lows    = list(hist_df["Low"].dropna())
-        volumes = list(hist_df["Volume"].fillna(0))
+        # Spalten robust extrahieren (auch bei MultiIndex)
+        def get_col(df, col):
+            if col in df.columns:
+                return list(df[col].dropna())
+            # MultiIndex fallback
+            for c in df.columns:
+                if str(c).startswith(col):
+                    return list(df[c].dropna())
+            return []
+
+        closes  = get_col(hist_df, "Close")
+        highs   = get_col(hist_df, "High")
+        lows    = get_col(hist_df, "Low")
+        vol_col = "Volume"
+        volumes = list(hist_df[vol_col].fillna(0)) if vol_col in hist_df.columns else [0]*len(closes)
 
         if len(closes) < 30:
             return {"sym": ticker, "error": "insufficient_data", "bars": len(closes)}
@@ -413,15 +480,19 @@ def fetch_batch(tickers, period="1y", max_workers=20):
     results = {}
 
     def fetch_one(ticker):
-        try:
-            df = yf.download(ticker, period=period, interval="1d",
-                             auto_adjust=True, progress=False, threads=False)
-            if df is not None and len(df) > 0:
-                return ticker, df
-            return ticker, None
-        except Exception as e:
-            log.warning(f"  {ticker}: {e}")
-            return ticker, None
+        # Versuche mehrere Perioden falls primär leer
+        for p in [period, "2y", "6mo"]:
+            try:
+                df = yf.download(ticker, period=p, interval="1d",
+                                 auto_adjust=True, progress=False, threads=False)
+                if df is not None and len(df) >= 20:
+                    # Sicherstellen dass Spalten korrekt sind (MultiIndex flatten)
+                    if hasattr(df.columns, 'levels'):
+                        df.columns = df.columns.get_level_values(0)
+                    return ticker, df
+            except Exception as e:
+                log.warning(f"  {ticker} ({p}): {e}")
+        return ticker, None
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(fetch_one, t): t for t in tickers}
@@ -549,7 +620,7 @@ def push_to_cloudflare_kv(data, key="master_market_data"):
 def main():
     start_time = time.time()
     log.info("=" * 60)
-    log.info("KO-Scanner Market Aggregator v1.0")
+    log.info("KO-Scanner Market Aggregator v2.0")
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     log.info("=" * 60)
 
@@ -630,6 +701,21 @@ def main():
         "meanReversion":  [{"sym": r["sym"], "overheat": r["overheat"], "rsi": r["rsi"],
                             "bbPos": r["bbPos"], "price": r["price"]}
                            for r in mean_reversion],
+        "sectorWatchlists": {
+            name: [next((r for r in results if r["sym"] == t), {"sym": t, "error": "no_data"})
+                   for t in tickers]
+            for name, tickers in SECTOR_WATCHLISTS.items()
+        },
+        "markets": {
+            "dax40":    [r for r in results if r["sym"] in DAX40_TICKERS],
+            "mdax":     [r for r in results if r["sym"] in MDAX_TICKERS],
+            "tecdax":   [r for r in results if r["sym"] in TECDAX_TICKERS],
+            "eurostoxx":[r for r in results if r["sym"] in EUROSTOXX_TICKERS],
+            "sp500":    [r for r in results if r["sym"] in SP500_TICKERS],
+            "nasdaq100":[r for r in results if r["sym"] in NASDAQ100_EXTRA],
+            "etfs":     [r for r in results if r["sym"] in SECTOR_ETFS],
+            "crypto":   [r for r in results if r["sym"] in CRYPTO_TICKERS],
+        },
         "tickers":        results,  # Alle Ergebnisse
     }
 
