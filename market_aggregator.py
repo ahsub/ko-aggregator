@@ -146,6 +146,37 @@ CRYPTO_TICKERS = [
     "ADA-USD","AVAX-USD","DOGE-USD","DOT-USD","MATIC-USD",
 ]
 
+# ── FTSE ALL-WORLD TIER-1 (NYSE/Nasdaq ADRs) ─────────────────────────────────
+# Größte Nicht-US Titel mit echten US-Listings — gute Datenqualität
+INTL_TIER1 = [
+    # Europa — Technologie & Halbleiter
+    "ASML","STM","ERIC","NOK","SAP",
+    # Europa — Healthcare & Pharma
+    "NVO","AZN","NOVN","ROG","SNY","GSK","BAYRY",
+    # Europa — Energie & Industrie
+    "SHEL","BP","TTE","ENEL","ENI",
+    # Europa — Finanzen
+    "UBS","CS","ING","INGA","BCS","HSBC",
+    # Europa — Konsum & Luxus
+    "LVMUY","CFRUY","ALIZF","PPRUY",
+    # Asien — Technologie
+    "TSM","2330.TW","Samsung","005930.KS",
+    # Asien — Konsum & E-Commerce
+    "BABA","JD","PDD","BIDU","9988.HK",
+    # Japan
+    "TM","HMC","SONY","NTT","MUFG","SoftBank",
+    # Kanada & Australien
+    "SHOP","CNQ","SU","BHP","RIO",
+    # Schwellenländer Blue Chips
+    "VALE","PBR","ITUB","BBD",
+]
+
+# Sektor-ETFs für Relative-Stärke Berechnung (vs. SPY)
+RS_SECTOR_ETFS = [
+    "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
+    "SMH","SOXX","IBB","XBI","ARKK",
+]
+
 def build_ticker_universe():
     seen = set()
     result = []
@@ -153,7 +184,7 @@ def build_ticker_universe():
     all_sources = (
         SP500_TICKERS + NASDAQ100_EXTRA +
         DAX40_TICKERS + MDAX_TICKERS + TECDAX_TICKERS + EUROSTOXX_TICKERS +
-        SECTOR_ETFS + CRYPTO_TICKERS +
+        INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
         [t for wl in SECTOR_WATCHLISTS.values() for t in wl]
     )
     for t in all_sources:
@@ -620,7 +651,7 @@ def push_to_cloudflare_kv(data, key="master_market_data"):
 def main():
     start_time = time.time()
     log.info("=" * 60)
-    log.info("KO-Scanner Market Aggregator v2.0")
+    log.info("KO-Scanner Market Aggregator v2.1")
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     log.info("=" * 60)
 
@@ -678,6 +709,66 @@ def main():
         key=lambda x: x.get("overheat", 0), reverse=True
     )[:20]
 
+    # 5b. Sektor Relative Stärke vs. SPY berechnen
+    log.info(f"\n📐 Berechne Sektor Relative Stärke...")
+    sector_rs = {}
+    spy_data  = hist_data.get("SPY")
+    if spy_data is not None and len(spy_data) >= 6:
+        spy_closes = list(spy_data["Close"].dropna())
+        spy_ret5  = (spy_closes[-1] / spy_closes[-6] - 1) * 100 if len(spy_closes) >= 6 else 0
+        spy_ret20 = (spy_closes[-1] / spy_closes[-21] - 1) * 100 if len(spy_closes) >= 21 else 0
+        spy_ret60 = (spy_closes[-1] / spy_closes[-61] - 1) * 100 if len(spy_closes) >= 61 else 0
+
+        for etf in RS_SECTOR_ETFS:
+            etf_data = hist_data.get(etf)
+            if etf_data is None or len(etf_data) < 6:
+                continue
+            etf_closes = list(etf_data["Close"].dropna())
+            try:
+                ret5  = (etf_closes[-1] / etf_closes[-6] - 1) * 100  if len(etf_closes) >= 6  else None
+                ret20 = (etf_closes[-1] / etf_closes[-21] - 1) * 100 if len(etf_closes) >= 21 else None
+                ret60 = (etf_closes[-1] / etf_closes[-61] - 1) * 100 if len(etf_closes) >= 61 else None
+
+                rs5  = round(ret5  - spy_ret5,  2) if ret5  is not None else None
+                rs20 = round(ret20 - spy_ret20, 2) if ret20 is not None else None
+                rs60 = round(ret60 - spy_ret60, 2) if ret60 is not None else None
+
+                # Trend: steigend wenn RS5 > RS20
+                trend = "steigend" if rs5 and rs20 and rs5 > rs20 else "fallend"
+
+                sector_rs[etf] = {
+                    "sym":   etf,
+                    "price": round(etf_closes[-1], 2),
+                    "rs5":   rs5,   # 5T RS vs SPY
+                    "rs20":  rs20,  # 20T RS vs SPY
+                    "rs60":  rs60,  # 60T RS vs SPY
+                    "ret5":  round(ret5, 2)  if ret5  else None,
+                    "ret20": round(ret20, 2) if ret20 else None,
+                    "trend": trend,
+                    # Rotation Signal: positiv RS + steigend = Geld fließt rein
+                    "inflow": rs5 is not None and rs5 > 0 and trend == "steigend",
+                }
+            except Exception as e:
+                log.warning(f"  RS Fehler {etf}: {e}")
+
+        # Top Sektoren nach RS5 sortiert
+        rs_sorted = sorted(
+            [v for v in sector_rs.values() if v.get("rs5") is not None],
+            key=lambda x: x["rs5"], reverse=True
+        )
+        log.info(f"  Top-3 Sektoren (RS5): {[r['sym'] for r in rs_sorted[:3]]}")
+        log.info(f"  Schwächste (RS5):     {[r['sym'] for r in rs_sorted[-3:]]}")
+
+    # 5c. Swing-Trading Kandidaten
+    swing_candidates = sorted(
+        [r for r in valid
+         if r.get("score", 0) >= 45
+         and r.get("bullSignals", 0) >= 1
+         and r.get("rsi") is not None and r["rsi"] < 60
+         and r.get("macdHist") is not None],
+        key=lambda x: x.get("score", 0), reverse=True
+    )[:20]
+
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
     master  = {
@@ -713,9 +804,14 @@ def main():
             "eurostoxx":[r for r in results if r["sym"] in EUROSTOXX_TICKERS],
             "sp500":    [r for r in results if r["sym"] in SP500_TICKERS],
             "nasdaq100":[r for r in results if r["sym"] in NASDAQ100_EXTRA],
+            "intl":     [r for r in results if r["sym"] in INTL_TIER1],
             "etfs":     [r for r in results if r["sym"] in SECTOR_ETFS],
             "crypto":   [r for r in results if r["sym"] in CRYPTO_TICKERS],
         },
+        "sectorRS":       sector_rs,   # Sektor Relative Stärke vs. SPY
+        "swingCandidates": [{"sym": r["sym"], "score": r["score"], "price": r["price"],
+                             "rsi": r["rsi"], "macdHist": r.get("macdHist"), "regime": r["regime"]}
+                            for r in swing_candidates],
         "tickers":        results,  # Alle Ergebnisse
     }
 
