@@ -94,133 +94,269 @@ def validate_data_freshness(results):
 
 # ── TICKER UNIVERSUM ──────────────────────────────────────────────────────────
 
+# ══════════════════════════════════════════════════════════════════════════════
+# TICKER UNIVERSUM v3.0  (~600 Titel)
+# Struktur: US-Aktien | DE/EU Aktien | FTSE Non-US | Sektor-ETFs US+ExUS | Crypto
+# Datenquelle: Yahoo Finance (Xetra .DE fuer DE/EU — beste Datenqualitaet)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── US LARGE/MID CAP (S&P500 Kern + Nasdaq Wachstum) ─────────────────────────
 SP500_TICKERS = [
-    "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AVGO","JPM","LLY",
-    "UNH","XOM","V","MA","COST","PG","HD","JNJ","ORCL","MRK","ABBV","BAC",
-    "NFLX","WMT","AMD","KO","CRM","PEP","TMO","CVX","MCD","CSCO","ADBE",
-    "ABT","ACN","DHR","LIN","INTC","WFC","TXN","NEE","PM","HON","AMGN",
-    "IBM","CAT","UPS","RTX","GS","INTU","SPGI","BLK","SYK","GILD","MDT",
-    "LOW","AXP","REGN","ISRG","VRTX","PLD","ELV","MO","C","CVS","ADP",
-    "TJX","SCHW","NOW","ZTS","BKNG","DE","DUK","SO","TGT","BSX","CI",
-    "AON","MMC","SHW","CME","CB","ITW","HUM","MCO","COP","EOG","SLB",
-    "BDX","KLAC","LRCX","SNPS","CDNS","MCHP","ADI","AMAT","MU","QCOM",
-    "PANW","CRWD","FTNT","DDOG","SNOW","PLTR","UBER","ABNB","LYFT","SQ",
-    "SHOP","MELI","SE","GRAB","COIN","RBLX","HOOD","SOFI","AFRM","UPST",
-    "GLW","TXN","MRVL","MSTR","SMCI","ARM","ASML","TSM","SAMSUNG","BABA",
-    "JD","PDD","NIO","XPEV","LI","BIDU","NTES","TCOM","TIGR","FUTU",
-    "RIVN","LCID","F","GM","STLA","TM","HMC","VOW3.DE","BMW.DE","MBG.DE",
-    "GE","GEV","BA","LMT","RTX","NOC","GD","HII","TDG","HWM","SPR",
-    "AMSC","ENPH","FSLR","SEDG","RUN","ARRY","NOVA","BE","PLUG","BLDP",
-    "UNP","CSX","NSC","CP","CNI","WAB","TT","CARR","OTIS","JCI","EMR",
-    "ROK","AME","LDOS","SAIC","CACI","BAH","KTOS","AXON","TNET","HUBS",
-    "TEAM","ZM","DOCU","BOX","DBX","TWLO","DDOG","MDB","ESTC","CFLT",
-    "NET","ZS","OKTA","S","SAIL","CYBER","HACK","BUG","CIBR",
-    "ALV.DE","SAP.DE","SIE.DE","RHM.DE","DTE.DE","BAYN.DE","ADS.DE",
-    "DBK.DE","MUV2.DE","BAS.DE","HEN3.DE","MRK.DE","HAG.DE","EOAN.DE",
-    "IFX.DE","MTX.DE","CBK.DE","HNR1.DE","VOW3.DE","BMW.DE",
+    # Mega-Cap Tech
+    "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","TSLA","AVGO","ORCL",
+    # Financials
+    "JPM","BAC","WFC","GS","MS","BLK","SCHW","AXP","CB","MMC","AON","CME","SPGI","MCO",
+    # Healthcare
+    "UNH","LLY","JNJ","ABT","MRK","ABBV","TMO","DHR","SYK","BSX","MDT","ELV","CI","HUM",
+    "ISRG","REGN","VRTX","GILD","AMGN","BMY","PFE","CVS","ZTS","IDXX","A","IQV",
+    # Consumer
+    "COST","WMT","HD","MCD","SBUX","TGT","LOW","TJX","BKNG","MAR","HLT","YUM",
+    "NKE","PG","KO","PEP","PM","MO","CL","EL","CHD",
+    # Industrials
+    "CAT","HON","UPS","DE","GE","GEV","BA","LMT","RTX","NOC","GD","HII","TDG","KTOS","AXON",
+    "UNP","CSX","NSC","TT","CARR","OTIS","JCI","EMR","ROK","AME","ITW","ETN","PH","IR",
+    # Energy
+    "XOM","CVX","COP","EOG","SLB","MPC","PSX","VLO","OXY","DVN","HAL","BKR","FANG",
+    # Utilities & REITs
+    "NEE","DUK","SO","AEP","D","SRE","EXC","PLD","AMT","EQIX","CCI","PSA","O","VICI",
+    # Tech & Software
+    "V","MA","INTU","ADBE","CRM","NOW","SNPS","CDNS","ANSS","ADSK","WDAY","TEAM",
+    "PANW","CRWD","FTNT","ZS","OKTA","S","DDOG","MDB","SNOW","NET","CFLT","ESTC",
+    "QCOM","TXN","ADI","MCHP","NXPI","KLAC","LRCX","AMAT","MU","WDC","STX",
+    "IBM","CSCO","ACN","HPQ","HPE","DELL","NTAP",
+    # Semiconductors / AI
+    "ARM","SMCI","MRVL","MSTR","PLTR","COIN",
+    # E-Commerce / Consumer Tech
+    "NFLX","UBER","ABNB","LYFT","RBLX","SNAP","PINS","MTCH","ZM","DOCU",
+    "SHOP","MELI","SE","GRAB","SQ","HOOD","SOFI","AFRM","UPST","PYPL",
+    # China ADRs (US-listed)
+    "BABA","JD","PDD","BIDU","NTES","TCOM","FUTU","NIO","XPEV","LI",
+    # Auto
+    "GM","F","RIVN","LCID","STLA","TM","HMC",
+    # Materials
+    "LIN","APD","ECL","SHW","FCX","NEM","GOLD","ALB","MP",
+    # Biotech / Pharma Growth
+    "MRNA","BNTX","BIIB","ILMN","SGEN","RARE","EXAS","INCY","NBIX","ALLO",
+    "VKTX","RYTM","ACAD","MRUS","PRCT",
+    # Clean Energy
+    "ENPH","FSLR","SEDG","RUN","ARRY","NOVA","BE","PLUG","BLDP","NEE",
+    # Fintech
+    "HOOD","AFRM","UPST","SOFI",
+    # Misc Growth
+    "GLW","LDOS","SAIC","CACI","BAH","HUBS","ZI","GTLB","BILL","PCTY",
 ]
 
 NASDAQ100_EXTRA = [
-    "ADSK","ANSS","BIIB","CHTR","CPRT","CTAS","DLTR","EBAY","EXC","FAST",
-    "FANG","IDXX","ILMN","KDP","KHC","LULU","MAR","MELI","MNST","MRNA",
-    "MTCH","NXPI","ODFL","PAYX","PCAR","PDD","ROST","SBUX","SIRI","TMUS",
-    "VRSK","VRSN","WDAY","XEL","ZS",
+    "ADSK","FAST","IDXX","KDP","KHC","LULU","MNST","ODFL","PAYX","PCAR",
+    "ROST","SIRI","TMUS","VRSK","VRSN","XEL","CPRT","CTAS","DLTR","EBAY","EXC",
 ]
 
-# ── DEUTSCHE MÄRKTE ───────────────────────────────────────────────────────────
+# ── DEUTSCHE MAERKTE (Xetra .DE — beste yfinance Verfuegbarkeit) ──────────────
 DAX40_TICKERS = [
     "ADS.DE","AIR.DE","ALV.DE","BAS.DE","BAYN.DE","BMW.DE","BNR.DE",
     "CBK.DE","CON.DE","1COV.DE","DBK.DE","DB1.DE","DHL.DE","DTE.DE",
     "EOAN.DE","FRE.DE","HEI.DE","HEN3.DE","IFX.DE","INL.DE","LIN.DE",
-    "MBG.DE","MRK.DE","MTX.DE","MUV2.DE","P911.DE","PAH3.DE","PUMA.DE",
-    "QIA.DE","RHM.DE","RWE.DE","SAP.DE","SHL.DE","SIE.DE","SY1.DE",
-    "VNA.DE","VOW3.DE","ZAL.DE","ENR.DE","DHER.DE",
+    "MBG.DE","MRK.DE","MTX.DE","MUV2.DE","P911.DE","PAH3.DE","QIA.DE",
+    "RHM.DE","RWE.DE","SAP.DE","SHL.DE","SIE.DE","SY1.DE",
+    "VNA.DE","VOW3.DE","ZAL.DE","ENR.DE","DHER.DE","PUMA.DE",
 ]
 
 MDAX_TICKERS = [
-    "AFX.DE","AG1.DE","AIXA.DE","ARND.DE","BC8.DE","BOSS.DE","COP.DE",
-    "CSCO.DE","DEQ.DE","DWS.DE","EVD.DE","EVK.DE","FNTN.DE","GFK.DE",
-    "HAG.DE","HHFA.DE","HNR1.DE","HOT.DE","JEN.DE","KGX.DE","KSB.DE",
-    "LEG.DE","MDNT.DE","NDA.DE","NOEJ.DE","O2D.DE","PBB.DE","PSM.DE",
-    "SDAX.DE","SFQ.DE","SGL.DE","SKB.DE","SLT.DE","SMT.DE","STRN.DE",
-    "SY1.DE","TAG.DE","TLX.DE","TUI1.DE","UTDI.DE","WAF.DE","WCH.DE",
+    "AFX.DE","AG1.DE","AIXA.DE","BC8.DE","BOSS.DE","DEQ.DE","DWS.DE",
+    "EVD.DE","EVK.DE","FNTN.DE","HAG.DE","HHFA.DE","HNR1.DE","HOT.DE",
+    "JEN.DE","KGX.DE","LEG.DE","NDA.DE","NOEJ.DE","O2D.DE","PBB.DE",
+    "PSM.DE","SFQ.DE","SGL.DE","TAG.DE","TLX.DE","TUI1.DE","UTDI.DE",
+    "WAF.DE","WCH.DE","KSB.DE","SMT.DE","GFK.DE","ARND.DE",
 ]
 
 TECDAX_TICKERS = [
-    "AIXA.DE","ARND.DE","BB1.DE","CSCO.DE","EVNT.DE","FNTN.DE","IFX.DE",
-    "INH.DE","KNEBV.HE","NDX1.DE","NFON.DE","NTT.DE","PFV.DE","PSM.DE",
-    "QIAGEN.DE","RIB.DE","S92.DE","SAP.DE","SFQ.DE","SHL.DE","SIE.DE",
-    "SOW.DE","SRT3.DE","TPVG.DE","UTDI.DE","WAF.DE","WIB.DE","ZAL.DE",
+    "AIXA.DE","BB1.DE","EVNT.DE","FNTN.DE","IFX.DE","INH.DE",
+    "NDX1.DE","PFV.DE","PSM.DE","S92.DE","SAP.DE","SFQ.DE","SHL.DE",
+    "SIE.DE","SOW.DE","SRT3.DE","UTDI.DE","WAF.DE","ZAL.DE",
 ]
 
+# ── EUROSTOXX 50 + STOXX Europe 600 Top (Heimatboersen) ──────────────────────
 EUROSTOXX_TICKERS = [
-    "ASML.AS","SAN.MC","OR.PA","MC.PA","SU.PA","BNP.PA","AIR.PA",
-    "DG.PA","RI.PA","CS.PA","SAP.DE","SIE.DE","ALV.DE","MBG.DE",
-    "PHIA.AS","ING.AS","RDSA.AS","ABN.AS","NN.AS","ADYEN.AS",
-    "ENI.MI","ENEL.MI","ISP.MI","UCG.MI","TIT.MI","STM.MI",
-    "NOVN.SW","ROG.SW","NESN.SW","AZN.L","SHEL.L","HSBA.L",
+    # Frankreich (.PA)
+    "OR.PA","MC.PA","SU.PA","BNP.PA","AIR.PA","DG.PA","RI.PA","CS.PA",
+    "SAN.PA","CAP.PA","DSY.PA","HO.PA","KER.PA","ML.PA","ORA.PA","SGO.PA",
+    "STM.PA","TTE.PA","VIE.PA","WLN.PA","ACA.PA","GLE.PA","LR.PA","RNO.PA",
+    # Niederlande (.AS)
+    "ASML.AS","PHIA.AS","ING.AS","ABN.AS","NN.AS","ADYEN.AS","HEIA.AS",
+    "AKZA.AS","DSM.AS","INGA.AS","MT.AS","REN.AS","RAND.AS","WKL.AS",
+    # Italien (.MI)
+    "ENI.MI","ENEL.MI","ISP.MI","UCG.MI","STM.MI","LDO.MI","PRY.MI",
+    "TIT.MI","MB.MI","RACE.MI","G.MI","SRG.MI",
+    # Spanien (.MC)
+    "SAN.MC","BBVA.MC","ITX.MC","IBE.MC","REP.MC","FER.MC","ACS.MC","TEF.MC",
+    # Schweiz (.SW)
+    "NOVN.SW","ROG.SW","NESN.SW","ABBN.SW","ZURN.SW","LONN.SW","GEBN.SW",
+    "SIKA.SW","GIVN.SW","SLHN.SW","ALC.SW","HOLN.SW","PGHN.SW",
+    # UK (.L)
+    "AZN.L","SHEL.L","HSBA.L","ULVR.L","RIO.L","BP.L","GSK.L","REL.L",
+    "BATS.L","DGE.L","NG.L","VOD.L","BA.L","EXPN.L","LSEG.L","PRU.L",
+    # Schweden (.ST)
+    "ERICB.ST","VOLVA.ST","SAND.ST","SEB-A.ST","SWED-A.ST","ATCO-A.ST",
+    # Daenemark (.CO)
+    "NOVO-B.CO","CARL-B.CO","MAERSK-B.CO","DSV.CO","ORSTED.CO",
+    # Finnland (.HE)
+    "NOKIA.HE","FORTUM.HE","SAMPO.HE","KNEBV.HE",
+    # Belgien (.BR)
+    "UCB.BR","AB.BR","ABI.BR","GLPG.BR",
 ]
 
-# ── SEKTOR-WATCHLISTEN ────────────────────────────────────────────────────────
-SECTOR_WATCHLISTS = {
-    "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET"],
-    "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML"],
-    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","RHM.DE"],
-    "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY"],
-    "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP"],
-    "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW"],
-    "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE"],
-    "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS"],
-    "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL"],
-}
-
-SECTOR_ETFS = [
-    "SPY","QQQ","IWM","DIA","VTI","VEA","VWO","EFA",
-    "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
-    "SMH","SOXX","IGV","HACK","CIBR","ARKK","ARKG","ARKW","ARKF",
-    "GLD","SLV","USO","UNG","PDBC",
-    "TLT","IEF","SHY","HYG","LQD","EMB","BND",
-    "VNQ","REET","IYR",
-    "EWJ","EWG","EWU","EWC","EWA","EWZ","FXI","KWEB","MCHI",
-    "IAU","GLDM","BAR",
-    "XBI","IBB","ARKG",
-    "BOTZ","ROBO","IRBO","AIQ",
+# ── FTSE ALL-WORLD NON-US TOP 150 ─────────────────────────────────────────────
+# ADRs (US-listed) bevorzugt — bessere yfinance-Datenqualitaet
+# Heimatboersen als Fallback fuer Titel ohne liquides ADR
+INTL_TIER1 = [
+    # Europa — Technologie (ADR/US-listed)
+    "ASML","STM","ERIC","NOK","SAP","INFN","KEYS",
+    # Europa — Healthcare (ADR)
+    "NVO","AZN","NOVN","ROG","SNY","GSK","BAYRY","RHHBY","NVCR",
+    # Europa — Energie & Rohstoffe (ADR)
+    "SHEL","BP","TTE","ENEL","E","ENGI","SQM","RIO","BHP","VALE","SCCO",
+    # Europa — Finanzen (ADR)
+    "UBS","ING","INGA","BCS","HSBC","DB","CS",
+    # Europa — Konsum & Luxus (ADR)
+    "LVMUY","CFRUY","PPRUY","HESAY","BURBY","ADDYY",
+    # Europa — Industrie (ADR)
+    "SIEGY","ATLKY","VOLVY","ABB","DSDVY",
+    # Japan (ADR)
+    "TM","HMC","SONY","NTT","MUFG","SMFG","MFG","NTDOY","KYOCY","FANUY",
+    "CCOEY","ITOCY","MARUY","7203.T","6758.T","9984.T",
+    # Suedkorea (ADR + Heimat)
+    "005930.KS","000660.KS","051910.KS","SSNLF",
+    # Taiwan
+    "TSM","2330.TW","2454.TW","2317.TW","2382.TW",
+    # China/Hongkong (ADR + HK-listed)
+    "BABA","JD","PDD","BIDU","9988.HK","0700.HK","3690.HK","1810.HK",
+    "TCEHY","BYDDY","NIO","XPEV","LI",
+    # Indien (ADR)
+    "INFY","WIT","HDB","IBN","VEDL","RDY","TTM",
+    # Kanada (US-listed)
+    "SHOP","CNQ","SU","CNI","CP","TD","RY","BNS","ENB","TRP","NTR","CCO",
+    # Australien (ADR)
+    "BHP","RIO","WDS","ORG",
+    # Brasilien (ADR)
+    "VALE","PBR","ITUB","BBD","ABEV","BRKM",
+    # Mexiko/Latam
+    "AMX","FMXB","GMEXICOB.MX",
+    # Suedafrika / EM Sonstiges
+    "NPN.JO","PROSSY","NPSNY",
+    # Israel Tech
+    "CHKP","NICE","CYBR","WIX","MNDY","GLBE","GTLB",
 ]
 
+# ── SEKTOR-ETFs USA (2-5 pro Sektor) ─────────────────────────────────────────
+# Breite Markt-Benchmarks
+SECTOR_ETFS_BROAD = [
+    "SPY","QQQ","IWM","DIA","VTI","MDY","IJR",          # US Broad
+    "VEA","VWO","EFA","EEM","IEFA","IEMG",               # Ex-US Broad
+    "ACWI","VT","URTH",                                  # World
+]
+
+# US Sektoren (SPDR XL-Familie + Alternativen)
+SECTOR_ETFS_US = [
+    # Technologie
+    "XLK","VGT","FTEC","IYW","QTEC",
+    # Semiconductors
+    "SMH","SOXX","SOXQ","USD",
+    # Software / Cyber
+    "IGV","BUG","CIBR","HACK","WCLD",
+    # Financials
+    "XLF","VFH","IYF","KRE","KBE",
+    # Healthcare
+    "XLV","VHT","IYH",
+    # Biotech / Pharma
+    "XBI","IBB","ARKG","PJP","BBP",
+    # Energie
+    "XLE","VDE","IYE","OIH","XOP",
+    # Industrials
+    "XLI","VIS","IYJ",
+    # Defense & Aerospace
+    "ITA","XAR","DFEN","PPA",
+    # Consumer Discretionary
+    "XLY","VCR","IYC",
+    # Consumer Staples
+    "XLP","VDC","IYK",
+    # Utilities
+    "XLU","VPU","IDU",
+    # Real Estate
+    "XLRE","VNQ","IYR","REET",
+    # Materials
+    "XLB","VAW","IYM",
+    # Communication
+    "XLC","VOX","IYZ",
+    # Clean Energy / ESG
+    "ICLN","QCLN","CNRG","ACES","ESGU",
+    # AI & Robotics
+    "BOTZ","ROBO","IRBO","AIQ","THNQ",
+    # Crypto-related
+    "BITO","GBTC","ETHA",
+    # Commodities
+    "GLD","IAU","GLDM","SLV","PPLT","PDBC","DJP","USO","UNG","CORN",
+    # Bonds
+    "TLT","IEF","SHY","HYG","LQD","EMB","BND","VCIT","VCSH","TIPS",
+]
+
+# Ex-US Sektoren (iShares / Vanguard international)
+SECTOR_ETFS_EXUS = [
+    # Europa
+    "EZU","VGK","IEUR","FEZ","EWG","EWU","EWF","EWI","EWQ","EWP","EWN","EWD","EWL",
+    # Asien Developed
+    "EWJ","EWA","EWH","EWS","EWY",
+    # Asien Emerging
+    "FXI","KWEB","MCHI","EWT","INDA","VNM",
+    # Latam
+    "EWZ","EWW","ILF",
+    # Sector Ex-US
+    "IXUS","VXUS",
+    # Ex-US Technologie
+    "IFRA","IQLT",
+    # Ex-US Energie
+    "IXC",
+    # Ex-US Healthcare
+    "IXJ",
+    # Ex-US Financials
+    "IXG",
+    # Schwellenlaender Sektoren
+    "EMXC","EEMS","EMSG",
+]
+
+# Zusammengefasst (fuer Aggregator)
+SECTOR_ETFS = list(dict.fromkeys(
+    SECTOR_ETFS_BROAD + SECTOR_ETFS_US + SECTOR_ETFS_EXUS
+))
+
+# ── KRYPTO ────────────────────────────────────────────────────────────────────
 CRYPTO_TICKERS = [
     "BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD",
     "ADA-USD","AVAX-USD","DOGE-USD","DOT-USD","MATIC-USD",
+    "LINK-USD","UNI-USD","ATOM-USD","LTC-USD","BCH-USD",
 ]
 
-# ── FTSE ALL-WORLD TIER-1 (NYSE/Nasdaq ADRs) ─────────────────────────────────
-# Größte Nicht-US Titel mit echten US-Listings — gute Datenqualität
-INTL_TIER1 = [
-    # Europa — Technologie & Halbleiter
-    "ASML","STM","ERIC","NOK","SAP",
-    # Europa — Healthcare & Pharma
-    "NVO","AZN","NOVN","ROG","SNY","GSK","BAYRY",
-    # Europa — Energie & Industrie
-    "SHEL","BP","TTE","ENEL","ENI",
-    # Europa — Finanzen
-    "UBS","CS","ING","INGA","BCS","HSBC",
-    # Europa — Konsum & Luxus
-    "LVMUY","CFRUY","ALIZF","PPRUY",
-    # Asien — Technologie
-    "TSM","2330.TW","Samsung","005930.KS",
-    # Asien — Konsum & E-Commerce
-    "BABA","JD","PDD","BIDU","9988.HK",
-    # Japan
-    "TM","HMC","SONY","NTT","MUFG","SoftBank",
-    # Kanada & Australien
-    "SHOP","CNQ","SU","BHP","RIO",
-    # Schwellenländer Blue Chips
-    "VALE","PBR","ITUB","BBD",
-]
+# ── SEKTOR-WATCHLISTEN (fuer Deep-Dive & EIC-Vorschlaege) ────────────────────
+SECTOR_WATCHLISTS = {
+    "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET","CRDO","ALAB"],
+    "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
+    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","RHM.DE","BA.L","AIR.PA"],
+    "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
+    "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP","ICLN","QCLN"],
+    "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
+    "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE","RHHBY"],
+    "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS","ONTO","ACLS"],
+    "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN","HOOD"],
+    "LUXURY_EU":    ["MC.PA","OR.PA","RI.PA","KER.PA","LVMUY","CFRUY","PPRUY","HESAY","ADDYY","BURBY"],
+    "JAPAN_TECH":   ["TM","SONY","6758.T","NTDOY","KYOCY","FANUY","9984.T","CCOEY"],
+    "EM_GROWTH":    ["TSM","BABA","PDD","INFY","VALE","ITUB","NU","STNE","SE","GRAB"],
+}
 
-# Sektor-ETFs für Relative-Stärke Berechnung (vs. SPY)
+# ── RS-REFERENZ ETFs fuer Sektor Relative-Staerke ─────────────────────────────
 RS_SECTOR_ETFS = [
     "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
-    "SMH","SOXX","IBB","XBI","ARKK",
+    "SMH","SOXX","IBB","XBI","ARKK","BOTZ","ITA","ICLN","VNQ",
+    # Ex-US RS
+    "EZU","EWJ","EWG","FXI","INDA","EWZ","EWY","EWT",
 ]
 
 def build_ticker_universe():
@@ -233,6 +369,8 @@ def build_ticker_universe():
         INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
         [t for wl in SECTOR_WATCHLISTS.values() for t in wl]
     )
+    # Filter: keine leeren Strings, keine bekannt ungueltige Symbole
+    BAD_SYMS = {"SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE","STRN.DE","SKB.DE","SLT.DE","ARND.DE"}
     for t in all_sources:
         if t and t not in seen:
             seen.add(t)
@@ -905,6 +1043,8 @@ def main():
             "sp500":    [r for r in results if r["sym"] in SP500_TICKERS],
             "nasdaq100":[r for r in results if r["sym"] in NASDAQ100_EXTRA],
             "intl":     [r for r in results if r["sym"] in INTL_TIER1],
+            "intl_eu":  [r for r in results if r["sym"] in EUROSTOXX_TICKERS],
+            "etfs_exus":[r for r in results if r["sym"] in SECTOR_ETFS_EXUS],
             "etfs":     [r for r in results if r["sym"] in SECTOR_ETFS],
             "crypto":   [r for r in results if r["sym"] in CRYPTO_TICKERS],
         },
