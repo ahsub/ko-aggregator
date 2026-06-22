@@ -999,14 +999,16 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     shortlist_candidates = []
 
     if is_bear:
-        # Bear: Short-Setups Priorität, Long nur MR
+        # Bear: MR Long hat Priorität 1 (Kapitulation = beste MR-Chance)
+        # Short-Setups Priorität 2
+        for x in scored:
+            if x["sMrLong"] >= 45:
+                shortlist_candidates.append({**x, "masterScore": x["sMrLong"] * 1.1,
+                    "masterStrategy": "long_mr"})
         for x in scored:
             if x["bestShort"] >= 55:
                 shortlist_candidates.append({**x, "masterScore": min(100, x["bestShort"]),
                     "masterStrategy": "short_" + (x["shortDir"] or "breakdown").lower()})
-            if x["sMrLong"] >= 45:
-                shortlist_candidates.append({**x, "masterScore": x["sMrLong"],
-                    "masterStrategy": "long_mr"})
     elif is_bull:
         # Bull: Long-Setups Priorität, Short nur Fading
         for x in scored:
@@ -1034,13 +1036,14 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
                 shortlist_candidates.append({**x, "masterScore": best,
                     "masterStrategy": strat})
 
-    # Deduplizieren (ein Ticker nur einmal — beste Strategie)
-    seen_syms = set()
-    master_shortlist_raw = []
-    for c in sorted(shortlist_candidates, key=lambda x: x["masterScore"], reverse=True):
-        if c["sym"] not in seen_syms:
-            seen_syms.add(c["sym"])
-            master_shortlist_raw.append(c)
+    # Deduplizieren: pro Ticker nur den besten masterScore behalten
+    best_per_sym = {}
+    for c in shortlist_candidates:
+        sym = c["sym"]
+        if sym not in best_per_sym or c["masterScore"] > best_per_sym[sym]["masterScore"]:
+            best_per_sym[sym] = c
+    master_shortlist_raw = sorted(best_per_sym.values(),
+                                   key=lambda x: x["masterScore"], reverse=True)
 
     master_shortlist_raw = master_shortlist_raw[:20]
 
