@@ -46,6 +46,52 @@ logging.basicConfig(
 )
 log = logging.getLogger("aggregator")
 
+def get_last_trading_day():
+    """
+    Bestimmt den letzten echten US-Handelstag.
+    Berücksichtigt Wochenenden und US-Feiertage via yfinance SPY-Daten.
+    """
+    try:
+        spy = yf.download("SPY", period="10d", interval="1d",
+                          auto_adjust=True, progress=False, threads=False)
+        if spy is not None and len(spy) > 0:
+            last_date = spy.index[-1].date()
+            log.info(f"  Letzter Handelstag (via SPY): {last_date}")
+            return last_date
+    except Exception as e:
+        log.warning(f"  get_last_trading_day Fehler: {e}")
+    from datetime import date
+    return date.today()
+
+def validate_data_freshness(results):
+    """
+    Prüft ob die geladenen Daten vom letzten Handelstag stammen.
+    Warnt wenn Daten veraltet sind (z.B. nach Feiertag).
+    """
+    last_trading_day = get_last_trading_day()
+    stale_count = 0
+    fresh_count = 0
+
+    for r in results:
+        if 'updated' in r:
+            try:
+                data_date = r['updated'][:10]  # YYYY-MM-DD
+                if data_date == str(last_trading_day):
+                    fresh_count += 1
+                else:
+                    stale_count += 1
+            except:
+                pass
+
+    log.info(f"  Datenfreshe: {fresh_count} aktuell · {stale_count} veraltet")
+    log.info(f"  Letzter Handelstag: {last_trading_day}")
+
+    # Warnung wenn mehr als 20% der Daten nicht vom letzten Handelstag
+    if stale_count > 0 and (stale_count / max(fresh_count + stale_count, 1)) > 0.2:
+        log.warning(f"  ⚠ Viele veraltete Daten — möglicher Feiertag oder Datenproblem!")
+
+    return str(last_trading_day)
+
 # ── TICKER UNIVERSUM ──────────────────────────────────────────────────────────
 
 SP500_TICKERS = [
@@ -769,16 +815,22 @@ def main():
         key=lambda x: x.get("score", 0), reverse=True
     )[:20]
 
+    # 5d. Datenfreshe validieren
+    log.info(f"\n🗓️  Validiere Datenfreshe...")
+    last_trading_day = validate_data_freshness(results)
+    log.info(f"  Referenz-Handelstag: {last_trading_day}")
+
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
     master  = {
         "meta": {
-            "version":    "1.0",
-            "generated":  datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "elapsed_s":  elapsed,
-            "total":      len(results),
-            "errors":     len(errors),
-            "tickers_ok": len(results),
+            "version":      "2.1",
+            "generated":    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "elapsed_s":    elapsed,
+            "total":        len(results),
+            "errors":       len(errors),
+            "tickers_ok":   len(results),
+            "last_trading_day": str(get_last_trading_day()),
         },
         "market": {
             "dixGex":   dix_gex,
