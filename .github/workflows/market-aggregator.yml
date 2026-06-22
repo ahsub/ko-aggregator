@@ -27,9 +27,10 @@ jobs:
 
       - name: Run Market Aggregator
         env:
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN:  ${{ secrets.CF_API_TOKEN }}
-          CF_KV_NS_ID:   ${{ secrets.CF_KV_NS_ID }}
+          CF_ACCOUNT_ID:      ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN:       ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID:        ${{ secrets.CF_KV_NS_ID }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python market_aggregator.py
 
