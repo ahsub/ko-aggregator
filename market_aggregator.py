@@ -807,8 +807,9 @@ def score_short_breakdown(r: dict) -> int:
     pct_high = r.get("pctFromHigh52")
     dist200  = r.get("dist200")    # % zum EMA200 (negativ = darunter)
 
-    # Gate 1: Preis unter EMA200 (Downtrend)
-    if not ema200 or price > ema200: return 0
+    # Gate 1: Preis unter EMA200 (Downtrend) — zwingend
+    if not ema200 or price <= 0: return 0
+    if price > ema200 * 0.995: return 0   # min. 0.5% unter EMA200
     s += 20
 
     # Gate 2: EMA50 unter EMA200 (Death Cross) oder nahe dran
@@ -1001,7 +1002,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # Bear: Short-Setups Priorität, Long nur MR
         for x in scored:
             if x["bestShort"] >= 55:
-                shortlist_candidates.append({**x, "masterScore": x["bestShort"] * 1.3,
+                shortlist_candidates.append({**x, "masterScore": min(100, x["bestShort"]),
                     "masterStrategy": "short_" + (x["shortDir"] or "breakdown").lower()})
             if x["sMrLong"] >= 45:
                 shortlist_candidates.append({**x, "masterScore": x["sMrLong"],
@@ -1010,7 +1011,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # Bull: Long-Setups Priorität, Short nur Fading
         for x in scored:
             if x["sMinervini"] >= 55:
-                shortlist_candidates.append({**x, "masterScore": x["sMinervini"] * 1.2,
+                shortlist_candidates.append({**x, "masterScore": min(100, x["sMinervini"]),
                     "masterStrategy": "long_minervini"})
             if x["sSwing"] >= 50:
                 shortlist_candidates.append({**x, "masterScore": x["sSwing"],
@@ -1585,17 +1586,26 @@ def main():
 
     # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
     market_regime_str = 'NEUTRAL'
+    # Primärquelle: VIX Term Structure (VIX/VIX3M Ratio)
+    _regime_ratio = None
     if vix_term and vix_term.get('ratio'):
-        ratio = vix_term['ratio']
-        if ratio < 0.98:   market_regime_str = 'STRESS_UNSTABLE'
-        elif ratio >= 1.05: market_regime_str = 'BULL_QUIET'
-        else:              market_regime_str = 'POST_PANIC_REVERSION'
-    elif mse_history and mse_history.get('vixRatio'):
-        last_ratio = mse_history['vixRatio'][-1] if mse_history.get('vixRatio') else None
-        if last_ratio:
-            if last_ratio < 0.98:   market_regime_str = 'STRESS_UNSTABLE'
-            elif last_ratio >= 1.05: market_regime_str = 'BULL_QUIET'
-    log.info(f'  Markt-Regime (Leaderboards): {market_regime_str}')
+        _regime_ratio = vix_term['ratio']
+    elif mse_history and mse_history.get('vixRatio') and mse_history['vixRatio']:
+        _regime_ratio = mse_history['vixRatio'][-1]
+
+    if _regime_ratio:
+        if _regime_ratio < 0.98:
+            market_regime_str = 'STRESS_UNSTABLE'
+        elif _regime_ratio < 1.05:
+            market_regime_str = 'POST_PANIC_REVERSION'
+        else:
+            # Contango = BULL — unterscheide QUIET vs FRAGILE per VIX-Niveau
+            _vix_val = vix_term.get('vix') if vix_term else None
+            if _vix_val and _vix_val > 25:
+                market_regime_str = 'BULL_FRAGILE'
+            else:
+                market_regime_str = 'BULL_QUIET'
+    log.info(f'  Markt-Regime (Leaderboards): {market_regime_str} | Ratio: {_regime_ratio}')
 
     log.info(f"  Schwächste (RS5):     {[r['sym'] for r in rs_sorted[-3:]]}")
 
