@@ -359,6 +359,19 @@ RS_SECTOR_ETFS = [
     "EZU","EWJ","EWG","FXI","INDA","EWZ","EWY","EWT",
 ]
 
+
+# ── FTSE 100 TOP 40 (London Stock Exchange) ───────────────────────────────────
+FTSE100_TICKERS = ['AZN.L', 'SHEL.L', 'HSBA.L', 'ULVR.L', 'RIO.L', 'BP.L', 'GSK.L', 'REL.L', 'BATS.L', 'DGE.L', 'NG.L', 'VOD.L', 'BA.L', 'EXPN.L', 'LSEG.L', 'PRU.L', 'AAL.L', 'GLEN.L', 'NWG.L', 'LLOY.L', 'BT-A.L', 'MNG.L', 'AV.L', 'TSCO.L', 'ABF.L', 'IMB.L', 'STAN.L', 'WPP.L', 'CRH.L', 'IHG.L', 'RKT.L', 'SSE.L', 'BME.L', 'EZJ.L', 'IAG.L', 'RR.L', 'SBRY.L', 'MKS.L', 'JD.L', 'SPX.L']
+
+# ── STOXX EUROPE EXTRA (Schweiz, Skandinavien, Benelux) ──────────────────────
+STOXX_EU_EXTRA = ['NOVO-B.CO', 'DSV.CO', 'CARL-B.CO', 'ORSTED.CO', 'MAERSK-B.CO', 'GIVN.SW', 'SIKA.SW', 'LONN.SW', 'ROG.SW', 'NOVN.SW', 'ABBN.SW', 'ZURN.SW', 'ALC.SW', 'PGHN.SW', 'HOLN.SW', 'ERICB.ST', 'VOLVA.ST', 'ATCO-A.ST', 'SAND.ST', 'SEB-A.ST', 'UCB.BR', 'KER.PA', 'KNEBV.HE']
+
+# ── BEAR-KANDIDATEN US (Momentum/Hype-Titel mit hohem Rückschlagpotenzial) ───
+BEAR_US_TICKERS = ['SMCI', 'MSTR', 'MRVL', 'ALAB', 'CRWD', 'SNOW', 'NET', 'DDOG', 'MDB', 'SHOP', 'SQ', 'HOOD', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'ENPH', 'FSLR', 'PLUG', 'BE', 'MRNA', 'BNTX', 'ILMN', 'BIIB', 'ZM', 'DOCU', 'UBER', 'LYFT', 'ABNB', 'DASH', 'RBLX', 'SNAP', 'PINS', 'MTCH', 'UPST', 'AFRM', 'SOFI', 'GME', 'PLTR', 'COIN', 'TSLA', 'BABA', 'PDD', 'BIDU', 'AMD', 'NVDA', 'ARM']
+
+# ── BEAR-KANDIDATEN DE/EU (Zykliker, Immobilien, Hochverschuldete) ───────────
+BEAR_DE_EU_TICKERS = ['BAYN.DE', 'VOW3.DE', 'BMW.DE', 'MBG.DE', 'CON.DE', 'DHER.DE', 'ZAL.DE', 'VNA.DE', 'LEG.DE', 'TAG.DE', '1COV.DE', 'EVT.DE', 'SRT.DE', 'NDX1.DE', 'AIXA.DE', 'WAF.DE', 'IFX.DE', 'STLAM.MI', 'RNO.PA', 'VOD.L', 'BT-A.L', 'TEF.MC', 'UCB.BR', 'GLPG.BR', 'ARND.DE', 'WDP.BR', 'RWE.DE', 'ENEL.MI', 'EZJ.L', 'IAG.L', 'DTE.DE', 'GLEN.L', 'AAL.L']
+
 def build_ticker_universe():
     seen = set()
     result = []
@@ -366,6 +379,8 @@ def build_ticker_universe():
     all_sources = (
         SP500_TICKERS + NASDAQ100_EXTRA +
         DAX40_TICKERS + MDAX_TICKERS + TECDAX_TICKERS + EUROSTOXX_TICKERS +
+        FTSE100_TICKERS + STOXX_EU_EXTRA +
+        BEAR_US_TICKERS + BEAR_DE_EU_TICKERS +
         INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
         [t for wl in SECTOR_WATCHLISTS.values() for t in wl]
     )
@@ -373,7 +388,10 @@ def build_ticker_universe():
     BAD_SYMS = {"SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE","STRN.DE","SKB.DE","SLT.DE","ARND.DE"}
     BAD_SYMS = {"CS","SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE",
                 "STRN.DE","SKB.DE","SLT.DE","ARND.DE","SSNLF","2330.TW",
-                "9988.HK","0700.HK","3690.HK","1810.HK"}  # Schlechte Yahoo-Daten
+                "9988.HK","0700.HK","3690.HK","1810.HK",
+                "STLAM.MI","WDP.BR","ARND.DE","GLPG.BR",  # schlechte Verfuegbarkeit
+                "SPX.L","BME.L","MNG.L","SDAX",  # nicht eindeutig
+                }  # Schlechte Yahoo-Daten
     for t in all_sources:
         if t and t not in seen and t not in BAD_SYMS:
             seen.add(t)
@@ -1052,6 +1070,10 @@ def main():
             "nasdaq100":[r for r in results if r["sym"] in NASDAQ100_EXTRA],
             "intl":     [r for r in results if r["sym"] in INTL_TIER1],
             "intl_eu":  [r for r in results if r["sym"] in EUROSTOXX_TICKERS],
+            "ftse100":  [r for r in results if r["sym"] in FTSE100_TICKERS],
+            "stoxx_eu": [r for r in results if r["sym"] in STOXX_EU_EXTRA],
+            "bear_us":  [r for r in results if r["sym"] in BEAR_US_TICKERS],
+            "bear_eu":  [r for r in results if r["sym"] in BEAR_DE_EU_TICKERS],
             "etfs_exus":[r for r in results if r["sym"] in SECTOR_ETFS_EXUS],
             "etfs":     [r for r in results if r["sym"] in SECTOR_ETFS],
             "crypto":   [r for r in results if r["sym"] in CRYPTO_TICKERS],
