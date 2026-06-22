@@ -216,7 +216,7 @@ INTL_TIER1 = [
     # Europa — Energie & Rohstoffe (ADR)
     "SHEL","BP","TTE","ENEL","E","ENGI","SQM","RIO","BHP","VALE","SCCO",
     # Europa — Finanzen (ADR)
-    "UBS","ING","INGA","BCS","HSBC","DB","CS",
+    "UBS","ING","INGA","BCS","HSBC","DB",# CS delisted (UBS-Übernahme 2023)
     # Europa — Konsum & Luxus (ADR)
     "LVMUY","CFRUY","PPRUY","HESAY","BURBY","ADDYY",
     # Europa — Industrie (ADR)
@@ -225,7 +225,7 @@ INTL_TIER1 = [
     "TM","HMC","SONY","NTT","MUFG","SMFG","MFG","NTDOY","KYOCY","FANUY",
     "CCOEY","ITOCY","MARUY","7203.T","6758.T","9984.T",
     # Suedkorea (ADR + Heimat)
-    "005930.KS","000660.KS","051910.KS","SSNLF",
+    "005930.KS","000660.KS","051910.KS",# SSNLF OTC — schlechte Daten; 005930.KS bevorzugt
     # Taiwan
     "TSM","2330.TW","2454.TW","2317.TW","2382.TW",
     # China/Hongkong (ADR + HK-listed)
@@ -331,7 +331,7 @@ SECTOR_ETFS = list(dict.fromkeys(
 # ── KRYPTO ────────────────────────────────────────────────────────────────────
 CRYPTO_TICKERS = [
     "BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD",
-    "ADA-USD","AVAX-USD","DOGE-USD","DOT-USD","MATIC-USD",
+    "ADA-USD","AVAX-USD","DOGE-USD","DOT-USD","POL-USD",
     "LINK-USD","UNI-USD","ATOM-USD","LTC-USD","BCH-USD",
 ]
 
@@ -371,8 +371,11 @@ def build_ticker_universe():
     )
     # Filter: keine leeren Strings, keine bekannt ungueltige Symbole
     BAD_SYMS = {"SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE","STRN.DE","SKB.DE","SLT.DE","ARND.DE"}
+    BAD_SYMS = {"CS","SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE",
+                "STRN.DE","SKB.DE","SLT.DE","ARND.DE","SSNLF","2330.TW",
+                "9988.HK","0700.HK","3690.HK","1810.HK"}  # Schlechte Yahoo-Daten
     for t in all_sources:
-        if t and t not in seen:
+        if t and t not in seen and t not in BAD_SYMS:
             seen.add(t)
             result.append(t)
     return result
@@ -779,8 +782,13 @@ def fetch_vix_term():
     try:
         vix   = yf.download("^VIX",  period="5d", auto_adjust=True, progress=False)
         vix3m = yf.download("^VIX3M", period="5d", auto_adjust=True, progress=False)
-        vix_val  = float(vix["Close"].iloc[-1])
-        vix3m_val = float(vix3m["Close"].iloc[-1])
+        # yfinance kann MultiIndex zurueckgeben — flatten
+        vix_close  = vix["Close"]
+        vix3m_close = vix3m["Close"]
+        if hasattr(vix_close, "squeeze"):  vix_close  = vix_close.squeeze()
+        if hasattr(vix3m_close,"squeeze"): vix3m_close = vix3m_close.squeeze()
+        vix_val   = float(vix_close.dropna().iloc[-1])
+        vix3m_val = float(vix3m_close.dropna().iloc[-1])
         spread   = round(vix3m_val - vix_val, 2)
         contango = spread > 0
         log.info(f"  VIX: {vix_val:.2f} | VIX3M: {vix3m_val:.2f} | Spread: {spread:+.2f} | {'CONTANGO' if contango else 'BACKWARDATION'}")
@@ -833,8 +841,8 @@ def fetch_mse_history(days: int = 30) -> dict:
         dates  = [str(d.date()) for d in common_idx]
         vvix   = [round(float(closes["^VVIX"].loc[d]), 2) if closes["^VVIX"] is not None else None for d in common_idx]
         skew   = [round(float(closes["^SKEW"].loc[d]), 2) if closes["^SKEW"] is not None else None for d in common_idx]
-        vix    = [round(float(closes["^VIX"].loc[d]), 2)  for d in common_idx]
-        vix3m  = [round(float(closes["^VIX3M"].loc[d]), 2) for d in common_idx]
+        vix    = [round(float(closes["^VIX"].loc[d].squeeze() if hasattr(closes["^VIX"].loc[d],"squeeze") else closes["^VIX"].loc[d]), 2)  for d in common_idx]
+        vix3m  = [round(float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d],"squeeze") else closes["^VIX3M"].loc[d]), 2) for d in common_idx]
         ratio  = [round(vix3m[i] / vix[i], 3) if vix[i] and vix[i] > 0 else None for i in range(len(vix))]
 
         result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates}
