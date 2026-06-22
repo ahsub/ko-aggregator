@@ -661,6 +661,51 @@ def fetch_vix_term():
 
 # ── CLOUDFLARE KV UPLOAD ──────────────────────────────────────────────────────
 
+
+def fetch_mse_history(days: int = 30) -> dict:
+    """Laedt 30-Tage-History fuer VVIX, SKEW, VIX, VIX3M fuer MSE Z-Score Normalisierung."""
+    period = f"{days + 5}d"
+    result = {"vvix": [], "skew": [], "vix": [], "vixRatio": [], "dates": []}
+    try:
+        raw = yf.download(
+            ["^VVIX", "^SKEW", "^VIX", "^VIX3M"],
+            period=period,
+            auto_adjust=True,
+            progress=False,
+            group_by="ticker",
+        )
+        closes = {}
+        for sym in ["^VVIX", "^SKEW", "^VIX", "^VIX3M"]:
+            try:
+                closes[sym] = raw[sym]["Close"].dropna()
+            except Exception:
+                closes[sym] = None
+
+        if closes["^VIX"] is None or closes["^VIX3M"] is None:
+            log.warning("  MSE History: VIX/VIX3M nicht verfuegbar")
+            return result
+
+        common_idx = closes["^VIX"].index
+        for sym in ["^VIX3M", "^VVIX", "^SKEW"]:
+            if closes[sym] is not None:
+                common_idx = common_idx.intersection(closes[sym].index)
+
+        common_idx = common_idx[-days:]
+
+        dates  = [str(d.date()) for d in common_idx]
+        vvix   = [round(float(closes["^VVIX"].loc[d]), 2) if closes["^VVIX"] is not None else None for d in common_idx]
+        skew   = [round(float(closes["^SKEW"].loc[d]), 2) if closes["^SKEW"] is not None else None for d in common_idx]
+        vix    = [round(float(closes["^VIX"].loc[d]), 2)  for d in common_idx]
+        vix3m  = [round(float(closes["^VIX3M"].loc[d]), 2) for d in common_idx]
+        ratio  = [round(vix3m[i] / vix[i], 3) if vix[i] and vix[i] > 0 else None for i in range(len(vix))]
+
+        result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates}
+        log.info(f"  MSE History: {len(dates)} Tage | VVIX: {vvix[-1]} | SKEW: {skew[-1] if skew[-1] else chr(8212)} | Ratio: {ratio[-1]}")
+    except Exception as e:
+        log.warning(f"  MSE History nicht verfuegbar: {e}")
+    return result
+
+
 def push_to_cloudflare_kv(data, key="master_market_data"):
     """Pusht JSON-Daten in Cloudflare KV."""
     account_id = os.environ.get("CF_ACCOUNT_ID")
@@ -738,7 +783,9 @@ def main():
     log.info(f"\n🌐 Externe Datenquellen...")
     dix_gex  = fetch_dix_gex()
     pcr      = fetch_pcr_cboe()
-    vix_term = fetch_vix_term()
+    vix_term    = fetch_vix_term()
+    log.info(f"  Lade MSE History (VVIX/SKEW/VIX 30T)...")
+    mse_history = fetch_mse_history(days=30)
 
     # 5. Top-Signale ermitteln
     valid = [r for r in results if r.get("score") is not None]
@@ -833,9 +880,10 @@ def main():
             "last_trading_day": str(get_last_trading_day()),
         },
         "market": {
-            "dixGex":   dix_gex,
-            "pcr":      pcr,
-            "vixTerm":  vix_term,
+            "dixGex":     dix_gex,
+            "pcr":        pcr,
+            "vixTerm":    vix_term,
+            "mseHistory": mse_history,   # 30T VVIX/SKEW/VIX fuer Z-Score
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
