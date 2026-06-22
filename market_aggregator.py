@@ -418,8 +418,14 @@ def ema(series, period):
     sma_vals = [v for v in series[valid_start:valid_start+period] if v is not None]
     result[valid_start + period - 1] = sum(sma_vals) / len(sma_vals)
     for i in range(valid_start + period, len(series)):
-        if series[i] is not None and result[i-1] is not None:
-            result[i] = series[i] * k + result[i-1] * (1 - k)
+        if series[i] is not None:
+            # Fix A: Wenn vorheriger EMA None (Datenlücke), hole letzten verfügbaren Wert
+            prev_ema = next((result[j] for j in range(i-1, -1, -1) if result[j] is not None), None)
+            if prev_ema is not None:
+                result[i] = series[i] * k + prev_ema * (1 - k)
+        else:
+            # Datenlücke: letzten bekannten EMA weiterführen (kein None-Kaskaden-Bug)
+            result[i] = result[i-1]
     return result
 
 def sma(series, period):
@@ -541,21 +547,28 @@ def calc_overheat(closes, highs, lows, ema200_val, atr_val):
 
     return min(100, score)
 
-def calc_markov(closes, lookback=60, stride=7):
-    """Vereinfachtes Markov 2.0 Regime-Signal."""
+def calc_markov(closes, lookback=60, stride=1):
+    """Markov 2.0 Regime-Signal — stride=1 fuer korrekte Uebergangswahrscheinlichkeiten.
+    Fix E: stride=7 erzeugte 85% Autokorrelation → p_bull2bear statistisch bedeutungslos.
+    Mit stride=1 werden echte diskrete Tagesübergänge gemessen.
+    Regime-Label basiert auf 5T-Return fuer Rauschen-Reduktion.
+    """
     if len(closes) < lookback:
         return None, None, None
     recent = closes[-lookback:]
+    # Regime-Labels: 5T-Return fuer Stabilität, aber 1T-Uebergaenge messen
     labels = []
-    for i in range(stride, len(recent)):
-        ret = (recent[i] / recent[i-stride]) - 1
-        if   ret >  0.02: labels.append('bull')
-        elif ret < -0.02: labels.append('bear')
+    smooth_window = 5
+    for i in range(smooth_window, len(recent)):
+        ret = (recent[i] / recent[i-smooth_window]) - 1
+        if   ret >  0.03: labels.append('bull')
+        elif ret < -0.03: labels.append('bear')
         else:             labels.append('side')
 
     if len(labels) < 10:
         return None, None, None
 
+    # Transitions in 1T-Schritten (keine Autokorrelation)
     bull_to_bear = 0
     bull_count   = 0
     bear_count   = 0
@@ -730,8 +743,8 @@ def score_long_swing(r: dict) -> int:
         elif macd_h > -0.5: s += 5   # kurz vor Drehung
 
     # Regime-Penalty
-    if p_b2b > 0.30: s -= 20
-    elif p_b2b > 0.20: s -= 10
+    if p_b2b and p_b2b > 0.30: s -= 20
+    elif p_b2b and p_b2b > 0.20: s -= 10
 
     return max(0, min(100, s))
 
@@ -807,20 +820,25 @@ def score_short_breakdown(r: dict) -> int:
     pct_high = r.get("pctFromHigh52")
     dist200  = r.get("dist200")    # % zum EMA200 (negativ = darunter)
 
-    # Gate 1: Preis unter EMA200 (Downtrend) — zwingend
+    # Fix D: Hard Gate — kein Short gegen strukturellen Aufwärtstrend
     if not ema200 or price <= 0: return 0
-    if price > ema200 * 0.995: return 0   # min. 0.5% unter EMA200
+    if ema50 and price > ema50 * 1.02: return 0   # >2% über EMA50 = Bullen-Struktur → kein Short
+    if price > ema200 * 0.995: return 0            # min. 0.5% unter EMA200
+    if atr and atr > 0:
+        dist_atr_check = (price - ema200) / atr
+        if dist_atr_check < -6.0: return 0        # >6 ATR = Kapitulation → MR, kein Short
     s += 20
 
     # Gate 2: EMA50 unter EMA200 (Death Cross) oder nahe dran
     if ema50 and ema50 < ema200: s += 15
     if ema50 and price < ema50:  s += 10   # auch unter EMA50
 
-    # Gate 3: RSI in Downtrend-Zone (nicht ueberverkauft = kein Bounce)
+    # Gate 3: RSI in Downtrend-Zone — NICHT kapituliert (RSI >32)
     if rsi is not None:
+        if rsi < 28: return 0             # Kapitulation = kein Breakdown-Short, sondern MR-Long
         if   40 <= rsi <= 60:  s += 20   # Mitte = Abwaertsdynamik intakt
-        elif 25 <= rsi < 40:   s += 10
-        elif rsi > 60:          s -= 10  # zu hoch fuer Short
+        elif 28 <= rsi < 40:   s += 10
+        elif rsi > 65:          s -= 15  # zu hoch fuer Short
 
     # Gate 4: OBV faellt (Distribution)
     if obv < 0: s += 20
@@ -831,9 +849,9 @@ def score_short_breakdown(r: dict) -> int:
         if   macd_h < -0.5: s += 15
         elif macd_h < 0:    s += 8
 
-    # Gate 6: Markov baerig
-    if "bear" in regime: s += 15
-    elif p_b2b > 0.25:   s += 10
+    # Gate 6: Markov baerig — Fix B: NoneType-Schutz
+    if regime and "bear" in regime: s += 15
+    elif p_b2b and p_b2b > 0.25:   s += 10
 
     # Gate 7: Volumen bei Abwaertsbewegung gross (Distribution)
     if vol_ratio and vol_ratio > 1.3: s += 5
@@ -893,7 +911,7 @@ def score_short_fading(r: dict) -> int:
     if macd_h is not None and macd_h < 0: s += 8
 
     # Bonus: Markov zeigt Bear-Uebergang
-    if p_b2b > 0.20: s += 8
+    if p_b2b and p_b2b > 0.20: s += 8
 
     return max(0, min(100, s))
 
@@ -990,59 +1008,61 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "short_fading":   top20("sFading",    35),
     }
 
-    # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS ────────────────────────
-    # Bull: primär Long-Leaderboards; Bear: primär Short-Leaderboards
+    # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS v2 (Gemini-Review Fix C+F) ──
     regime_upper = market_regime.upper() if market_regime else "NEUTRAL"
     is_bear = any(x in regime_upper for x in ["STRESS", "BEAR", "PANIC"])
     is_bull = any(x in regime_upper for x in ["BULL", "POST_PANIC"])
 
-    shortlist_candidates = []
+    shortlist_dict = {}   # Fix F: Dict verhindert Duplikate, Dict-Key = Ticker-Symbol
 
     if is_bear:
-        # Bear: MR Long hat Priorität 1 (Kapitulation = beste MR-Chance)
-        # Short-Setups Priorität 2
+        # Bärenmarkt: MR Long zuerst (Kapitulation = Priorität 1), dann Breakdown-Shorts
         for x in scored:
             if x["sMrLong"] >= 45:
-                shortlist_candidates.append({**x, "masterScore": x["sMrLong"] * 1.1,
-                    "masterStrategy": "long_mr"})
+                shortlist_dict[x["sym"]] = {**x,
+                    "masterScore": min(100, x["sMrLong"] * 1.2),
+                    "masterStrategy": "long_mr"}
         for x in scored:
-            if x["bestShort"] >= 55:
-                shortlist_candidates.append({**x, "masterScore": min(100, x["bestShort"]),
-                    "masterStrategy": "short_" + (x["shortDir"] or "breakdown").lower()})
-    elif is_bull:
-        # Bull: Long-Setups Priorität, Short nur Fading
-        for x in scored:
-            if x["sMinervini"] >= 55:
-                shortlist_candidates.append({**x, "masterScore": min(100, x["sMinervini"]),
-                    "masterStrategy": "long_minervini"})
-            if x["sSwing"] >= 50:
-                shortlist_candidates.append({**x, "masterScore": x["sSwing"],
-                    "masterStrategy": "long_swing"})
-            if x["sFading"] >= 65:
-                shortlist_candidates.append({**x, "masterScore": x["sFading"] * 0.8,
-                    "masterStrategy": "short_fading"})
-    else:
-        # Neutral: alle Strategien gleichwertig
-        for x in scored:
-            best = max(x["sMinervini"], x["sSwing"], x["sMrLong"],
-                       x["sBreakdown"], x["sFading"])
-            if best >= 50:
-                strat = max(
-                    [("long_minervini",x["sMinervini"]),("long_swing",x["sSwing"]),
-                     ("long_mr",x["sMrLong"]),("short_breakdown",x["sBreakdown"]),
-                     ("short_fading",x["sFading"])],
-                    key=lambda t: t[1]
-                )[0]
-                shortlist_candidates.append({**x, "masterScore": best,
-                    "masterStrategy": strat})
+            if x["bestShort"] >= 55 and x["sym"] not in shortlist_dict:
+                shortlist_dict[x["sym"]] = {**x,
+                    "masterScore": min(100, x["bestShort"]),
+                    "masterStrategy": "short_" + (x["shortDir"] or "breakdown").lower()}
 
-    # Deduplizieren: pro Ticker nur den besten masterScore behalten
-    best_per_sym = {}
-    for c in shortlist_candidates:
-        sym = c["sym"]
-        if sym not in best_per_sym or c["masterScore"] > best_per_sym[sym]["masterScore"]:
-            best_per_sym[sym] = c
-    master_shortlist_raw = sorted(best_per_sym.values(),
+    elif is_bull:
+        # Bullenmarkt: Minervini + Swing primär, Fading-Shorts selektiv
+        for x in scored:
+            if x["sMinervini"] >= 75:
+                shortlist_dict[x["sym"]] = {**x,
+                    "masterScore": x["sMinervini"],
+                    "masterStrategy": "long_minervini"}
+            elif x["sSwing"] >= 70 and x["sym"] not in shortlist_dict:
+                shortlist_dict[x["sym"]] = {**x,
+                    "masterScore": x["sSwing"],
+                    "masterStrategy": "long_swing"}
+            elif x["sFading"] >= 70 and x["sym"] not in shortlist_dict:
+                shortlist_dict[x["sym"]] = {**x,
+                    "masterScore": x["sFading"],
+                    "masterStrategy": "short_fading"}
+
+    else:
+        # Fix C: NEUTRAL Fallback — Top 5 aus JEDER Strategie, kein leeres Ergebnis mehr
+        strat_map = [
+            ("sMinervini",  "long_minervini",  50),
+            ("sSwing",      "long_swing",      50),
+            ("sMrLong",     "long_mr",         45),
+            ("sBreakdown",  "short_breakdown", 50),
+            ("sFading",     "short_fading",    50),
+        ]
+        for key, label, min_score in strat_map:
+            top5 = sorted(scored, key=lambda x: x.get(key, 0), reverse=True)[:5]
+            for x in top5:
+                if x.get(key, 0) >= min_score and x["sym"] not in shortlist_dict:
+                    shortlist_dict[x["sym"]] = {**x,
+                        "masterScore": x[key],
+                        "masterStrategy": label}
+
+    # Fix F: Sortierung nach masterScore — knallhart, keine Alphabetik-Artefakte
+    master_shortlist_raw = sorted(shortlist_dict.values(),
                                    key=lambda x: x["masterScore"], reverse=True)
 
     master_shortlist_raw = master_shortlist_raw[:20]
@@ -1066,6 +1086,20 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     log.info(f"  Leaderboards: Minervini={len(leaderboards['long_minervini'])} | "
              f"Swing={len(leaderboards['long_swing'])} | MR={len(leaderboards['long_mr'])} | "
              f"Breakdown={len(leaderboards['short_breakdown'])} | Fading={len(leaderboards['short_fading'])}")
+
+    # Strategie-Scores in die originalen results schreiben (fuer Ticker-Export)
+    scored_map = {x["sym"]: x for x in scored}
+    for r in results:
+        s = scored_map.get(r.get("sym"), {})
+        if s:
+            r["sMinervini"] = s.get("sMinervini", 0)
+            r["sSwing"]     = s.get("sSwing", 0)
+            r["sMrLong"]    = s.get("sMrLong", 0)
+            r["sBreakdown"] = s.get("sBreakdown", 0)
+            r["sFading"]    = s.get("sFading", 0)
+            r["bestLong"]   = s.get("bestLong", 0)
+            r["bestShort"]  = s.get("bestShort", 0)
+            r["shortDir"]   = s.get("shortDir")
     log.info(f"  Master Shortlist: {len(master_shortlist)} Kandidaten | Regime: {regime_upper}")
 
     return {
@@ -1276,6 +1310,7 @@ def process_ticker(ticker, hist_df):
             "volRatio":      vol_ratio,
             "bars":          len(closes),
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            # Strategie-Scores werden im build_leaderboards-Pass hinzugefuegt
         }
     except Exception as e:
         return {"sym": ticker, "error": str(e)}
@@ -1630,8 +1665,62 @@ def main():
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
     master  = {
+        "schema": {
+            "version":       "3.0",
+            "description":   "UnderlyingIQ Master Market Data — Multi-Strategy Leaderboard Engine",
+            "generated_by":  "ko-aggregator / market_aggregator.py",
+            "documentation": {
+                "meta":       "Run-Metadaten: Zeitstempel, Ticker-Anzahl, Fehler, Laufzeit",
+                "market":     "Makro-Indikatoren: dixGex (Dark Pool), pcr (Put/Call), vixTerm (VIX-Termstruktur), mseHistory (30T VVIX/SKEW/VIX)",
+                "leaderboards": {
+                    "long_minervini":   "Minervini SEPA Score 0-100: Stage2-Uptrend, 52W-Hoch-Naehe, Volumen-Akkumulation",
+                    "long_swing":       "Swing-Pullback Score 0-100: EMA50-Bounce, RSI 30-50, Bollinger-Kompression",
+                    "long_mr":          "Mean Reversion Long Score 0-100: Extreme Kapitulation >2 ATR unter EMA200, RSI<30",
+                    "short_breakdown":  "Short Breakdown Score 0-100: Downtrend unter EMA200, OBV faellt, Markov baerig, RSI 28-60",
+                    "short_fading":     "Short Fading Score 0-100: FOMO-Top >2.5 ATR ueber EMA200, RSI>68, Kauf-Erschoepfung",
+                },
+                "masterShortlist": "Top 15-20 regime-adaptive Kandidaten. KI-Felder (trigger/stopLoss/target/crv/holdingDays/positionPct/leverageRec) nur bei ANTHROPIC_API_KEY vorhanden",
+                "strategyMeta":    "Regime-Klassifikation und KI-Enrichment Status",
+                "tickers":         "Alle 716 Ticker mit vollstaendigen Indikatoren",
+                "ticker_fields": {
+                    "sym":          "Yahoo Finance Symbol",
+                    "price":        "Letzter Schlusskurs (USD/EUR)",
+                    "ema50":        "EMA 50 Tage",
+                    "ema200":       "EMA 200 Tage",
+                    "atr":          "Average True Range 14T",
+                    "rsi":          "RSI 14T",
+                    "macdHist":     "MACD Histogramm (12/26/9)",
+                    "obvTrend":     "OBV-Trend 5T (positiv=bullisch)",
+                    "bbPos":        "Bollinger Band Position 0-1 (0=unten, 1=oben)",
+                    "overheat":     "Ueberhitzungs-Score 0-100",
+                    "regime":       "Markov Regime: bull/side/bear",
+                    "pBull2Bear":   "Markov Transition-Wahrscheinlichkeit Bull->Bear (0-1)",
+                    "score":        "Composite Long-Score 0-100 (Basis-Metrik)",
+                    "grade":        "A+/A/B/C/D/F",
+                    "high52":       "52-Wochen Hoch",
+                    "low52":        "52-Wochen Tief",
+                    "pctFromHigh52":"Abstand vom 52W-Hoch in %",
+                    "dist50":       "Abstand EMA50 in %",
+                    "dist200":      "Abstand EMA200 in %",
+                    "volRatio":     "Volumen-Verhaeltnis vs. 20T-Durchschnitt",
+                    "sMinervini":   "Strategie-Score Minervini 0-100",
+                    "sSwing":       "Strategie-Score Swing 0-100",
+                    "sMrLong":      "Strategie-Score Mean Reversion Long 0-100",
+                    "sBreakdown":   "Strategie-Score Short Breakdown 0-100",
+                    "sFading":      "Strategie-Score Short Fading 0-100",
+                    "shortDir":     "Short-Richtung: BREAKDOWN oder FADING",
+                },
+                "regime_values": {
+                    "BULL_QUIET":           "Contango + VIX<25: Trendfolge freigegeben",
+                    "BULL_FRAGILE":         "Contango + VIX>25: Trendfolge mit engeren Stops",
+                    "POST_PANIC_REVERSION": "Uebergang von Backwardation zu Contango: MR + CSP optimal",
+                    "STRESS_UNSTABLE":      "Backwardation (VIX>VIX3M): Short + MR Long prioritaet",
+                    "NEUTRAL":              "Kein klares Signal",
+                },
+            },
+        },
         "meta": {
-            "version":      "2.1",
+            "version":      "3.0",
             "generated":    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "elapsed_s":    elapsed,
             "total":        len(results),
