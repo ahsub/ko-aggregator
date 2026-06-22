@@ -616,6 +616,574 @@ def calc_composite_score(close, ema50, ema200, macd_hist, obv_trend, overheat, p
 
     return score, grade
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STRATEGIE-SCORING ENGINE v1.0 — Multi-Strategy Leaderboards
+# Implementiert nach Gemini-Blueprint (Strategie-Matrix)
+# Jede Funktion gibt normalisierten Score 0-100 zurueck
+# ══════════════════════════════════════════════════════════════════════════════
+
+def score_long_minervini(r: dict) -> int:
+    """
+    Minervini SEPA: Trend-Staerke, RS, 52W-Hoch-Naehe, VCP, Volumen-Akkumulation.
+    Basis: Stage 2 Uptrend + Kontraktions-Muster + Ausbruch auf Volumen.
+    """
+    s = 0
+    price    = r.get("price", 0)
+    ema50    = r.get("ema50")
+    ema200   = r.get("ema200")
+    atr      = r.get("atr")
+    rsi      = r.get("rsi")
+    high52   = r.get("high52")
+    pct_high = r.get("pctFromHigh52")   # negativ = unter 52W-Hoch
+    dist200  = r.get("dist200")          # % ueber EMA200
+    vol_ratio= r.get("volRatio", 1)
+    obv      = r.get("obvTrend", 0) or 0
+    macd_h   = r.get("macdHist")
+    overheat = r.get("overheat", 0) or 0
+    p_b2b    = r.get("pBull2Bear", 0) or 0
+    regime   = (r.get("regime") or "").lower()
+
+    # Gate 1: Stage 2 Uptrend (Preis > EMA50 > EMA200) — Pflicht
+    if not ema50 or not ema200: return 0
+    if price < ema50 or price < ema200: return 0   # kein Stage 2 → 0
+    if ema50 < ema200: return 0                     # Death Cross → 0
+    s += 25  # Stage 2 Basis
+
+    # Gate 2: Naehe zum 52W-Hoch (Relative Staerke vs. Markt)
+    if pct_high is not None:
+        if pct_high >= -5:   s += 20   # innerhalb 5% vom ATH
+        elif pct_high >= -10: s += 12
+        elif pct_high >= -15: s += 6
+        # weit unter 52W-Hoch = kein Minervini-Setup
+
+    # Gate 3: Abstand zu EMA200 — nicht zu ueberhitzt
+    if dist200 is not None:
+        if 10 <= dist200 <= 50:   s += 15   # gesunde Ausdehnung
+        elif 5 <= dist200 < 10:   s += 8
+        elif dist200 > 50:         s -= 10  # zu weit gestreckt
+
+    # Gate 4: Volumen-Akkumulation
+    if vol_ratio and vol_ratio > 1.5: s += 15   # Ausbruch auf Volumen
+    elif vol_ratio and vol_ratio > 1.2: s += 8
+    if obv > 0: s += 10   # OBV steigt = Institutionen akkumulieren
+
+    # Gate 5: Momentum (MACD)
+    if macd_h is not None and macd_h > 0: s += 10
+
+    # Gate 6: Markov-Regime nicht baerig
+    if p_b2b > 0.25: s -= 15
+    elif p_b2b < 0.08: s += 5
+
+    # Abzug: RSI Extremzone (kein Einstieg bei RSI > 85)
+    if rsi and rsi > 85: s -= 10
+
+    return max(0, min(100, s))
+
+
+def score_long_swing(r: dict) -> int:
+    """
+    Swing-Pullback: EMA20/50 Pullback in Uptrend, steigender ADX, 
+    ueberverkaufte Stochastik, dann Bounce.
+    """
+    s = 0
+    price   = r.get("price", 0)
+    ema50   = r.get("ema50")
+    ema200  = r.get("ema200")
+    rsi     = r.get("rsi")
+    macd_h  = r.get("macdHist")
+    bbpos   = r.get("bbPos")
+    dist200 = r.get("dist200")
+    obv     = r.get("obvTrend", 0) or 0
+    p_b2b   = r.get("pBull2Bear", 0) or 0
+    vol_ratio = r.get("volRatio", 1) or 1
+
+    # Gate 1: Uebergeordneter Uptrend (Preis > EMA200)
+    if not ema200 or price < ema200: return 0
+    s += 15
+
+    # Gate 2: Pullback-Zone (RSI ueberverkauft fuer Kontext, Pullback zum EMA)
+    if rsi is not None:
+        if 30 <= rsi <= 50:   s += 25   # Suesse Pullback-Zone
+        elif 25 <= rsi < 30:  s += 15   # stark ueberverkauft
+        elif 50 < rsi <= 60:  s += 10   # leichter Pullback
+        elif rsi > 70:         s -= 10  # kein Pullback, zu heiss
+
+    # Gate 3: Preis nah am EMA50 (max 5% drueber/drunter)
+    if ema50:
+        dist50_abs = abs((price / ema50 - 1) * 100)
+        if dist50_abs <= 3:   s += 20   # direkt am EMA50
+        elif dist50_abs <= 5: s += 12
+        elif dist50_abs <= 8: s += 5
+
+    # Gate 4: Bollinger Band unten (Preis comprimiert)
+    if bbpos is not None:
+        if bbpos <= 0.25:   s += 15   # unteres BB = Kompression
+        elif bbpos <= 0.40: s += 8
+
+    # Gate 5: OBV stabil oder steigend (kein Ausverkauf)
+    if obv >= 0: s += 10
+
+    # Gate 6: MACD dreht oder positiv
+    if macd_h is not None:
+        if macd_h > 0: s += 10
+        elif macd_h > -0.5: s += 5   # kurz vor Drehung
+
+    # Regime-Penalty
+    if p_b2b > 0.30: s -= 20
+    elif p_b2b > 0.20: s -= 10
+
+    return max(0, min(100, s))
+
+
+def score_long_mean_reversion(r: dict) -> int:
+    """
+    Mean Reversion Long: Extreme Kapitulation, weit unter EMA200,
+    RSI < 30, Volumen-Spike (Capitulation Flush).
+    """
+    s = 0
+    price   = r.get("price", 0)
+    ema200  = r.get("ema200")
+    atr     = r.get("atr")
+    rsi     = r.get("rsi")
+    bbpos   = r.get("bbPos")
+    overheat= r.get("overheat", 0) or 0
+    obv     = r.get("obvTrend", 0) or 0
+    vol_ratio = r.get("volRatio", 1) or 1
+
+    if not ema200 or not atr or atr == 0: return 0
+
+    dist_atr = (price - ema200) / atr   # negativ = unter EMA200
+
+    # Gate 1: Muss unter EMA200 sein (Mean Reversion Long)
+    if dist_atr >= 0: return 0
+
+    # Gate 2: Kapitulations-Tiefe
+    dist_abs = abs(dist_atr)
+    if   dist_abs >= 4.0: s += 40
+    elif dist_abs >= 3.0: s += 28
+    elif dist_abs >= 2.0: s += 15
+    else: return 0   # nicht tief genug
+
+    # Gate 3: RSI Kapitulation
+    if rsi is not None:
+        if   rsi <= 20: s += 30
+        elif rsi <= 25: s += 20
+        elif rsi <= 30: s += 12
+        elif rsi <= 35: s += 5
+
+    # Gate 4: BB unteres Band
+    if bbpos is not None:
+        if   bbpos <= 0.05: s += 20
+        elif bbpos <= 0.15: s += 12
+        elif bbpos <= 0.25: s += 6
+
+    # Gate 5: Volumen-Spike (Capitulation)
+    if vol_ratio >= 2.0: s += 10   # Panik-Volumen
+
+    # Keine Ueberhitzung (sollte 0 sein bei Kapitulation)
+    if overheat > 30: s -= 10
+
+    return max(0, min(100, s))
+
+
+def score_short_breakdown(r: dict) -> int:
+    """
+    Short Breakdown (Trendfolge): Preis unter EMA50 < EMA200 (Death Cross Bereich),
+    fallender OBV, baerige Marktstruktur, Distribution.
+    Gemini Saeule A: Stop ueber letztes Swing-Hoch.
+    """
+    s = 0
+    price    = r.get("price", 0)
+    ema50    = r.get("ema50")
+    ema200   = r.get("ema200")
+    rsi      = r.get("rsi")
+    macd_h   = r.get("macdHist")
+    obv      = r.get("obvTrend", 0) or 0
+    vol_ratio= r.get("volRatio", 1) or 1
+    p_b2b    = r.get("pBull2Bear", 0) or 0
+    regime   = (r.get("regime") or "").lower()
+    bbpos    = r.get("bbPos")
+    pct_high = r.get("pctFromHigh52")
+    dist200  = r.get("dist200")    # % zum EMA200 (negativ = darunter)
+
+    # Gate 1: Preis unter EMA200 (Downtrend)
+    if not ema200 or price > ema200: return 0
+    s += 20
+
+    # Gate 2: EMA50 unter EMA200 (Death Cross) oder nahe dran
+    if ema50 and ema50 < ema200: s += 15
+    if ema50 and price < ema50:  s += 10   # auch unter EMA50
+
+    # Gate 3: RSI in Downtrend-Zone (nicht ueberverkauft = kein Bounce)
+    if rsi is not None:
+        if   40 <= rsi <= 60:  s += 20   # Mitte = Abwaertsdynamik intakt
+        elif 25 <= rsi < 40:   s += 10
+        elif rsi > 60:          s -= 10  # zu hoch fuer Short
+
+    # Gate 4: OBV faellt (Distribution)
+    if obv < 0: s += 20
+    elif obv == 0: s += 5
+
+    # Gate 5: MACD negativ
+    if macd_h is not None:
+        if   macd_h < -0.5: s += 15
+        elif macd_h < 0:    s += 8
+
+    # Gate 6: Markov baerig
+    if "bear" in regime: s += 15
+    elif p_b2b > 0.25:   s += 10
+
+    # Gate 7: Volumen bei Abwaertsbewegung gross (Distribution)
+    if vol_ratio and vol_ratio > 1.3: s += 5
+
+    return max(0, min(100, s))
+
+
+def score_short_fading(r: dict) -> int:
+    """
+    Short Fading (FOMO Top): Extreme Ueberdehnung ueber EMA200,
+    hoher SKEW, niedriges PCR, RSI uebergekauft, Kauf-Erschoepfung.
+    Gemini Saeule B: Stop ueber Signal-Hoch.
+    """
+    s = 0
+    price    = r.get("price", 0)
+    ema200   = r.get("ema200")
+    atr      = r.get("atr")
+    rsi      = r.get("rsi")
+    bbpos    = r.get("bbPos")
+    overheat = r.get("overheat", 0) or 0
+    macd_h   = r.get("macdHist")
+    obv      = r.get("obvTrend", 0) or 0
+    vol_ratio= r.get("volRatio", 1) or 1
+    p_b2b    = r.get("pBull2Bear", 0) or 0
+
+    if not ema200 or not atr or atr == 0: return 0
+    dist_atr = (price - ema200) / atr   # positiv = ueber EMA200
+
+    # Gate 1: Extrem ueber EMA200 (Gummiband gespannt)
+    if   dist_atr >= 5.0: s += 35
+    elif dist_atr >= 3.5: s += 25
+    elif dist_atr >= 2.5: s += 12
+    else: return 0   # nicht genug Ueberdehnung
+
+    # Gate 2: RSI uebergekauft
+    if rsi is not None:
+        if   rsi >= 82: s += 25
+        elif rsi >= 75: s += 15
+        elif rsi >= 68: s += 7
+        elif rsi < 60:  s -= 10  # nicht uebergekauft genug
+
+    # Gate 3: Bollinger Band oben
+    if bbpos is not None:
+        if   bbpos >= 0.92: s += 15
+        elif bbpos >= 0.80: s += 8
+
+    # Gate 4: Ueberhitzungs-Score
+    if   overheat >= 75: s += 15
+    elif overheat >= 55: s += 8
+    elif overheat >= 35: s += 3
+
+    # Gate 5: Kauf-Erschoepfung (Volumen faellt trotz hohem Preis)
+    if vol_ratio and vol_ratio < 0.75: s += 10   # Erschoepfung
+    if obv < 0: s += 8                             # Distribution
+
+    # Gate 6: MACD dreht oder faellt
+    if macd_h is not None and macd_h < 0: s += 8
+
+    # Bonus: Markov zeigt Bear-Uebergang
+    if p_b2b > 0.20: s += 8
+
+    return max(0, min(100, s))
+
+
+def calc_last_swing_high(highs: list, lookback: int = 20) -> float | None:
+    """Berechnet das letzte signifikante Swing-Hoch (fuer Short Stop-Loss)."""
+    if len(highs) < lookback + 2:
+        return None
+    window = highs[-(lookback+2):-1]   # ohne letzten Bar
+    # Swing-Hoch = lokales Maximum (hoeher als n-1 und n+1)
+    swing_highs = []
+    for i in range(1, len(window)-1):
+        if window[i] > window[i-1] and window[i] > window[i+1]:
+            swing_highs.append(window[i])
+    return round(max(swing_highs), 4) if swing_highs else round(max(window), 4)
+
+
+def calc_last_swing_low(lows: list, lookback: int = 20) -> float | None:
+    """Berechnet das letzte signifikante Swing-Tief (fuer Long Stop-Loss)."""
+    if len(lows) < lookback + 2:
+        return None
+    window = lows[-(lookback+2):-1]
+    swing_lows = []
+    for i in range(1, len(window)-1):
+        if window[i] < window[i-1] and window[i] < window[i+1]:
+            swing_lows.append(window[i])
+    return round(min(swing_lows), 4) if swing_lows else round(min(window), 4)
+
+
+def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
+    """
+    Berechnet alle 5 Strategie-Scores und erstellt sortierte Leaderboards.
+    Gibt auch Master-Shortlist (Top 15 regime-adaptiv) zurueck.
+    """
+    log.info("  Berechne Multi-Strategie Leaderboards...")
+    scored = []
+
+    for r in results:
+        if r.get("error") or not r.get("price"):
+            continue
+
+        sym = r["sym"]
+        s_minervini = score_long_minervini(r)
+        s_swing     = score_long_swing(r)
+        s_mr_long   = score_long_mean_reversion(r)
+        s_breakdown = score_short_breakdown(r)
+        s_fading    = score_short_fading(r)
+
+        # Best Long / Short Score
+        best_long  = max(s_minervini, s_swing, s_mr_long)
+        best_short = max(s_breakdown, s_fading)
+
+        # Short-Richtung
+        short_dir = None
+        if best_short >= 30:
+            short_dir = "BREAKDOWN" if s_breakdown >= s_fading else "FADING"
+
+        # Kompaktes Scoring-Objekt
+        scored.append({
+            "sym":           sym,
+            "price":         r.get("price"),
+            "score":         r.get("score"),        # Composite (bestehend)
+            "grade":         r.get("grade"),
+            "rsi":           r.get("rsi"),
+            "atr":           r.get("atr"),
+            "regime":        r.get("regime"),
+            "overheat":      r.get("overheat"),
+            "pBull2Bear":    r.get("pBull2Bear"),
+            # Strategie-Scores
+            "sMinervini":    s_minervini,
+            "sSwing":        s_swing,
+            "sMrLong":       s_mr_long,
+            "sBreakdown":    s_breakdown,
+            "sFading":       s_fading,
+            "bestLong":      best_long,
+            "bestShort":     best_short,
+            "shortDir":      short_dir,
+        })
+
+    # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
+    def top20(key, min_score=35):
+        return [
+            {"sym": x["sym"], "score": x[key], "price": x["price"],
+             "grade": x["grade"], "rsi": x["rsi"], "atr": x["atr"]}
+            for x in sorted(scored, key=lambda x: x[key], reverse=True)
+            if x[key] >= min_score
+        ][:20]
+
+    leaderboards = {
+        "long_minervini": top20("sMinervini", 40),
+        "long_swing":     top20("sSwing",     35),
+        "long_mr":        top20("sMrLong",    30),
+        "short_breakdown":top20("sBreakdown", 35),
+        "short_fading":   top20("sFading",    35),
+    }
+
+    # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS ────────────────────────
+    # Bull: primär Long-Leaderboards; Bear: primär Short-Leaderboards
+    regime_upper = market_regime.upper() if market_regime else "NEUTRAL"
+    is_bear = any(x in regime_upper for x in ["STRESS", "BEAR", "PANIC"])
+    is_bull = any(x in regime_upper for x in ["BULL", "POST_PANIC"])
+
+    shortlist_candidates = []
+
+    if is_bear:
+        # Bear: Short-Setups Priorität, Long nur MR
+        for x in scored:
+            if x["bestShort"] >= 55:
+                shortlist_candidates.append({**x, "masterScore": x["bestShort"] * 1.3,
+                    "masterStrategy": "short_" + (x["shortDir"] or "breakdown").lower()})
+            if x["sMrLong"] >= 45:
+                shortlist_candidates.append({**x, "masterScore": x["sMrLong"],
+                    "masterStrategy": "long_mr"})
+    elif is_bull:
+        # Bull: Long-Setups Priorität, Short nur Fading
+        for x in scored:
+            if x["sMinervini"] >= 55:
+                shortlist_candidates.append({**x, "masterScore": x["sMinervini"] * 1.2,
+                    "masterStrategy": "long_minervini"})
+            if x["sSwing"] >= 50:
+                shortlist_candidates.append({**x, "masterScore": x["sSwing"],
+                    "masterStrategy": "long_swing"})
+            if x["sFading"] >= 65:
+                shortlist_candidates.append({**x, "masterScore": x["sFading"] * 0.8,
+                    "masterStrategy": "short_fading"})
+    else:
+        # Neutral: alle Strategien gleichwertig
+        for x in scored:
+            best = max(x["sMinervini"], x["sSwing"], x["sMrLong"],
+                       x["sBreakdown"], x["sFading"])
+            if best >= 50:
+                strat = max(
+                    [("long_minervini",x["sMinervini"]),("long_swing",x["sSwing"]),
+                     ("long_mr",x["sMrLong"]),("short_breakdown",x["sBreakdown"]),
+                     ("short_fading",x["sFading"])],
+                    key=lambda t: t[1]
+                )[0]
+                shortlist_candidates.append({**x, "masterScore": best,
+                    "masterStrategy": strat})
+
+    # Deduplizieren (ein Ticker nur einmal — beste Strategie)
+    seen_syms = set()
+    master_shortlist_raw = []
+    for c in sorted(shortlist_candidates, key=lambda x: x["masterScore"], reverse=True):
+        if c["sym"] not in seen_syms:
+            seen_syms.add(c["sym"])
+            master_shortlist_raw.append(c)
+
+    master_shortlist_raw = master_shortlist_raw[:20]
+
+    # Kompaktes Format fuer JSON
+    master_shortlist = [
+        {
+            "sym":       c["sym"],
+            "price":     c["price"],
+            "strategy":  c["masterStrategy"],
+            "score":     round(c["masterScore"]),
+            "grade":     c["grade"],
+            "rsi":       c["rsi"],
+            "atr":       c["atr"],
+            "shortDir":  c.get("shortDir"),
+            "overheat":  c.get("overheat"),
+        }
+        for c in master_shortlist_raw
+    ]
+
+    log.info(f"  Leaderboards: Minervini={len(leaderboards['long_minervini'])} | "
+             f"Swing={len(leaderboards['long_swing'])} | MR={len(leaderboards['long_mr'])} | "
+             f"Breakdown={len(leaderboards['short_breakdown'])} | Fading={len(leaderboards['short_fading'])}")
+    log.info(f"  Master Shortlist: {len(master_shortlist)} Kandidaten | Regime: {regime_upper}")
+
+    return {
+        "leaderboards":   leaderboards,
+        "masterShortlist": master_shortlist,
+        "regimeUsed":     regime_upper,
+        "timestamp":      datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+
+async def enrich_shortlist_with_ai(shortlist: list, market_data: dict,
+                                    api_key: str | None = None) -> list:
+    """
+    KI-Enrichment: Claude Sonnet analysiert Top-15 Shortlist-Kandidaten
+    und generiert strukturierte Trading-Parameter als JSON.
+    """
+    if not api_key or not shortlist:
+        log.warning("  KI-Enrichment: kein API-Key oder leere Shortlist — uebersprungen")
+        return shortlist
+
+    import json as json_mod, urllib.request, urllib.error
+
+    enriched = []
+    top15 = shortlist[:15]
+
+    # Markt-Kontext fuer den Prompt
+    vix_term = market_data.get("vixTerm") or {}
+    regime   = market_data.get("regimeUsed", "NEUTRAL")
+    vix_val  = vix_term.get("vix", "?")
+
+    for c in top15:
+        sym      = c["sym"]
+        strategy = c["strategy"]
+        price    = c["price"]
+        atr      = c["atr"] or 0
+        rsi      = c["rsi"]
+        overheat = c["overheat"]
+        is_short = strategy.startswith("short")
+
+        strat_labels = {
+            "long_minervini":  "Minervini SEPA (Stage 2 Ausbruch)",
+            "long_swing":      "Swing-Pullback (EMA-Bounce)",
+            "long_mr":         "Mean Reversion Long (Kapitulations-Bounce)",
+            "short_breakdown": "Short Breakdown (Trendfolge abwaerts)",
+            "short_fading":    "Short Fading (FOMO-Top Mean Reversion)",
+        }
+        strat_label = strat_labels.get(strategy, strategy)
+
+        prompt = f"""Du bist die quantitative Analyse-Engine von UnderlyingIQ.
+Erstelle fuer diesen Kandidaten ein praezises Setup-JSON.
+Antworte NUR mit dem JSON-Objekt — kein Markdown, kein Praeambel.
+
+MARKTKONTEXT:
+- Regime: {regime}
+- VIX: {vix_val}
+- Fiktives Modell-Depot: 100.000 EUR (BaFin-konforme Deskription gemaess §1 WpHG)
+
+KANDIDAT:
+- Ticker: {sym}
+- Kurs: {price} USD
+- Strategie: {strat_label}
+- Score: {c['score']}/100
+- ATR(14): {round(atr, 2) if atr else 'n/v'}
+- RSI(14): {round(rsi, 1) if rsi else 'n/v'}
+- Ueberhitzung: {overheat}/100
+- Richtung: {"SHORT" if is_short else "LONG"}
+
+Berechne mathematisch praezise (alle Werte auf 2 Dezimalstellen):
+{{
+  "sym": "{sym}",
+  "strategy": "{strategy}",
+  "direction": "<SHORT oder LONG>",
+  "trigger": <Einstiegsniveau: {"Short-Trigger unter" if is_short else "Buy Stop ueber"} dem {"Swing-Hoch" if is_short else "Tageshoch"} in USD>,
+  "stopLoss": <Stop-Loss in USD: {"Swing-Hoch + 0.5×ATR" if is_short else "letztes Swing-Tief - 0.3×ATR"}>,
+  "target": <Take-Profit in USD: CRV min. 2:1 zum Stop-Abstand>,
+  "crv": <Chance-Risiko-Verhaeltnis als Float>,
+  "holdingDays": <Haltedauer in Tagen: Short-Swing 3-7, Position-Trade 10-30>,
+  "positionPct": <Depotanteil in %: max 2% bei Long, max 1% bei Short>,
+  "leverageRec": <"Konservativ: Aktie/ETF" oder "Moderat: KO-Zertifikat Hebel 2-3" oder "Aggressiv: KO Hebel 4-6">,
+  "riskClass": <"LOW"|"MEDIUM"|"HIGH">,
+  "keyRisk": <1 Satz: Hauptrisiko dieses Setups>,
+  "note": <1 Satz: Wichtigste deskriptive Beobachtung, §1 WpHG-konform>
+}}"""
+
+        try:
+            req_body = json_mod.dumps({
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 400,
+                "messages": [{"role": "user", "content": prompt}]
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=req_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp_data = json_mod.loads(resp.read().decode())
+                text = resp_data.get("content", [{}])[0].get("text", "")
+                # JSON aus Antwort extrahieren
+                text = text.strip()
+                if text.startswith("```"):
+                    text = '\n'.join(text.split('\n')[1:-1])
+                ki_params = json_mod.loads(text)
+                enriched.append({**c, "ki": ki_params})
+                log.info(f"    KI {sym}: Trigger={ki_params.get('trigger')} | SL={ki_params.get('stopLoss')} | CRV={ki_params.get('crv')}")
+        except Exception as e:
+            log.warning(f"    KI {sym} Fehler: {e}")
+            enriched.append(c)   # ohne KI-Enrichment
+
+    # Nicht-enriched hinzufuegen
+    enriched_syms = {x["sym"] for x in enriched}
+    for c in shortlist[15:]:
+        if c["sym"] not in enriched_syms:
+            enriched.append(c)
+
+    return enriched
+
 # ── EINZELTITEL VERARBEITUNG ──────────────────────────────────────────────────
 
 def process_ticker(ticker, hist_df):
@@ -1014,7 +1582,22 @@ def main():
             key=lambda x: x["rs5"], reverse=True
         )
         log.info(f"  Top-3 Sektoren (RS5): {[r['sym'] for r in rs_sorted[:3]]}")
-        log.info(f"  Schwächste (RS5):     {[r['sym'] for r in rs_sorted[-3:]]}")
+
+    # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
+    market_regime_str = 'NEUTRAL'
+    if vix_term and vix_term.get('ratio'):
+        ratio = vix_term['ratio']
+        if ratio < 0.98:   market_regime_str = 'STRESS_UNSTABLE'
+        elif ratio >= 1.05: market_regime_str = 'BULL_QUIET'
+        else:              market_regime_str = 'POST_PANIC_REVERSION'
+    elif mse_history and mse_history.get('vixRatio'):
+        last_ratio = mse_history['vixRatio'][-1] if mse_history.get('vixRatio') else None
+        if last_ratio:
+            if last_ratio < 0.98:   market_regime_str = 'STRESS_UNSTABLE'
+            elif last_ratio >= 1.05: market_regime_str = 'BULL_QUIET'
+    log.info(f'  Markt-Regime (Leaderboards): {market_regime_str}')
+
+    log.info(f"  Schwächste (RS5):     {[r['sym'] for r in rs_sorted[-3:]]}")
 
     # 5c. Swing-Trading Kandidaten
     swing_candidates = sorted(
@@ -1083,6 +1666,30 @@ def main():
                              "rsi": r["rsi"], "macdHist": r.get("macdHist"), "regime": r["regime"]}
                             for r in swing_candidates],
         "tickers":        results,  # Alle Ergebnisse
+    }
+
+    # ── STRATEGIE LEADERBOARDS & MASTER SHORTLIST ───────────────────────────
+    import os as _os
+    _ant_key = _os.environ.get("ANTHROPIC_API_KEY") or _os.environ.get("ANT_KEY")
+    strategy_data = build_leaderboards(results, market_regime=market_regime_str)
+    leaderboards_obj  = strategy_data["leaderboards"]
+    master_shortlist  = strategy_data["masterShortlist"]
+    log.info(f"\n🤖 KI-Enrichment Master Shortlist ({len(master_shortlist)} Kandidaten)...")
+    if _ant_key:
+        import asyncio
+        master_shortlist = asyncio.run(
+            enrich_shortlist_with_ai(master_shortlist, strategy_data, api_key=_ant_key)
+        )
+    else:
+        log.warning("  ANTHROPIC_API_KEY fehlt — KI-Enrichment uebersprungen")
+
+    # Leaderboards + Shortlist in master dict einfuegen
+    master["leaderboards"]    = leaderboards_obj
+    master["masterShortlist"] = master_shortlist
+    master["strategyMeta"]    = {
+        "regimeUsed":  strategy_data["regimeUsed"],
+        "timestamp":   strategy_data["timestamp"],
+        "enriched":    bool(_ant_key),
     }
 
     payload_size = len(json.dumps(master)) / 1024
