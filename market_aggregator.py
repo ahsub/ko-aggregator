@@ -1126,10 +1126,15 @@ async def enrich_shortlist_with_ai(shortlist: list, market_data: dict,
     enriched = []
     top15 = shortlist[:15]
 
-    # Markt-Kontext fuer den Prompt
-    vix_term = market_data.get("vixTerm") or {}
-    regime   = market_data.get("regimeUsed", "NEUTRAL")
-    vix_val  = vix_term.get("vix", "?")
+    # Fix Gemini Review 1: dual-regime — VIX-Struktur vs. Leaderboard-Regime
+    vix_term     = market_data.get("vixTerm") or {}
+    vix_signal   = market_data.get("vixRegime", vix_term.get("signal", "?"))
+    vix_val      = market_data.get("vixActual", vix_term.get("vix", "?"))
+    vix3m_val    = market_data.get("vix3mActual", vix_term.get("vix3m", "?"))
+    ratio_val    = market_data.get("ratioActual", vix_term.get("ratio", "?"))
+    lb_regime    = market_data.get("regimeUsed", "NEUTRAL")   # Leaderboard-Regime (Strategie-Filter)
+    # Für KI-Prompt: echtes VIX-Termstruktur-Regime verwenden
+    regime = f"{lb_regime} | VIX-Struktur: {vix_signal} (VIX:{vix_val} / VIX3M:{vix3m_val} = {ratio_val})" 
 
     for c in top15:
         sym      = c["sym"]
@@ -1568,10 +1573,13 @@ def main():
 
     mean_reversion = sorted(
         [r for r in valid
-         if r.get("overheat", 0) >= 60
-         and r.get("rsi") is not None and r["rsi"] < 35
-         and r.get("bbPos") is not None and r["bbPos"] < 0.15],
-        key=lambda x: x.get("overheat", 0), reverse=True
+         # Fix Gemini Review 3: overheat>=60 war falsch — MR braucht TIEFES overheat
+         # Echte Kapitulation: RSI<35, weit unter EMA200, BB unten
+         if r.get("rsi") is not None and r["rsi"] < 35
+         and r.get("dist200") is not None and r["dist200"] < -8   # min 8% unter EMA200
+         and r.get("bbPos") is not None and r["bbPos"] < 0.20
+         and r.get("score", 0) >= 15],   # mind. leichtes Signal
+        key=lambda x: x.get("rsi", 99)   # nach RSI sortieren (niedrigster zuerst)
     )[:20]
 
     # 5b. Sektor Relative Stärke vs. SPY berechnen
@@ -1780,8 +1788,17 @@ def main():
     log.info(f"\n🤖 KI-Enrichment Master Shortlist ({len(master_shortlist)} Kandidaten)...")
     if _ant_key:
         import asyncio
+        # Fix Gemini Review 1: echtes vixTerm + dual-regime an KI übergeben
+        enrich_context = {
+            **strategy_data,
+            "vixTerm":      vix_term,                    # echte VIX-Termstruktur
+            "vixRegime":    vix_term.get("signal", "?"), # CONTANGO/BACKWARDATION/NORMAL
+            "vixActual":    vix_term.get("vix", "?"),
+            "vix3mActual":  vix_term.get("vix3m", "?"),
+            "ratioActual":  vix_term.get("ratio", "?"),
+        }
         master_shortlist = asyncio.run(
-            enrich_shortlist_with_ai(master_shortlist, strategy_data, api_key=_ant_key)
+            enrich_shortlist_with_ai(master_shortlist, enrich_context, api_key=_ant_key)
         )
     else:
         log.warning("  ANTHROPIC_API_KEY fehlt — KI-Enrichment uebersprungen")
