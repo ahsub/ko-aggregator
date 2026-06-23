@@ -1587,6 +1587,7 @@ def main():
     # 5b. Sektor Relative Stärke vs. SPY berechnen
     log.info(f"\n📐 Berechne Sektor Relative Stärke...")
     sector_rs = {}
+    rs_sorted = []   # Fix A: initialisieren — wird nur befüllt wenn SPY-Daten vorhanden
     spy_data  = hist_data.get("SPY")
     if spy_data is not None and len(spy_data) >= 6:
         spy_closes = list(spy_data["Close"].dropna())
@@ -1656,7 +1657,12 @@ def main():
                 market_regime_str = 'BULL_QUIET'
     log.info(f'  Markt-Regime (Leaderboards): {market_regime_str} | Ratio: {_regime_ratio}')
 
-    log.info(f"  Schwächste (RS5):     {[r['sym'] for r in rs_sorted[-3:]]}")
+    # Fix A: rs_sorted wird nur innerhalb von `if spy_data is not None` befüllt
+    # → außerhalb des Blocks nur loggen wenn vorhanden (verhindert NameError/UnboundLocalError)
+    if rs_sorted:
+        log.info(f"  Schwächste (RS5):     {[r['sym'] for r in rs_sorted[-3:]]}")
+    else:
+        log.info("  Schwächste (RS5):     — (SPY-Daten fehlen, Sektor-RS übersprungen)")
 
     # 5c. Swing-Trading Kandidaten
     swing_candidates = sorted(
@@ -1791,13 +1797,15 @@ def main():
     if _ant_key:
         import asyncio
         # Fix Gemini Review 1: echtes vixTerm + dual-regime an KI übergeben
+        # Fix B: vix_term kann None sein wenn fetch_vix_term() fehlschlägt
+        _vt = vix_term or {}
         enrich_context = {
             **strategy_data,
-            "vixTerm":      vix_term,                    # echte VIX-Termstruktur
-            "vixRegime":    vix_term.get("signal", "?"), # CONTANGO/BACKWARDATION/NORMAL
-            "vixActual":    vix_term.get("vix", "?"),
-            "vix3mActual":  vix_term.get("vix3m", "?"),
-            "ratioActual":  vix_term.get("ratio", "?"),
+            "vixTerm":      vix_term,                   # echte VIX-Termstruktur
+            "vixRegime":    _vt.get("signal", "?"),     # CONTANGO/BACKWARDATION/NORMAL
+            "vixActual":    _vt.get("vix", "?"),
+            "vix3mActual":  _vt.get("vix3m", "?"),
+            "ratioActual":  _vt.get("ratio", "?"),
         }
         master_shortlist = asyncio.run(
             enrich_shortlist_with_ai(master_shortlist, enrich_context, api_key=_ant_key)
