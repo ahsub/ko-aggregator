@@ -810,6 +810,7 @@ def score_short_breakdown(r: dict) -> int:
     price    = r.get("price", 0)
     ema50    = r.get("ema50")
     ema200   = r.get("ema200")
+    atr      = r.get("atr")           # Fix: fehlte → NameError
     rsi      = r.get("rsi")
     macd_h   = r.get("macdHist")
     obv      = r.get("obvTrend", 0) or 0
@@ -818,7 +819,7 @@ def score_short_breakdown(r: dict) -> int:
     regime   = (r.get("regime") or "").lower()
     bbpos    = r.get("bbPos")
     pct_high = r.get("pctFromHigh52")
-    dist200  = r.get("dist200")    # % zum EMA200 (negativ = darunter)
+    dist200  = r.get("dist200")
 
     # Fix D: Hard Gate — kein Short gegen strukturellen Aufwärtstrend
     if not ema200 or price <= 0: return 0
