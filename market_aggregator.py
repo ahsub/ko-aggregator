@@ -834,28 +834,31 @@ def score_short_breakdown(r: dict) -> int:
     if ema50 and ema50 < ema200: s += 15
     if ema50 and price < ema50:  s += 10   # auch unter EMA50
 
-    # Gate 3: RSI in Downtrend-Zone — NICHT kapituliert (RSI >32)
+    # Gate 3: RSI in Downtrend-Zone — Hard Gate per Gemini-Blueprint
     if rsi is not None:
-        if rsi < 28: return 0             # Kapitulation = kein Breakdown-Short, sondern MR-Long
-        if   40 <= rsi <= 60:  s += 20   # Mitte = Abwaertsdynamik intakt
-        elif 28 <= rsi < 40:   s += 10
-        elif rsi > 65:          s -= 15  # zu hoch fuer Short
+        if rsi < 28 or rsi > 60: return 0   # außerhalb Zone = kein Signal
+        if   35 <= rsi <= 50: s += 20        # optimale Downtrend-Zone
+        else:                  s += 10
 
-    # Gate 4: OBV faellt (Distribution)
-    if obv < 0: s += 20
-    elif obv == 0: s += 5
+    # Gate 4: OBV negativ (institutionelle Distribution)
+    if obv is not None and obv < 0:
+        s += 15
 
-    # Gate 5: MACD negativ
-    if macd_h is not None:
-        if   macd_h < -0.5: s += 15
-        elif macd_h < 0:    s += 8
+    # Gate 5: MACD Histogramm negativ (Abwärtsmomentum)
+    if macd_h is not None and macd_h < 0:
+        s += 15
 
-    # Gate 6: Markov baerig — Fix B: NoneType-Schutz
-    if regime and "bear" in regime: s += 15
-    elif p_b2b and p_b2b > 0.25:   s += 10
+    # Gate 6: Bollinger Band Position (Breakdown-Bestätigung)
+    if bbpos is not None:
+        if   bbpos <= 0.20: s += 15
+        elif bbpos <= 0.40: s += 8
 
-    # Gate 7: Volumen bei Abwaertsbewegung gross (Distribution)
-    if vol_ratio and vol_ratio > 1.3: s += 5
+    # Gate 7: Markov baerig — NoneType-Schutz
+    if regime and "bear" in regime: s += 10
+    elif p_b2b and p_b2b > 0.25:   s += 8
+
+    # Gate 8: Erhöhtes Volumen stützt Breakdown
+    if vol_ratio and vol_ratio > 1.2: s += 10
 
     return max(0, min(100, s))
 
@@ -881,18 +884,17 @@ def score_short_fading(r: dict) -> int:
     if not ema200 or not atr or atr == 0: return 0
     dist_atr = (price - ema200) / atr   # positiv = ueber EMA200
 
-    # Gate 1: Extrem ueber EMA200 (Gummiband gespannt)
-    if   dist_atr >= 5.0: s += 35
-    elif dist_atr >= 3.5: s += 25
-    elif dist_atr >= 2.5: s += 12
-    else: return 0   # nicht genug Ueberdehnung
+    # Gate 1: Hard Gate — zwingend >2.5 ATR über EMA200 per Gemini-Blueprint
+    if dist_atr < 2.5: return 0
+    if   dist_atr >= 4.0: s += 30
+    elif dist_atr >= 3.0: s += 20
+    else:                  s += 15
 
-    # Gate 2: RSI uebergekauft
-    if rsi is not None:
-        if   rsi >= 82: s += 25
-        elif rsi >= 75: s += 15
-        elif rsi >= 68: s += 7
-        elif rsi < 60:  s -= 10  # nicht uebergekauft genug
+    # Gate 2: RSI Hard Gate — zwingend >68 per Gemini-Blueprint
+    if rsi is None or rsi <= 68: return 0   # Kein Fading ohne echte Überhitzung
+    if   rsi >= 80: s += 25
+    elif rsi >= 75: s += 18
+    else:           s += 10
 
     # Gate 3: Bollinger Band oben
     if bbpos is not None:
