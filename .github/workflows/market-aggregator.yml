@@ -2,8 +2,8 @@ name: KO-Scanner Market Aggregator
 
 on:
   schedule:
-    - cron: '15 22 * * 1-5'   # Mo-Fr 22:15 UTC (nach US-Schluss)
-    - cron: '00 23 * * 0'     # Sonntag 23:00 UTC (Freitag-Daten + After-Hours)
+    - cron: '00 04 * * 2-6'   # Mo-Fr 22:15 UTC (nach US-Schluss)
+    - cron: '00 04 * * 1'     # Sonntag 23:00 UTC (Freitag-Daten + After-Hours)
   workflow_dispatch:
 
 jobs:
