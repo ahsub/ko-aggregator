@@ -547,6 +547,105 @@ def calc_overheat(closes, highs, lows, ema200_val, atr_val):
 
     return min(100, score)
 
+
+def calc_hv_percentile(closes, window=30, lookback=252):
+    """
+    Berechnet Historical Volatility Percentile (HVP).
+    HVP = wie hoch ist die aktuelle 30T-HV im Vergleich zu den letzten 252 Handelstagen?
+    Returns: int 0-100 oder None
+    """
+    import math
+    if len(closes) < lookback + window:
+        return None
+    try:
+        def hv30(cls):
+            log_rets = [math.log(cls[i] / cls[i-1]) for i in range(1, len(cls))]
+            return math.sqrt(252) * (sum(x**2 for x in log_rets) / len(log_rets) - (sum(log_rets)/len(log_rets))**2) ** 0.5
+
+        # Aktuelle 30T-HV
+        current_hv = hv30(closes[-window:])
+
+        # Alle 30T-HV der letzten 252 Tage
+        hv_series = []
+        for i in range(lookback):
+            end = len(closes) - i
+            start = end - window
+            if start < 0:
+                break
+            hv_series.append(hv30(closes[start:end]))
+
+        if not hv_series:
+            return None
+
+        # Percentile: wie viele historische HVs sind kleiner als die aktuelle?
+        pct = sum(1 for h in hv_series if h < current_hv) / len(hv_series) * 100
+        return round(pct)
+    except Exception:
+        return None
+
+
+def score_options_csp(r):
+    """
+    Cash-Secured Put Score (0-100).
+    Ideal: Hohe HVP + Bull-Regime + Kurs ueber EMA200 + RSI nicht ueberkauft.
+    """
+    price  = r.get("price", 0) or 0
+    ema200 = r.get("ema200")
+    hvp    = r.get("hvp", 0) or 0
+    rsi    = r.get("rsi", 50) or 50
+    regime = (r.get("regime") or "").lower()
+
+    if not ema200 or price < ema200: return 0   # Nur im Aufwaertstrend
+    if hvp < 30:                     return 0   # Zu wenig Praemie
+
+    s = 0
+    s += min(hvp, 40)                            # Max 40 Pkt: Vola
+    if   regime == "bull": s += 30
+    elif regime == "side": s += 15
+    if   35 <= rsi <= 60:  s += 30               # Gesunder Pullback/Konsolidierung
+    elif rsi < 35:         s += 15               # Stark ueberverkauft
+    return max(0, min(100, s))
+
+
+def score_options_covered_call(r):
+    """
+    Covered Call Score (0-100).
+    Ideal: Stabiler Bluechip + Seitwärts/leicht bull + moderates HVP.
+    """
+    comp_score = r.get("score", 50) or 50
+    hvp        = r.get("hvp", 0) or 0
+    regime     = (r.get("regime") or "").lower()
+
+    if comp_score < 50: return 0                 # Nur Qualitaets-Aktien
+
+    s = 0
+    s += min(int(hvp * 0.5), 25)                 # Max 25 Pkt: Vola
+    if comp_score >= 70: s += 35                 # Technisch starke Aktie
+    elif comp_score >= 55: s += 20
+    if   regime == "side": s += 40               # Paradedisziplin fuer CCs
+    elif regime == "bull": s += 20
+    return max(0, min(100, s))
+
+
+def score_options_credit_spread(r):
+    """
+    Bull Put Credit Spread Score (0-100).
+    Ideal: Extrem hohes HVP + stark ueberverkauft + erste Stabilisierung.
+    """
+    hvp       = r.get("hvp", 0) or 0
+    rsi       = r.get("rsi", 50) or 50
+    bb_pos    = r.get("bbPos", 0.5) or 0.5
+    macd_hist = r.get("macdHist", 0) or 0
+
+    if hvp < 60: return 0                        # Nur bei massiver Vola-Implosion-Erwartung
+
+    s = 0
+    s += min(int((hvp - 60) * 2), 30)            # Je hoeher HVP, desto besser
+    if rsi < 35:    s += 30                      # Stark ueberverkauft
+    if bb_pos < 0.2: s += 20                     # Unteres Bollinger Band
+    if macd_hist > 0: s += 20                    # Erstes bullisches Momentum
+    return max(0, min(100, s))
+
 def calc_markov(closes, lookback=60, stride=1):
     """Markov 2.0 Regime-Signal — stride=1 fuer korrekte Uebergangswahrscheinlichkeiten.
     Fix E: stride=7 erzeugte 85% Autokorrelation → p_bull2bear statistisch bedeutungslos.
@@ -638,66 +737,67 @@ def calc_composite_score(close, ema50, ema200, macd_hist, obv_trend, overheat, p
 
 def score_long_minervini(r: dict) -> int:
     """
-    Minervini SEPA: Trend-Staerke, RS, 52W-Hoch-Naehe, VCP, Volumen-Akkumulation.
-    Basis: Stage 2 Uptrend + Kontraktions-Muster + Ausbruch auf Volumen.
+    Minervini SEPA: Stage 2 Uptrend + VCP (Volatility Contraction) + Volumen-Ausbruch.
+    Gemini-Refactoring v2: HVP-Integration (niedrige Vola = VCP-Ideal), strikterer Dist200.
     """
     s = 0
     price    = r.get("price", 0)
     ema50    = r.get("ema50")
     ema200   = r.get("ema200")
-    atr      = r.get("atr")
-    rsi      = r.get("rsi")
-    high52   = r.get("high52")
-    pct_high = r.get("pctFromHigh52")   # negativ = unter 52W-Hoch
-    dist200  = r.get("dist200")          # % ueber EMA200
-    vol_ratio= r.get("volRatio", 1)
+    pct_high = r.get("pctFromHigh52")
+    dist200  = r.get("dist200")
+    vol_ratio= r.get("volRatio", 1) or 1
     obv      = r.get("obvTrend", 0) or 0
     macd_h   = r.get("macdHist")
-    overheat = r.get("overheat", 0) or 0
     p_b2b    = r.get("pBull2Bear", 0) or 0
-    regime   = (r.get("regime") or "").lower()
+    rsi      = r.get("rsi")
+    hvp      = r.get("hvp")
 
-    # Gate 1: Stage 2 Uptrend (Preis > EMA50 > EMA200) — Pflicht
+    # Gate 1: Stage 2 Uptrend — Pflicht
     if not ema50 or not ema200: return 0
-    if price < ema50 or price < ema200: return 0   # kein Stage 2 → 0
-    if ema50 < ema200: return 0                     # Death Cross → 0
-    s += 25  # Stage 2 Basis
+    if price < ema50 or price < ema200 or ema50 < ema200: return 0
+    s += 25
 
-    # Gate 2: Naehe zum 52W-Hoch (Relative Staerke vs. Markt)
+    # Gate 2: Naehe zum 52W-Hoch
     if pct_high is not None:
-        if pct_high >= -5:   s += 20   # innerhalb 5% vom ATH
+        if pct_high >= -5:    s += 20
         elif pct_high >= -10: s += 12
         elif pct_high >= -15: s += 6
-        # weit unter 52W-Hoch = kein Minervini-Setup
 
-    # Gate 3: Abstand zu EMA200 — nicht zu ueberhitzt
+    # Gate 3: Abstand EMA200 — Gemini: Obergrenze von 50 auf 40 gesenkt
     if dist200 is not None:
-        if 10 <= dist200 <= 50:   s += 15   # gesunde Ausdehnung
+        if 10 <= dist200 <= 40:   s += 15
         elif 5 <= dist200 < 10:   s += 8
-        elif dist200 > 50:         s -= 10  # zu weit gestreckt
+        elif dist200 > 50:         s -= 15  # Gemini: von -10 auf -15 verschaerft
 
     # Gate 4: Volumen-Akkumulation
-    if vol_ratio and vol_ratio > 1.5: s += 15   # Ausbruch auf Volumen
-    elif vol_ratio and vol_ratio > 1.2: s += 8
-    if obv > 0: s += 10   # OBV steigt = Institutionen akkumulieren
+    if vol_ratio > 1.5:   s += 15
+    elif vol_ratio > 1.2: s += 8
+    if obv > 0:           s += 10
 
-    # Gate 5: Momentum (MACD)
+    # Gate 5: Momentum
     if macd_h is not None and macd_h > 0: s += 10
 
-    # Gate 6: Markov-Regime nicht baerig
-    if p_b2b > 0.25: s -= 15
+    # Gate 6: Markov
+    if p_b2b > 0.25:   s -= 15
     elif p_b2b < 0.08: s += 5
 
-    # Abzug: RSI Extremzone (kein Einstieg bei RSI > 85)
-    if rsi and rsi > 85: s -= 10
+    # Gate 7: HVP — VCP erfordert Volatilitaets-Kontraktion (Gemini-Integration)
+    if hvp is not None:
+        if hvp <= 25:   s += 10  # Ideal: Ruhe vor dem Sturm
+        elif hvp >= 75: s -= 15  # Zu erratisch fuer SEPA
+
+    # Gate 8: RSI — Gemini: Schwelle von 85 auf 80 gesenkt
+    if rsi and rsi > 80: s -= 15
 
     return max(0, min(100, s))
 
 
 def score_long_swing(r: dict) -> int:
     """
-    Swing-Pullback: EMA20/50 Pullback in Uptrend, steigender ADX, 
-    ueberverkaufte Stochastik, dann Bounce.
+    Swing-Pullback: EMA50-Bounce im Aufwaertstrend.
+    Gemini-Fix v2: Richtungskorrektur EMA50-Abstand (nur UEBER EMA50 belohnen),
+    Basis auf 20 erhoehen, HVP-Integration (moderate Vola bevorzugt).
     """
     s = 0
     price   = r.get("price", 0)
@@ -706,53 +806,57 @@ def score_long_swing(r: dict) -> int:
     rsi     = r.get("rsi")
     macd_h  = r.get("macdHist")
     bbpos   = r.get("bbPos")
-    dist200 = r.get("dist200")
     obv     = r.get("obvTrend", 0) or 0
     p_b2b   = r.get("pBull2Bear", 0) or 0
-    vol_ratio = r.get("volRatio", 1) or 1
+    hvp     = r.get("hvp")
 
-    # Gate 1: Uebergeordneter Uptrend (Preis > EMA200)
+    # Gate 1: Uebergeordneter Uptrend
     if not ema200 or price < ema200: return 0
-    s += 15
+    s += 20  # Gemini: Basis von 15 auf 20 erhoehen
 
-    # Gate 2: Pullback-Zone (RSI ueberverkauft fuer Kontext, Pullback zum EMA)
+    # Gate 2: Pullback-Zone
     if rsi is not None:
-        if 30 <= rsi <= 50:   s += 25   # Suesse Pullback-Zone
-        elif 25 <= rsi < 30:  s += 15   # stark ueberverkauft
-        elif 50 < rsi <= 60:  s += 10   # leichter Pullback
-        elif rsi > 70:         s -= 10  # kein Pullback, zu heiss
+        if 30 <= rsi <= 48:   s += 25   # Gemini: engere Pullback-Zone
+        elif 25 <= rsi < 30:  s += 15
+        elif 48 < rsi <= 58:  s += 10
+        elif rsi > 70:         s -= 15  # Gemini: haertere Abstrafung
 
-    # Gate 3: Preis nah am EMA50 (max 5% drueber/drunter)
+    # Gate 3: Gemini-Fix — nur belohnen wenn Kurs UEBER oder exakt AM EMA50
     if ema50:
-        dist50_abs = abs((price / ema50 - 1) * 100)
-        if dist50_abs <= 3:   s += 20   # direkt am EMA50
-        elif dist50_abs <= 5: s += 12
-        elif dist50_abs <= 8: s += 5
+        if price >= ema50:
+            dist50 = ((price / ema50) - 1) * 100
+            if dist50 <= 2.5:   s += 20   # Praziser Bounce-Bereich
+            elif dist50 <= 5.0: s += 12
+        else:
+            s -= 10  # Gemini: Abzug wenn EMA50 unterschritten
 
-    # Gate 4: Bollinger Band unten (Preis comprimiert)
+    # Gate 4: Bollinger Band
     if bbpos is not None:
-        if bbpos <= 0.25:   s += 15   # unteres BB = Kompression
+        if bbpos <= 0.25:   s += 15
         elif bbpos <= 0.40: s += 8
 
-    # Gate 5: OBV stabil oder steigend (kein Ausverkauf)
+    # Gate 5: OBV
     if obv >= 0: s += 10
 
-    # Gate 6: MACD dreht oder positiv
-    if macd_h is not None:
-        if macd_h > 0: s += 10
-        elif macd_h > -0.5: s += 5   # kurz vor Drehung
+    # Gate 6: MACD
+    if macd_h is not None and macd_h > 0: s += 10
 
-    # Regime-Penalty
-    if p_b2b and p_b2b > 0.30: s -= 20
-    elif p_b2b and p_b2b > 0.20: s -= 10
+    # Gate 7: Markov
+    if p_b2b > 0.25: s -= 20
+
+    # Gate 8: HVP — moderate Vola bevorzugt (Gemini-Integration)
+    if hvp is not None:
+        if 20 <= hvp <= 60: s += 5
+        elif hvp > 80:      s -= 15
 
     return max(0, min(100, s))
 
 
 def score_long_mean_reversion(r: dict) -> int:
     """
-    Mean Reversion Long: Extreme Kapitulation, weit unter EMA200,
-    RSI < 30, Volumen-Spike (Capitulation Flush).
+    Mean Reversion Long: Extreme Kapitulation, weit unter EMA200.
+    Gemini-Fix v2: HVP-Integration (hohe Vola = echter Bounce-Kandidat,
+    niedrige Vola = Value Trap), RSI-Extremwert verschaerft.
     """
     s = 0
     price   = r.get("price", 0)
@@ -761,113 +865,96 @@ def score_long_mean_reversion(r: dict) -> int:
     rsi     = r.get("rsi")
     bbpos   = r.get("bbPos")
     overheat= r.get("overheat", 0) or 0
-    obv     = r.get("obvTrend", 0) or 0
     vol_ratio = r.get("volRatio", 1) or 1
+    hvp     = r.get("hvp")
 
     if not ema200 or not atr or atr == 0: return 0
+    dist_atr = (price - ema200) / atr
 
-    dist_atr = (price - ema200) / atr   # negativ = unter EMA200
-
-    # Gate 1: Muss unter EMA200 sein (Mean Reversion Long)
     if dist_atr >= 0: return 0
 
-    # Gate 2: Kapitulations-Tiefe
     dist_abs = abs(dist_atr)
     if   dist_abs >= 4.0: s += 40
     elif dist_abs >= 3.0: s += 28
     elif dist_abs >= 2.0: s += 15
-    else: return 0   # nicht tief genug
+    else: return 0
 
-    # Gate 3: RSI Kapitulation
+    # Gemini: RSI-Extremwert von 20 auf 18 verschaerft
     if rsi is not None:
-        if   rsi <= 20: s += 30
+        if   rsi <= 18: s += 30
         elif rsi <= 25: s += 20
         elif rsi <= 30: s += 12
         elif rsi <= 35: s += 5
 
-    # Gate 4: BB unteres Band
+    # Gemini: BBPos-Schwelle verschaerft (nur 2 Stufen)
     if bbpos is not None:
         if   bbpos <= 0.05: s += 20
         elif bbpos <= 0.15: s += 12
-        elif bbpos <= 0.25: s += 6
 
-    # Gate 5: Volumen-Spike (Capitulation)
-    if vol_ratio >= 2.0: s += 10   # Panik-Volumen
+    if vol_ratio >= 2.0: s += 10
+    if overheat > 30:    s -= 10
 
-    # Keine Ueberhitzung (sollte 0 sein bei Kapitulation)
-    if overheat > 30: s -= 10
+    # HVP-Integration (Gemini): Gummiband-Effekt nur bei hoher hist. Vola
+    if hvp is not None:
+        if hvp >= 80:  s += 10  # Echter Bounce-Kandidat mit hist. Vola-Hintergrund
+        elif hvp < 40: s -= 20  # Value Trap — keine lahmenden Enten einsammeln
 
     return max(0, min(100, s))
 
 
 def score_short_breakdown(r: dict) -> int:
     """
-    Short Breakdown (Trendfolge): Preis unter EMA50 < EMA200 (Death Cross Bereich),
-    fallender OBV, baerige Marktstruktur, Distribution.
-    Gemini Saeule A: Stop ueber letztes Swing-Hoch.
+    Short Breakdown: Death-Cross-Bereich, fallender OBV, Distribution.
+    Gemini-Fix v2: RSI-Gate entschaerft (dynamische Breakdowns erhalten),
+    Score-Werte entzerrt (Max war 140 → jetzt ~100), HVP-Integration.
     """
     s = 0
     price    = r.get("price", 0)
     ema50    = r.get("ema50")
     ema200   = r.get("ema200")
-    atr      = r.get("atr")           # Fix: fehlte → NameError
+    atr      = r.get("atr")
     rsi      = r.get("rsi")
     macd_h   = r.get("macdHist")
     obv      = r.get("obvTrend", 0) or 0
     vol_ratio= r.get("volRatio", 1) or 1
-    p_b2b    = r.get("pBull2Bear", 0) or 0
     regime   = (r.get("regime") or "").lower()
     bbpos    = r.get("bbPos")
-    pct_high = r.get("pctFromHigh52")
-    dist200  = r.get("dist200")
+    hvp      = r.get("hvp")
 
-    # Fix D: Hard Gate — kein Short gegen strukturellen Aufwärtstrend
     if not ema200 or price <= 0: return 0
-    if ema50 and price > ema50 * 1.02: return 0   # >2% über EMA50 = Bullen-Struktur → kein Short
-    if price > ema200 * 0.995: return 0            # min. 0.5% unter EMA200
+    if ema50 and price > ema50 * 1.02: return 0
+    if price > ema200 * 0.995: return 0
     if atr and atr > 0:
-        dist_atr_check = (price - ema200) / atr
-        if dist_atr_check < -6.0: return 0        # >6 ATR = Kapitulation → MR, kein Short
-    s += 20
+        if (price - ema200) / atr < -6.0: return 0  # Kapitulation → MR, kein Short
+    s += 15  # Gemini: von 20 auf 15 gesenkt (Score-Entzerrung)
 
-    # Gate 2: EMA50 unter EMA200 (Death Cross) oder nahe dran
-    if ema50 and ema50 < ema200: s += 15
-    if ema50 and price < ema50:  s += 10   # auch unter EMA50
+    if ema50 and ema50 < ema200: s += 10  # Gemini: von 15 auf 10
+    if ema50 and price < ema50:  s += 10
 
-    # Gate 3: RSI in Downtrend-Zone — Hard Gate per Gemini-Blueprint
+    # Gemini-Fix: RSI-Gate entschaerft — dynamische Breakdowns nicht abschneiden
     if rsi is not None:
-        if rsi < 28 or rsi > 60: return 0   # außerhalb Zone = kein Signal
-        if   35 <= rsi <= 50: s += 20        # optimale Downtrend-Zone
-        else:                  s += 10
+        if rsi < 20 or rsi > 65: return 0   # <20 = zu spaet, >65 = Bullen-Struktur
+        if 30 <= rsi <= 45:   s += 15        # Gemini: von 20 auf 15
+        elif 20 <= rsi < 30:  s += 8         # Dynamische Breakdowns erlaubt
 
-    # Gate 4: OBV negativ (institutionelle Distribution)
-    if obv is not None and obv < 0:
-        s += 15
+    if obv is not None and obv < 0:  s += 10  # Gemini: von 15 auf 10
+    if macd_h is not None and macd_h < 0: s += 10  # Gemini: von 15 auf 10
 
-    # Gate 5: MACD Histogramm negativ (Abwärtsmomentum)
-    if macd_h is not None and macd_h < 0:
-        s += 15
+    if bbpos is not None and bbpos <= 0.25: s += 10  # Gemini: vereinfacht
 
-    # Gate 6: Bollinger Band Position (Breakdown-Bestätigung)
-    if bbpos is not None:
-        if   bbpos <= 0.20: s += 15
-        elif bbpos <= 0.40: s += 8
+    if "bear" in regime: s += 10
+    if vol_ratio > 1.3:  s += 10  # Gemini: von 1.2 auf 1.3 (strenger)
 
-    # Gate 7: Markov baerig — NoneType-Schutz
-    if regime and "bear" in regime: s += 10
-    elif p_b2b and p_b2b > 0.25:   s += 8
-
-    # Gate 8: Erhöhtes Volumen stützt Breakdown
-    if vol_ratio and vol_ratio > 1.2: s += 10
+    # HVP-Integration (Gemini): steigende Vola = Short-Dynamik
+    if hvp is not None and hvp >= 65: s += 10
 
     return max(0, min(100, s))
 
 
 def score_short_fading(r: dict) -> int:
     """
-    Short Fading (FOMO Top): Extreme Ueberdehnung ueber EMA200,
-    hoher SKEW, niedriges PCR, RSI uebergekauft, Kauf-Erschoepfung.
-    Gemini Saeule B: Stop ueber Signal-Hoch.
+    Short Fading (FOMO-Climax): Extreme Ueberdehnung + Kauf-Erschoepfung.
+    Gemini-Fix v2: BBPos-Schwelle 0.92->0.85, HVP Squeeze-Schutz.
     """
     s = 0
     price    = r.get("price", 0)
@@ -876,45 +963,40 @@ def score_short_fading(r: dict) -> int:
     rsi      = r.get("rsi")
     bbpos    = r.get("bbPos")
     overheat = r.get("overheat", 0) or 0
-    macd_h   = r.get("macdHist")
-    obv      = r.get("obvTrend", 0) or 0
     vol_ratio= r.get("volRatio", 1) or 1
     p_b2b    = r.get("pBull2Bear", 0) or 0
+    obv      = r.get("obvTrend", 0) or 0
+    hvp      = r.get("hvp")
 
     if not ema200 or not atr or atr == 0: return 0
-    dist_atr = (price - ema200) / atr   # positiv = ueber EMA200
+    dist_atr = (price - ema200) / atr
 
-    # Gate 1: Hard Gate — zwingend >2.5 ATR über EMA200 per Gemini-Blueprint
     if dist_atr < 2.5: return 0
     if   dist_atr >= 4.0: s += 30
     elif dist_atr >= 3.0: s += 20
     else:                  s += 15
 
-    # Gate 2: RSI Hard Gate — zwingend >68 per Gemini-Blueprint
-    if rsi is None or rsi <= 68: return 0   # Kein Fading ohne echte Überhitzung
+    if rsi is None or rsi <= 68: return 0
     if   rsi >= 80: s += 25
     elif rsi >= 75: s += 18
     else:           s += 10
 
-    # Gate 3: Bollinger Band oben
-    if bbpos is not None:
-        if   bbpos >= 0.92: s += 15
-        elif bbpos >= 0.80: s += 8
+    # Gemini: BBPos-Schwelle von 0.92 auf 0.85 gesenkt
+    if bbpos is not None and bbpos >= 0.85: s += 15
 
-    # Gate 4: Ueberhitzungs-Score
     if   overheat >= 75: s += 15
     elif overheat >= 55: s += 8
-    elif overheat >= 35: s += 3
 
-    # Gate 5: Kauf-Erschoepfung (Volumen faellt trotz hohem Preis)
-    if vol_ratio and vol_ratio < 0.75: s += 10   # Erschoepfung
-    if obv < 0: s += 8                             # Distribution
+    # Gemini: Kauf-Erschoepfung
+    if vol_ratio and vol_ratio < 0.80: s += 10
+    if obv < 0:                         s += 7
 
-    # Gate 6: MACD dreht oder faellt
-    if macd_h is not None and macd_h < 0: s += 8
+    if p_b2b > 0.20: s += 10
 
-    # Bonus: Markov zeigt Bear-Uebergang
-    if p_b2b and p_b2b > 0.20: s += 8
+    # HVP-Integration (Gemini): Squeeze-Schutz — KRITISCH
+    if hvp is not None:
+        if hvp >= 85:   s -= 20  # Short-Squeeze / Meme-Stock Gefahr
+        elif hvp <= 40: s += 8   # Ruhiger Erschoepfungs-Peak
 
     return max(0, min(100, s))
 
@@ -1317,6 +1399,7 @@ def process_ticker(ticker, hist_df):
             "dist200":       dist_200,
             "volRatio":      vol_ratio,
             "bars":          len(closes),
+            "hvp":           calc_hv_percentile(closes),   # Historical Vol Percentile 0-100
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             # Strategie-Scores werden im build_leaderboards-Pass hinzugefuegt
         }
@@ -1584,6 +1667,69 @@ def main():
         key=lambda x: x.get("rsi", 99)   # nach RSI sortieren (niedrigster zuerst)
     )[:20]
 
+    # 5a. Options-Watchlist (Top-50, Gemini-Architektur) ────────────────────────
+    log.info(f"\n🎯 Options-Watchlist berechnen (3 Strategien)...")
+
+    OPTIONS_MIN_PRICE = 15.0
+    OPTIONS_MAX_PRICE = 150.0
+
+    options_candidates = []
+    for r in valid:
+        sym   = r.get("sym", "")
+        price = r.get("price") or 0
+
+        # Gemini Fix 1: Nur US-Ticker (kein .DE, .L, .PA etc. oder Krypto mit -)
+        if "." in sym or "-" in sym:
+            continue
+
+        # Preis-Filter
+        if price < OPTIONS_MIN_PRICE or price > OPTIONS_MAX_PRICE:
+            continue
+
+        # HVP muss vorhanden sein
+        if r.get("hvp") is None:
+            continue
+
+        # Berechne alle 3 Strategy-Scores (Gemini-Modelle)
+        s_csp    = score_options_csp(r)
+        s_cc     = score_options_covered_call(r)
+        s_spread = score_options_credit_spread(r)
+
+        # Mindestens eine Strategie muss > 0 sein
+        if max(s_csp, s_cc, s_spread) == 0:
+            continue
+
+        options_candidates.append({
+            "sym":         sym,
+            "price":       price,
+            "hvp":         r.get("hvp"),
+            "rsi":         r.get("rsi"),
+            "atr":         r.get("atr"),
+            "dist200":     round(r.get("dist200") or 0, 1),
+            "score":       r.get("score"),
+            "grade":       r.get("grade"),
+            "regime":      r.get("regime"),
+            "scoreCsp":    s_csp,
+            "scoreCc":     s_cc,
+            "scoreSpread": s_spread,
+            # Bester Score fuer Sortierung
+            "optsScore":   max(s_csp, s_cc, s_spread),
+        })
+
+    # Sortierung: bester Strategie-Score zuerst, Top-50
+    options_watchlist = sorted(
+        options_candidates,
+        key=lambda x: x["optsScore"],
+        reverse=True
+    )[:50]
+
+    log.info(f"   ✅ Options-WL: {len(options_watchlist)} US-Kandidaten "
+             f"(aus {len(valid)} validen Tickern)")
+    if options_watchlist:
+        top3 = [f"{r['sym']}(CSP:{r['scoreCsp']}/CC:{r['scoreCc']}/Spr:{r['scoreSpread']})"
+                for r in options_watchlist[:3]]
+        log.info(f"   Top-3: {', '.join(top3)}")
+
     # 5b. Sektor Relative Stärke vs. SPY berechnen
     log.info(f"\n📐 Berechne Sektor Relative Stärke...")
     sector_rs = {}
@@ -1814,9 +1960,10 @@ def main():
         log.warning("  ANTHROPIC_API_KEY fehlt — KI-Enrichment uebersprungen")
 
     # Leaderboards + Shortlist in master dict einfuegen
-    master["leaderboards"]    = leaderboards_obj
-    master["masterShortlist"] = master_shortlist
-    master["strategyMeta"]    = {
+    master["leaderboards"]     = leaderboards_obj
+    master["masterShortlist"]  = master_shortlist
+    master["optionsWatchlist"] = options_watchlist   # Top-50 Options-Kandidaten (täglich)
+    master["strategyMeta"]     = {
         "regimeUsed":  strategy_data["regimeUsed"],
         "timestamp":   strategy_data["timestamp"],
         "enriched":    bool(_ant_key),
@@ -1834,6 +1981,22 @@ def main():
     # 8. Cloudflare KV Upload
     log.info(f"\n☁️  Cloudflare KV Upload...")
     push_to_cloudflare_kv(master, key="master_market_data")
+
+    # Separater KV-Key für schnellen Options-Desk Zugriff
+    options_kv = {
+        "generated":        master["meta"]["generated"],
+        "last_trading_day": master["meta"].get("last_trading_day"),
+        "tickers":          options_watchlist,
+        "count":            len(options_watchlist),
+        "criteria": {
+            "min_price":  15.0,
+            "max_price":  150.0,
+            "min_hvp":    35,
+            "min_score":  30,
+        }
+    }
+    push_to_cloudflare_kv(options_kv, key="options_watchlist")
+    log.info(f"   ✅ options_watchlist KV-Key aktualisiert ({len(options_watchlist)} Ticker)")
 
     log.info(f"\n{'='*60}")
     log.info(f"✅ Fertig in {elapsed}s")
