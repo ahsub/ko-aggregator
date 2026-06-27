@@ -1054,7 +1054,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         if best_short >= 30:
             short_dir = "BREAKDOWN" if s_breakdown >= s_fading else "FADING"
 
-        # Kompaktes Scoring-Objekt
+        # Kompaktes Scoring-Objekt (inkl. Chart-Felder fuer Alpha Desk Parität)
         scored.append({
             "sym":           sym,
             "price":         r.get("price"),
@@ -1065,6 +1065,20 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "regime":        r.get("regime"),
             "overheat":      r.get("overheat"),
             "pBull2Bear":    r.get("pBull2Bear"),
+            # Chart-Metriken fuer Alpha Desk / Scanner-Parität
+            "ema50":         r.get("ema50"),
+            "ema200":        r.get("ema200"),
+            "macdHist":      r.get("macdHist"),
+            "obvTrend":      r.get("obvTrend"),
+            "bbPos":         r.get("bbPos"),
+            "volRatio":      r.get("volRatio"),
+            "hvp":           r.get("hvp"),
+            "pctFromHigh52": r.get("pctFromHigh52"),
+            "dist200":       r.get("dist200"),
+            "dist50":        r.get("dist50"),
+            "high52":        r.get("high52"),
+            "low52":         r.get("low52"),
+            "bullSignals":   r.get("bullSignals"),
             # Strategie-Scores
             "sMinervini":    s_minervini,
             "sSwing":        s_swing,
@@ -1152,18 +1166,38 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     master_shortlist_raw = master_shortlist_raw[:20]
 
-    # Kompaktes Format fuer JSON
+    # Kompaktes Format fuer JSON (erweitertes Payload fuer Alpha Desk Scanner-Paritaet)
     master_shortlist = [
         {
-            "sym":       c["sym"],
-            "price":     c["price"],
-            "strategy":  c["masterStrategy"],
-            "score":     round(c["masterScore"]),
-            "grade":     c["grade"],
-            "rsi":       c["rsi"],
-            "atr":       c["atr"],
-            "shortDir":  c.get("shortDir"),
-            "overheat":  c.get("overheat"),
+            "sym":           c["sym"],
+            "price":         c["price"],
+            "strategy":      c["masterStrategy"],
+            "score":         round(c["masterScore"]),
+            "grade":         c["grade"],
+            "rsi":           c["rsi"],
+            "atr":           c["atr"],
+            "shortDir":      c.get("shortDir"),
+            "overheat":      c.get("overheat"),
+            # Chart-Metriken fuer Alpha Desk (MACD, OBV, 52W, EMA, Bollinger)
+            "ema50":         c.get("ema50"),
+            "ema200":        c.get("ema200"),
+            "macdHist":      c.get("macdHist"),
+            "obvTrend":      c.get("obvTrend"),
+            "bbPos":         c.get("bbPos"),
+            "volRatio":      c.get("volRatio"),
+            "hvp":           c.get("hvp"),
+            "pctFromHigh52": c.get("pctFromHigh52"),
+            "dist200":       c.get("dist200"),
+            "dist50":        c.get("dist50"),
+            "high52":        c.get("high52"),
+            "low52":         c.get("low52"),
+            "bullSignals":   c.get("bullSignals"),
+            # Alle Strategie-Scores fuer Frontend-Kontext
+            "sMinervini":    c.get("sMinervini"),
+            "sSwing":        c.get("sSwing"),
+            "sMrLong":       c.get("sMrLong"),
+            "sBreakdown":    c.get("sBreakdown"),
+            "sFading":       c.get("sFading"),
         }
         for c in master_shortlist_raw
     ]
