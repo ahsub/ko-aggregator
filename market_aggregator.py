@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """
-KO-Scanner Market Aggregator v2.0
-==================================
-Zentraler Daten-Aggregator für die KO-Scanner Investment Suite.
+UnderlyingIQ Market Aggregator v3.0
+=====================================
+Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
-Version 2.0: DE-Märkte (DAX40, MDAX, TecDAX, EuroStoxx), Sektor-Watchlisten,
-robustes Datenladen mit Fallback-Perioden.
+Version 3.0: EU-ADR-Universum (US-gelistete ADRs statt Heimatbörsen .DE/.PA/.L),
+Multi-Strategy Scoring Engine (Gemini v3), Macro Risk Overlay (GEX/PCR),
+KV-basierte Scanner-Architektur (Single Source of Truth).
 
 Ablauf:
-  1. Lädt OHLCV-Daten für alle ~600 Ticker via yfinance (parallel)
-  2. Berechnet technische Indikatoren (EMA, RSI, MACD, OBV, ATR, BB)
+  1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
+  2. Berechnet technische Indikatoren (EMA, RSI, MACD, OBV, ATR, BB, HVP, hv10)
   3. Berechnet Markov 2.0 Regime-Signale
-  4. Berechnet Composite Score (A+ bis F)
-  5. Lädt echte DIX/GEX von squeezemetrics (wenn verfügbar)
-  6. Lädt echten PCR von CBOE
-  7. Pusht master_market_data.json → Cloudflare KV
+  4. Berechnet Composite Score + 5 Strategie-Scores (Gemini v3)
+  5. Lädt DIX/GEX von squeezemetrics (wenn verfügbar)
+  6. Lädt PCR von CBOE
+  7. Wendet Macro Risk Overlay (GEX/PCR) auf Options-Kandidaten an
+  8. Pusht master_market_data.json → Cloudflare KV
 
 Umgebungsvariablen (GitHub Secrets):
   CF_ACCOUNT_ID   — Cloudflare Account ID
   CF_API_TOKEN    — Cloudflare API Token (KV Write)
-  CF_KV_NS_ID     — Cloudflare KV Namespace ID (ko-sync)
+  CF_KV_NS_ID     — Cloudflare KV Namespace ID
+  ANTHROPIC_API_KEY — Claude API für KI-Enrichment
 """
 
 import os
@@ -249,8 +252,7 @@ EU_ADR_TICKERS = [
     "RHHBY",    # Roche (OTC ADR)
     "NSRGY",    # Nestle (OTC ADR)
     "ABB",      # ABB (NYSE, US-listing)
-    "CFR",      # Richemont — bereits als CFRUY
-    "ZURN",     # Zurich Insurance (OTC) — schlechte Liquidität, Skip
+    # CFR/ZURN entfernt — schlechte OTC-Liquidität (CFRUY bereits in Liste)
     # ── UK ────────────────────────────────────────────────────────────────────
     "AZN",      # AstraZeneca (NASDAQ, primär US-listing, liquid Options!)
     "SHEL",     # Shell (NYSE ADR, liquid Options)
@@ -290,9 +292,9 @@ INTL_TIER1 = [
     # Europa — Technologie (ADR/US-listed)
     "ASML","STM","ERIC","NOK","SAP","INFN","KEYS",
     # Europa — Healthcare (ADR)
-    "NVO","AZN","NOVN","ROG","SNY","GSK","BAYRY","RHHBY","NVCR",
+    "NVO","AZN","NVS","RHHBY","SNY","GSK","BAYRY","NVCR",
     # Europa — Energie & Rohstoffe (ADR)
-    "SHEL","BP","TTE","ENEL","E","ENGI","SQM","RIO","BHP","VALE","SCCO",
+    "SHEL","BP","TTE","ENLAY","E","ENGIY","SQM","RIO","BHP","VALE","SCCO",
     # Europa — Finanzen (ADR)
     "UBS","ING","BCS","HSBC","DB",  # INGA entfernt (Duplikat von ING); CS delisted
     # Europa — Konsum & Luxus (ADR)
@@ -426,7 +428,7 @@ SECTOR_WATCHLISTS = {
     "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS","ONTO","ACLS"],
     "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN","HOOD"],
     "LUXURY_EU":    ["LVMUY","LRLCY","HESAY","CFRUY","PPRUY","ADDYY","BURBY","RACE","CPRI","RL"],
-    "JAPAN_TECH":   ["TM","SONY","6758.T","NTDOY","KYOCY","FANUY","9984.T","CCOEY"],
+    "JAPAN_TECH":   ["TM","SONY","NTDOY","KYOCY","FANUY","CCOEY","SONY","HMC"],
     "EM_GROWTH":    ["TSM","BABA","PDD","INFY","VALE","ITUB","NU","STNE","SE","GRAB"],
 }
 
@@ -1839,7 +1841,7 @@ def push_to_cloudflare_kv(data, key="master_market_data"):
 def main():
     start_time = time.time()
     log.info("=" * 60)
-    log.info("KO-Scanner Market Aggregator v2.1")
+    log.info("UnderlyingIQ Market Aggregator v3.0")
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     log.info("=" * 60)
 
@@ -1919,6 +1921,8 @@ def main():
 
         # Preis-Filter
         # Kein Preisfilter — wird durch US-ADR Universum sichergestellt
+        # Sanity: Preise über $50k = Datenfehler (BRK.A-Klasse)
+        if (r.get("price") or 0) > 50000: continue
 
         # HVP muss vorhanden sein
         if r.get("hvp") is None:
@@ -2227,10 +2231,10 @@ def main():
         "tickers":          options_watchlist,
         "count":            len(options_watchlist),
         "criteria": {
-            "min_price":  15.0,
-            "max_price":  150.0,
-            "min_hvp":    35,
+            "note":       "Kein Preisfilter — US-ADR Universum sichert Liquidität",
+            "min_hvp":    20,   # CSP Gate (Unleashed v2)
             "min_score":  30,
+            "macro":      "GEX/PCR Overlay aktiv",
         }
     }
     push_to_cloudflare_kv(options_kv, key="options_watchlist")
