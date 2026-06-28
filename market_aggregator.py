@@ -643,18 +643,21 @@ def calc_hv_percentile(closes, window=30, lookback=252):
     Returns: int 0-100 oder None
     """
     import math
-    # Gemini Bug B: +20 Bars Margin verhindert leere Slices an Randpositionen
-    if len(closes) < lookback + window + 20:
+    # Adaptiver lookback: passt sich an verfügbare Bars an
+    # Behebt: period="1y" liefert nur ~251 Bars, fixer Guard 302 blockiert alle
+    available = len(closes) - window - 5  # 5 Bars Sicherheitsabstand
+    if available < 30:  # Mindestens 30 historische HV-Punkte für stabilen Percentil
         return None
+    lookback = min(lookback, available)  # Adaptiv: nie mehr als vorhanden
     try:
         def hv30(cls):
             log_rets = [math.log(cls[i] / cls[i-1]) for i in range(1, len(cls))]
             return math.sqrt(252) * (sum(x**2 for x in log_rets) / len(log_rets) - (sum(log_rets)/len(log_rets))**2) ** 0.5
 
-        # Aktuelle 30T-HV
+        # Aktuelle HV
         current_hv = hv30(closes[-window:])
 
-        # Alle 30T-HV der letzten 252 Tage
+        # Historische HV-Serie (adaptiver lookback)
         hv_series = []
         for i in range(lookback):
             end = len(closes) - i
@@ -1558,11 +1561,18 @@ def process_ticker(ticker, hist_df):
 
         # Spalten robust extrahieren (auch bei MultiIndex)
         def get_col(df, col):
+            # Fix: MultiIndex-Columns (yfinance gibt manchmal ('Close','AAPL') zurück)
             if col in df.columns:
-                return list(df[col].dropna())
-            # MultiIndex fallback
+                vals = list(df[col].dropna())
+                return vals
+            # MultiIndex: suche Spalte die mit col beginnt
             for c in df.columns:
-                if str(c).startswith(col):
+                cname = c[0] if isinstance(c, tuple) else str(c)
+                if cname == col:
+                    return list(df[c].dropna())
+            # Fallback: jede Spalte die den Namen enthält
+            for c in df.columns:
+                if col in str(c):
                     return list(df[c].dropna())
             return []
 
@@ -2246,3 +2256,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
