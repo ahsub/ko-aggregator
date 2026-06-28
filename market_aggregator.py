@@ -651,7 +651,6 @@ def calc_hv_percentile(closes, window=30, lookback=252):
     lookback = min(lookback, available)  # Adaptiv: nie mehr als vorhanden
     try:
         def hv30(cls):
-            # Fix: Filter Nullen/negative Preise (yfinance Datenfehler)
             cls = [c for c in cls if c and c > 0]
             if len(cls) < 2:
                 return None
@@ -660,7 +659,6 @@ def calc_hv_percentile(closes, window=30, lookback=252):
                 return None
             mean_lr = sum(log_rets) / len(log_rets)
             variance = sum(x**2 for x in log_rets) / len(log_rets) - mean_lr**2
-            # Fix: max(0,...) verhindert sqrt negativer Zahl (Float-Precision)
             return math.sqrt(252) * math.sqrt(max(0.0, variance))
 
         # Aktuelle HV
