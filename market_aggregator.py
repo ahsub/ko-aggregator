@@ -338,7 +338,7 @@ INTL_TIER1 = [
 # ── SEKTOR-ETFs USA (2-5 pro Sektor) ─────────────────────────────────────────
 # Breite Markt-Benchmarks
 SECTOR_ETFS_BROAD = [
-    "SPY","QQQ","IWM","DIA","VTI","MDY","IJR",          # US Broad
+    "SPY","QQQ","IWM","RSP","DIA","VTI","MDY","IJR",    # US Broad (RSP = Equal-Weight S&P für Breadth)
     "VEA","VWO","EFA","EEM","IEFA","IEMG",               # Ex-US Broad
     "ACWI","VT","URTH",                                  # World
 ]
@@ -1216,6 +1216,370 @@ def calc_last_swing_low(lows: list, lookback: int = 20) -> float | None:
     return round(min(swing_lows), 4) if swing_lows else round(min(window), 4)
 
 
+
+
+def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
+    """
+    IOS Market Score v1.0 — Python-Port für UnderlyingIQ Aggregator.
+    Bewertet das Marktumfeld für neue Long-Käufe (0-100).
+    Quelle: IOS_Market_Score_v1_0 Pine Script (Club-Kolleg:in).
+
+    Module: Trend(35) + Breadth(25) + Risk(20) + Momentum(10) + Rotation(10)
+    Knock-out: SPY<SMA200 → cap65 | Risk≤6 → cap70 | Breadth≤8 → cap72
+    Decision: KAUFEN ERLAUBT / SELEKTIV KAUFEN / NUR TOP-SETUPS /
+              KEINE NEUEN BREAKOUTS / KEINE NEUEN KAEUFE
+    """
+    def get_closes(sym):
+        df = hist_data.get(sym)
+        if df is None or len(df) < 10: return []
+        try:
+            col = 'Close' if 'Close' in df.columns else df.columns[0]
+            return [float(x) for x in df[col].dropna().tolist()]
+        except Exception:
+            return []
+
+    def sma(closes, n):
+        if len(closes) < n: return None
+        return sum(closes[-n:]) / n
+
+    def sma_n_ago(closes, n, ago=20):
+        if len(closes) < n + ago: return None
+        return sum(closes[-(n+ago):-ago]) / n
+
+    def ratio_ma(a_closes, b_closes, ma_len=50):
+        """Verhältnis zweier Serien gleitend gemittelt."""
+        min_len = min(len(a_closes), len(b_closes))
+        if min_len < ma_len: return None, None
+        ratios = [a_closes[-min_len+i] / b_closes[-min_len+i]
+                  for i in range(min_len) if b_closes[-min_len+i] != 0]
+        if len(ratios) < ma_len: return None, None
+        current = ratios[-1]
+        ma      = sum(ratios[-ma_len:]) / ma_len
+        return current, ma
+
+    def rsi(closes, period=14):
+        if len(closes) < period + 1: return None
+        gains = [max(closes[i]-closes[i-1], 0) for i in range(1, len(closes))]
+        losses= [max(closes[i-1]-closes[i], 0) for i in range(1, len(closes))]
+        ag = sum(gains[-period:]) / period
+        al = sum(losses[-period:]) / period
+        if al == 0: return 100.0
+        return round(100 - 100 / (1 + ag/al), 1)
+
+    def macd_bull(closes):
+        if len(closes) < 35: return False
+        def ema_last(s, p):
+            k = 2/(p+1); v = s[0]
+            for x in s[1:]: v = x*k + v*(1-k)
+            return v
+        fast = ema_last(closes[-34:], 12)
+        slow = ema_last(closes[-34:], 26)
+        return fast > slow
+
+    # Daten laden
+    spy = get_closes('SPY');  qqq = get_closes('QQQ')
+    iwm = get_closes('IWM');  rsp = get_closes('RSP')
+    smh = get_closes('SMH');  hyg = get_closes('HYG')
+    tlt = get_closes('TLT')
+
+    vix_val = (vix_term or {}).get('vix', 20)
+
+    # SMAs
+    spy50  = sma(spy, 50);  spy200  = sma(spy, 200)
+    spy200_ago20 = sma_n_ago(spy, 200, 20)
+    qqq200 = sma(qqq, 200); qqq200_ago20 = sma_n_ago(qqq, 200, 20)
+    smh200 = sma(smh, 200)
+    rsp50  = sma(rsp, 50);  rsp200  = sma(rsp, 200)
+    iwm50  = sma(iwm, 50);  iwm200  = sma(iwm, 200)
+    hyg50  = sma(hyg, 50)
+
+    spy_last = spy[-1] if spy else None
+    qqq_last = qqq[-1] if qqq else None
+    smh_last = smh[-1] if smh else None
+    rsp_last = rsp[-1] if rsp else None
+    iwm_last = iwm[-1] if iwm else None
+
+    # Ratios
+    rspSpy, rspSpyMa = ratio_ma(rsp, spy, 50)
+    iwmSpy, iwmSpyMa = ratio_ma(iwm, spy, 50)
+    qqqSpy, qqqSpyMa = ratio_ma(qqq, spy, 50)
+    smhSpy, smhSpyMa = ratio_ma(smh, spy, 50)
+    hygTlt, hygTltMa = ratio_ma(hyg, tlt, 50)
+    hygSpy, hygSpyMa = ratio_ma(hyg, spy, 50)
+
+    # RSP/SPY Trend (10 Bars)
+    min_rsp_spy = min(len(rsp), len(spy))
+    rspSpy_10ago = (rsp[-11]/spy[-11]) if min_rsp_spy >= 11 else None
+
+    # ── MODULE 1: MARKET TREND /35 ────────────────────────────────────────────
+    trend1 = bool(spy_last and spy200 and spy_last > spy200)
+    trend2 = bool(spy200 and spy200_ago20 and spy200 > spy200_ago20)
+    trend3 = bool(spy_last and spy50 and spy_last > spy50)
+    trend4 = bool(qqq_last and qqq200 and qqq_last > qqq200)
+    trend5 = bool(qqq200 and qqq200_ago20 and qqq200 > qqq200_ago20)
+    trend6 = bool(smh_last and smh200 and smh_last > smh200)
+    trend7 = bool(rsp_last and rsp200 and rsp_last > rsp200)
+    trend_score = sum([trend1,trend2,trend3,trend4,trend5,trend6,trend7]) * 5
+
+    # ── MODULE 2: BREADTH PROXY /25 ───────────────────────────────────────────
+    breadth1 = bool(rsp_last and rsp50  and rsp_last > rsp50)
+    breadth2 = bool(rsp_last and rsp200 and rsp_last > rsp200)
+    breadth3 = bool(rspSpy and rspSpyMa and rspSpy > rspSpyMa)
+    breadth4 = bool(rspSpy and rspSpy_10ago and rspSpy > rspSpy_10ago)
+    breadth5 = bool(iwmSpy and iwmSpyMa and iwmSpy > iwmSpyMa)
+    breadth_score = sum([breadth1,breadth2,breadth3,breadth4,breadth5]) * 5
+
+    # ── MODULE 3: RISK /20 ────────────────────────────────────────────────────
+    vix_ma20 = None  # Proxy: wir nutzen vix_term Daten
+    vix_calm   = 20.0
+    vix_stress = 25.0
+    risk1 = bool(vix_val and vix_val < vix_calm)
+    risk2 = bool(vix_val and vix_val < vix_stress)  # vereinfacht (kein vixMa20)
+    risk3 = bool(vix_val and vix_val < 22)           # VIX MA-Proxy
+    risk4 = bool(hygTlt and hygTltMa and hygTlt > hygTltMa)
+    risk5 = bool(hyg and hyg[-1] and hyg50 and hyg[-1] > hyg50)
+    risk_score = ((5 if risk1 else 0) + (4 if risk2 else 0) +
+                  (4 if risk3 else 0) + (4 if risk4 else 0) + (3 if risk5 else 0))
+
+    # ── MODULE 4: MARKET MOMENTUM /10 ─────────────────────────────────────────
+    spy_rsi = rsi(spy, 14)
+    mom1 = bool(spy_rsi and 50 <= spy_rsi <= 75)
+    mom2 = macd_bull(spy)
+    mom3 = bool(spy_rsi and spy_rsi > 50)  # ADX-Proxy: Trend stark wenn RSI>50
+    mom_score = (4 if mom1 else 0) + (3 if mom2 else 0) + (3 if mom3 else 0)
+
+    # ── MODULE 5: ROTATION /10 ────────────────────────────────────────────────
+    rot1 = bool(qqqSpy and qqqSpyMa and qqqSpy > qqqSpyMa)
+    rot2 = bool(smhSpy and smhSpyMa and smhSpy > smhSpyMa)
+    rot3 = bool(hygSpy and hygSpyMa and hygSpy > hygSpyMa)
+    rotation_score = (4 if rot1 else 0) + (3 if rot2 else 0) + (3 if rot3 else 0)
+
+    # ── KNOCK-OUT CAPS ────────────────────────────────────────────────────────
+    raw = trend_score + breadth_score + risk_score + mom_score + rotation_score
+    capped = raw
+    if not trend1:      capped = min(capped, 65)   # SPY unter SMA200
+    if risk_score <= 6: capped = min(capped, 70)   # Risikoumfeld kritisch
+    if breadth_score <= 8: capped = min(capped, 72) # Marktbreite schwach
+    overall = max(0, min(100, capped))
+
+    # ── RATING & DECISION ─────────────────────────────────────────────────────
+    def rating(s):
+        if s >= 95: return "AAA"
+        if s >= 90: return "AA+"
+        if s >= 85: return "AA"
+        if s >= 80: return "A"
+        if s >= 75: return "BBB+"
+        if s >= 70: return "BBB"
+        if s >= 65: return "BB"
+        if s >= 50: return "B"
+        return "NO"
+
+    if overall >= 85 and trend_score >= 28 and breadth_score >= 18 and risk_score >= 14:
+        decision = "KAUFEN ERLAUBT"
+    elif overall >= 75:
+        decision = "SELEKTIV KAUFEN"
+    elif overall >= 60:
+        decision = "NUR TOP-SETUPS"
+    elif overall >= 45:
+        decision = "KEINE NEUEN BREAKOUTS"
+    else:
+        decision = "KEINE NEUEN KAEUFE"
+
+    if overall >= 85 and risk_score >= 14:
+        mode = "OFFENSIV"
+    elif overall >= 75:
+        mode = "SELEKTIV"
+    elif overall >= 60:
+        mode = "NEUTRAL"
+    elif overall >= 45:
+        mode = "DEFENSIV"
+    else:
+        mode = "KAPITAL SCHUETZEN"
+
+    # Diagnose
+    diag_trend    = "Markttrend stark" if trend_score >= 30 else "Trend intakt" if trend_score >= 22 else "Trend fragil" if trend_score >= 15 else "Trend schwach"
+    diag_breadth  = "Breite Teilnahme" if breadth_score >= 20 else "Breadth okay" if breadth_score >= 15 else "Breadth schmal" if breadth_score >= 10 else "Interne Schwaeche"
+    diag_risk     = "Risiko ruhig"     if risk_score >= 16 else "Risiko normal" if risk_score >= 11 else "Risiko erhoeht" if risk_score >= 7 else "Risiko kritisch"
+    diag_rotation = "Risk-on Rotation" if rotation_score >= 8 else "Rotation neutral" if rotation_score >= 5 else "Defensive Rotation"
+
+    log.info(f"  [IOS-Market] Score={overall} ({rating(overall)}) | {decision}")
+    log.info(f"  [IOS-Market] Trend={trend_score}/35 Breadth={breadth_score}/25 Risk={risk_score}/20 Mom={mom_score}/10 Rot={rotation_score}/10")
+
+    return {
+        "iosMarketScore":    overall,
+        "iosMarketRating":   rating(overall),
+        "iosMarketDecision": decision,
+        "iosMarketMode":     mode,
+        "iosMarketTrend":    trend_score,
+        "iosMarketBreadth":  breadth_score,
+        "iosMarketRisk":     risk_score,
+        "iosMarketMom":      mom_score,
+        "iosMarketRotation": rotation_score,
+        "iosMarketDiags": {
+            "trend":    diag_trend,
+            "breadth":  diag_breadth,
+            "risk":     diag_risk,
+            "rotation": diag_rotation,
+        },
+        "details": {
+            "spy_above_sma200":  trend1,
+            "spy_sma200_rising": trend2,
+            "qqq_above_sma200":  trend4,
+            "smh_above_sma200":  trend6,
+            "rsp_above_sma200":  trend7,
+            "breadth_rsp_spy":   breadth3,
+            "risk_vix_calm":     risk1,
+            "risk_hyg_tlt":      risk4,
+            "rotation_qqq_spy":  rot1,
+            "rotation_smh_spy":  rot2,
+        }
+    }
+
+def calc_ios_score(r: dict) -> dict:
+    """
+    IOS Foundation v1.2 — Python-Port für UnderlyingIQ (Club-Integration).
+    Neu in v1.2: Quality/Entry-Trennung, Leader-Wait-Pullback-Logik.
+
+    overallScore = qualityPct×0.70 + entryPct×0.30
+    → Leader im Pullback bekommt jetzt "LEADER WAIT PULLBACK" statt "NO BUY"
+    → Entry-Score bleibt separat sichtbar
+
+    Rating-Skala: AAA(95+) AA+(90) AA(85) A(80) BBB+(75) BBB(70) BB(65) B(50) NO
+    Decision: BUY FIRST TRANCHE / LEADER WAIT PULLBACK / SELECTIVE ENTRY / WATCHLIST / NO BUY
+    """
+    price    = r.get("price", 0) or 0
+    ema50    = r.get("ema50")
+    ema200   = r.get("ema200")
+    rsi      = r.get("rsi", 50) or 50
+    macd_h   = r.get("macdHist")
+    vol_r    = r.get("volRatio", 1) or 1
+    atr      = r.get("atr")
+    dist50   = r.get("dist50", 0) or 0
+    dist200  = r.get("dist200", 0) or 0
+    overheat = r.get("overheat", 0) or 0
+    pct_high = r.get("pctFromHigh52", 0) or 0
+    bbpos    = r.get("bbPos")
+    regime   = (r.get("regime") or "").lower()
+    score_c  = r.get("score", 50) or 50
+    s_min    = r.get("sMinervini", 0) or 0
+
+    # ── TREND SCORE /35 ───────────────────────────────────────────────────────
+    trend_score = 0
+    if ema200 and price > ema200:   trend_score += 5
+    if dist200 > 0:                 trend_score += 5
+    if ema50 and price > ema50:     trend_score += 5
+    if dist50 > 0:                  trend_score += 5
+    if ema50 and ema200 and ema50 > ema200: trend_score += 5
+    if regime in ("bull", "side"):  trend_score += 5
+    if bbpos is not None and bbpos > 0.5:   trend_score += 5
+
+    # ── RS SCORE /20 ──────────────────────────────────────────────────────────
+    rs_score = 0
+    if s_min >= 50:   rs_score += 5
+    if s_min >= 65:   rs_score += 5
+    if score_c >= 60: rs_score += 5
+    if dist200 > 5 and dist200 < 40: rs_score += 5
+
+    # ── MOMENTUM SCORE /10 ────────────────────────────────────────────────────
+    mom_score = 0
+    if rsi >= 55 and rsi <= 75:         mom_score += 4
+    if macd_h is not None and macd_h > 0: mom_score += 3
+    if regime == "bull":                mom_score += 3
+
+    # ── VOLUME SCORE /15 ──────────────────────────────────────────────────────
+    vol_score = 0
+    if vol_r >= 1.0: vol_score += 5
+    if vol_r >= 1.2: vol_score += 5
+    if vol_r >= 1.2 and macd_h and macd_h > 0: vol_score += 5
+
+    # ── QUALITY (Trend + RS + Mom + Vol, max 80) ──────────────────────────────
+    quality_raw = trend_score + rs_score + mom_score + vol_score  # max 80
+    quality_pct = round(quality_raw / 80 * 100)
+
+    # ── ENTRY SCORE /20 ───────────────────────────────────────────────────────
+    atr_pct = (atr / price * 100) if atr and price > 0 else 0
+    entry1 = -2 <= dist50 <= 8
+    entry2 = -3 <= dist50 <= 15
+    entry3 = atr_pct <= 7
+    entry4 = pct_high >= -15 and dist50 <= 15
+
+    entry_base = sum([entry1, entry2, entry3, entry4]) * 5
+
+    # v1.2 FIX #3: rvol aus Penalty entfernt (Doppelzählung mit vol_score)
+    # Nur noch 3 reine Geometrie-Penalties
+    penalty = ((3 if rsi > 80 else 0) +
+               (3 if dist50 > 8 + 5  else 0) +   # distEma21 Proxy
+               (4 if dist50 > 15 + 5 else 0))     # distSma50 Proxy
+
+    entry_score = max(0, min(20, entry_base - penalty))
+    entry_pct   = round(entry_score / 20 * 100)
+
+    # ── OVERALL = Quality×0.70 + Entry×0.30 (v1.2 Kernformel) ───────────────
+    overall = max(0, min(100, round(quality_pct * 0.70 + entry_pct * 0.30)))
+
+    def rating(s):
+        if s >= 95: return "AAA"
+        if s >= 90: return "AA+"
+        if s >= 85: return "AA"
+        if s >= 80: return "A"
+        if s >= 75: return "BBB+"
+        if s >= 70: return "BBB"
+        if s >= 65: return "BB"
+        if s >= 50: return "B"
+        return "NO"
+
+    # ── v1.2 DECISION LOGIC ───────────────────────────────────────────────────
+    is_leader   = quality_pct >= 85
+    is_tradable = quality_pct >= 70
+    entry_good  = entry_pct   >= 75
+    strong_ovx  = dist50 > 20 or rsi > 80  # strongOverextension Proxy
+
+    if is_leader and entry_good:
+        decision = "BUY FIRST TRANCHE"
+    elif is_leader and not entry_good:
+        decision = "LEADER WAIT PULLBACK"   # NEU in v1.2
+    elif is_tradable and entry_good:
+        decision = "SELECTIVE ENTRY"        # NEU in v1.2
+    elif is_tradable:
+        decision = "WATCHLIST"
+    else:
+        decision = "NO BUY"
+
+    # ── DIAGNOSE ──────────────────────────────────────────────────────────────
+    diag_trend  = ("Trend sehr stark" if trend_score >= 30 else
+                   "Trend intakt"     if trend_score >= 20 else "Trend schwach")
+    diag_rs     = "Leader vs Benchmark" if rs_score >= 15 else "RS nicht führend"
+    diag_entry  = ("Einstieg attraktiv"  if entry_pct >= 75 else
+                   "Entry nur selektiv"  if entry_pct >= 55 else "Pullback abwarten")
+    diag_risk   = "Überdehnung" if strong_ovx else "Keine Überdehnung"
+    summary     = ("Top-Aktie mit kaufbarem Setup"  if is_leader and entry_good     else
+                   "Top-Aktie, kein idealer Einstieg" if is_leader                  else
+                   "Watchlist, nur selektiv"         if is_tradable                 else
+                   "Keine Kaufqualität")
+
+    return {
+        "iosScore":      overall,
+        "iosRating":     rating(overall),
+        "iosDecision":   decision,
+        # v1.2 neu: Quality/Entry getrennt
+        "iosQuality":    quality_pct,
+        "iosQualityRating": rating(quality_pct),
+        "iosEntry":      entry_pct,
+        "iosEntryRating": rating(entry_pct),
+        "iosIsLeader":   is_leader,
+        "iosTrend":      trend_score,
+        "iosRS":         rs_score,
+        "iosMom":        mom_score,
+        "iosVol":        vol_score,
+        "iosPenalty":    penalty,
+        "iosSummary":    summary,
+        "iosDiagTrend":  diag_trend,
+        "iosDiagRS":     diag_rs,
+        "iosDiagEntry":  diag_entry,
+        "iosDiagWarn":   diag_risk,
+    }
+
+
 def apply_macro_risk_overlay(options_candidates: list, dix_gex: dict, pcr_data: dict) -> list:
     """
     Macro Risk Overlay — Gemini-Blueprint.
@@ -1254,6 +1618,37 @@ def apply_macro_risk_overlay(options_candidates: list, dix_gex: dict, pcr_data: 
         # Gesamtscore nach Overlay neu berechnen
         r["optsScore"] = max(r.get("scoreCsp", 0), r.get("scoreCc", 0), r.get("scoreSpread", 0))
 
+    return options_candidates
+
+
+def apply_ios_market_overlay(options_candidates: list, ios_market: dict) -> list:
+    """
+    IOS Market Score Overlay auf Options-Kandidaten.
+    Bei "KEINE NEUEN KAEUFE" → CSP/CC stark gedämpft (Kapitalschutz).
+    Bei "KAUFEN ERLAUBT"  → leichter Bonus für Confidence.
+    """
+    if not ios_market:
+        return options_candidates
+    ims = ios_market.get("iosMarketScore", 60)
+    decision = ios_market.get("iosMarketDecision", "")
+
+    for r in options_candidates:
+        if decision == "KEINE NEUEN KAEUFE":
+            # Kapitalschutz: alle Long-Options-Strategien stark dämpfen
+            r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.30))
+            r["scoreCc"]  = max(0, int(r.get("scoreCc",  0) * 0.30))
+            r["_macroNote"] = r.get("_macroNote","") + " | IOS: KAPITAL SCHUETZEN"
+        elif decision == "KEINE NEUEN BREAKOUTS":
+            r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.55))
+            r["_macroNote"] = r.get("_macroNote","") + " | IOS: DEFENSIV"
+        elif decision == "NUR TOP-SETUPS":
+            r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.75))
+        elif decision == "KAUFEN ERLAUBT":
+            # Leichter Confidence-Bonus
+            r["scoreCsp"] = min(100, int(r.get("scoreCsp", 0) * 1.10))
+            r["scoreCc"]  = min(100, int(r.get("scoreCc",  0) * 1.10))
+        # optsScore neu
+        r["optsScore"] = max(r.get("scoreCsp",0), r.get("scoreCc",0), r.get("scoreSpread",0))
     return options_candidates
 
 
@@ -1320,6 +1715,8 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "bestLong":      best_long,
             "bestShort":     best_short,
             "shortDir":      short_dir,
+            # IOS Foundation Rating (Club-Integration)
+            **calc_ios_score(r),
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
@@ -1431,6 +1828,17 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "sMrLong":       c.get("sMrLong"),
             "sBreakdown":    c.get("sBreakdown"),
             "sFading":       c.get("sFading"),
+            # IOS Foundation
+            "iosScore":      c.get("iosScore"),
+            "iosRating":     c.get("iosRating"),
+            "iosDecision":   c.get("iosDecision"),
+            "iosDiagTrend":  c.get("iosDiagTrend"),
+            "iosDiagEntry":  c.get("iosDiagEntry"),
+            "iosDiagWarn":   c.get("iosDiagWarn"),
+            "iosQuality":    c.get("iosQuality"),
+            "iosEntry":      c.get("iosEntry"),
+            "iosIsLeader":   c.get("iosIsLeader"),
+            "iosSummary":    c.get("iosSummary"),
         }
         for c in master_shortlist_raw
     ]
@@ -1948,6 +2356,9 @@ def main():
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
     pcr      = fetch_pcr_cboe() or {}   # Fallback auf leeres Dict
     vix_term    = fetch_vix_term()
+    # IOS Market Score (Club-Integration)
+    log.info(f"\n🏛️  IOS Market Score berechnen (Breadth/Rotation/Risk)...")
+    ios_market = calc_ios_market_score(hist_data, vix_term)
     log.info(f"  Lade MSE History (VVIX/SKEW/VIX 30T)...")
     mse_history = fetch_mse_history(days=30)
 
@@ -2023,6 +2434,8 @@ def main():
     # Sortierung: bester Strategie-Score zuerst, Top-50
     # Macro Risk Overlay anwenden (GEX/PCR-Skalierung) — Gemini-Blueprint
     options_candidates = apply_macro_risk_overlay(options_candidates, dix_gex, pcr)
+    # IOS Market Score Overlay (Club-Integration)
+    options_candidates = apply_ios_market_overlay(options_candidates, ios_market)
 
     options_watchlist = sorted(
         options_candidates,
@@ -2203,6 +2616,7 @@ def main():
             "pcr":        pcr,
             "vixTerm":    vix_term,
             "mseHistory": mse_history,   # 30T VVIX/SKEW/VIX fuer Z-Score
+            "iosMarket":  ios_market,    # IOS Market Score v1.0 (Club)
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
