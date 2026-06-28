@@ -1388,38 +1388,38 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     # Kompaktes Format fuer JSON (erweitertes Payload fuer Alpha Desk Scanner-Paritaet)
     master_shortlist = [
-        {
-            "sym":           c["sym"],
-            "price":         c["price"],
-            "strategy":      c["masterStrategy"],
-            "score":         round(c["masterScore"]),
-            "grade":         c["grade"],
-            "rsi":           c["rsi"],
-            "atr":           c["atr"],
-            "shortDir":      c.get("shortDir"),
-            "overheat":      c.get("overheat"),
-            "ema50":         c.get("ema50"),
-            "ema200":        c.get("ema200"),
-            "macdHist":      c.get("macdHist"),
-            "obvTrend":      c.get("obvTrend"),
-            "bbPos":         c.get("bbPos"),
-            "volRatio":      c.get("volRatio"),
-            "hvp":           c.get("hvp"),
-            "hv10":          c.get("hv10"),
-            "pctFromHigh52": c.get("pctFromHigh52"),
-            "dist200":       c.get("dist200"),
-            "dist50":        c.get("dist50"),
-            "high52":        c.get("high52"),
-            "low52":         c.get("low52"),
-            "bullSignals":   c.get("bullSignals"),
-            "sMinervini":    c.get("sMinervini"),
-            "sSwing":        c.get("sSwing"),
-            "sMrLong":       c.get("sMrLong"),
-            "sBreakdown":    c.get("sBreakdown"),
-            "sFading":       c.get("sFading"),
-        }
-        for c in master_shortlist_raw
-    ]
+    {
+        "sym":           c["sym"],
+        "price":         c["price"],
+        "strategy":      c["masterStrategy"],
+        "score":         round(c["masterScore"]),
+        "grade":         c["grade"],
+        "rsi":           c["rsi"],
+        "atr":           c["atr"],
+        "shortDir":      c.get("shortDir"),
+        "overheat":      c.get("overheat"),
+        "ema50":         c.get("ema50"),
+        "ema200":        c.get("ema200"),
+        "macdHist":      c.get("macdHist"),
+        "obvTrend":      c.get("obvTrend"),
+        "bbPos":         c.get("bbPos"),
+        "volRatio":      c.get("volRatio"),
+        "hvp":           c.get("hvp"),
+        "hv10":          c.get("hv10"),
+        "pctFromHigh52": c.get("pctFromHigh52"),
+        "dist200":       c.get("dist200"),
+        "dist50":        c.get("dist50"),
+        "high52":        c.get("high52"),
+        "low52":         c.get("low52"),
+        "bullSignals":   c.get("bullSignals"),
+        "sMinervini":    c.get("sMinervini"),
+        "sSwing":        c.get("sSwing"),
+        "sMrLong":       c.get("sMrLong"),
+        "sBreakdown":    c.get("sBreakdown"),
+        "sFading":       c.get("sFading"),
+    }
+    for c in master_shortlist_raw
+]
 Block 2 — hv30() (ersetze die alte def hv30(cls): Funktion):
 python
         for c in master_shortlist_raw
