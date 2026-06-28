@@ -87,6 +87,7 @@ def validate_data_freshness(results):
                 pass
 
     log.info(f"  Datenfreshe: {fresh_count} aktuell · {stale_count} veraltet")
+    log.info(f"CODE-CHECK: ema50_refs={open(__file__).read().count('c.get(\"ema50\")')} | period={'2y' if '\"2y\"' in open(__file__).read() else '1y'}")
     log.info(f"  Letzter Handelstag: {last_trading_day}")
 
     # Warnung wenn mehr als 20% der Daten nicht vom letzten Handelstag
