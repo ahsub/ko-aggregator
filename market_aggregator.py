@@ -1673,6 +1673,7 @@ def process_ticker(ticker, hist_df):
             "dist200":       dist_200,
             "volRatio":      vol_ratio,
             "bars":          len(closes),
+            "_bars_raw":     len(hist_df) if hist_df is not None else 0,
             "hvp":           calc_hv_percentile(closes),          # 30-Tage HV-Percentile 0-100
             "hv10":          calc_hv_percentile(closes, window=10, lookback=90),  # 10-Tage HV für Weeklies
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1690,7 +1691,7 @@ def fetch_batch(tickers, period="1y", max_workers=20):
 
     def fetch_one(ticker):
         # Versuche mehrere Perioden falls primär leer
-        for p in [period, "2y", "6mo"]:
+        for p in ["2y", period, "6mo"]:  # Fix: 2y zuerst → immer 504 Bars
             try:
                 df = yf.download(ticker, period=p, interval="1d",
                                  auto_adjust=True, progress=False, threads=False)
@@ -1885,7 +1886,11 @@ def main():
 
     # ── CODE-VERIFIKATION (Gemini-Empfehlung) ────────────────────────────────
     _src = open(__file__).read()
-    log.info(f"[VERIFY] Zeilen={_src.count(chr(10))} | period_2y={'2y' in _src[:_src.find('fetch_batch')+200]} | ema50_in_shortlist={'c.get("ema50")' in _src} | adaptive_guard={'available = len(closes)' in _src}")
+    _zl = _src.count(chr(10))
+    _2y = '["2y", period' in _src
+    _ema = 'c.get("ema50")' in _src
+    _guard = 'available = len(closes)' in _src
+    log.info(f"[VERIFY] Zeilen={_zl} | 2y_first={_2y} | ema50_in_shortlist={_ema} | adaptive_guard={_guard}")
     # ── ENDE VERIFIKATION ─────────────────────────────────────────────────────
 
     # 1. Ticker-Universum aufbauen
@@ -1920,6 +1925,11 @@ def main():
             results.append(result)
 
     log.info(f"   ✅ Erfolgreich: {len(results)} | ❌ Fehler: {len(errors)}")
+    # Bars-Statistik (Gemini-Diagnose)
+    _bars_all = [r.get("bars", 0) for r in results if r.get("bars")]
+    if _bars_all:
+        import numpy as _np
+        log.info(f"   [DIAGNOSE] Ø-Bars: {_np.mean(_bars_all):.0f} | max: {max(_bars_all)} | >300: {sum(1 for b in _bars_all if b>300)}/{len(_bars_all)}")
 
     # 4. Externe Datenquellen
     log.info(f"\n🌐 Externe Datenquellen...")
