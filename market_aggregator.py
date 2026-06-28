@@ -1884,7 +1884,7 @@ def main():
 
     # 2. Marktdaten laden
     log.info(f"\n📥 Lade Marktdaten...")
-    hist_data = fetch_batch(stock_tickers, period="1y", max_workers=25)
+    hist_data = fetch_batch(stock_tickers, period="2y", max_workers=25)
 
     # Krypto mit 6 Monaten
     if crypto_tickers:
