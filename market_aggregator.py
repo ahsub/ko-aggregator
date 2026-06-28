@@ -651,20 +651,37 @@ def calc_hv_percentile(closes, window=30, lookback=252):
     lookback = min(lookback, available)  # Adaptiv: nie mehr als vorhanden
     try:
         def hv30(cls):
+            # Fix: Filter Nullen/negative Preise (yfinance Datenfehler)
+            cls = [c for c in cls if c and c > 0]
+            if len(cls) < 2:
+                return None
             log_rets = [math.log(cls[i] / cls[i-1]) for i in range(1, len(cls))]
-            return math.sqrt(252) * (sum(x**2 for x in log_rets) / len(log_rets) - (sum(log_rets)/len(log_rets))**2) ** 0.5
+            if not log_rets:
+                return None
+            mean_lr = sum(log_rets) / len(log_rets)
+            variance = sum(x**2 for x in log_rets) / len(log_rets) - mean_lr**2
+            # Fix: max(0,...) verhindert sqrt negativer Zahl (Float-Precision)
+            return math.sqrt(252) * math.sqrt(max(0.0, variance))
 
         # Aktuelle HV
         current_hv = hv30(closes[-window:])
+        if current_hv is None:
+            return None
 
-        # Historische HV-Serie (adaptiver lookback)
+        # Historische HV-Serie — per-Window Exception-Handling
+        # (ein schlechtes Fenster killt nicht die gesamte Percentil-Berechnung)
         hv_series = []
         for i in range(lookback):
-            end = len(closes) - i
-            start = end - window
-            if start < 0:
-                break
-            hv_series.append(hv30(closes[start:end]))
+            try:
+                end = len(closes) - i
+                start = end - window
+                if start < 0:
+                    break
+                hv = hv30(closes[start:end])
+                if hv is not None:
+                    hv_series.append(hv)
+            except Exception:
+                continue  # Schlechtes Fenster überspringen
 
         if not hv_series:
             return None
