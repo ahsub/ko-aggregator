@@ -679,7 +679,8 @@ def calc_hv_percentile(closes, window=30, lookback=252):
                 if hv is not None:
                     hv_series.append(hv)
             except Exception:
-                continue  # Schlechtes Fenster überspringen
+                continue
+
 
         if not hv_series:
             return None
