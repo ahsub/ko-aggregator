@@ -42,6 +42,13 @@ except ImportError:
     os.system("pip install yfinance --quiet")
     import yfinance as yf
 
+# Gemini Fix 4: Verhindert Thread-Konflikte bei parallelem yfinance-Download
+# (Race Conditions bei ThreadPoolExecutor → stille Fehler ohne Exception)
+try:
+    yf.set_tz_cache_path(None)   # Kein Datei-Cache (thread-safe)
+except Exception:
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -87,7 +94,6 @@ def validate_data_freshness(results):
                 pass
 
     log.info(f"  Datenfreshe: {fresh_count} aktuell · {stale_count} veraltet")
-    log.info(f"CODE-CHECK: ema50_refs={open(__file__).read().count('c.get(\"ema50\")')} | period={'2y' if '\"2y\"' in open(__file__).read() else '1y'}")
     log.info(f"  Letzter Handelstag: {last_trading_day}")
 
     # Warnung wenn mehr als 20% der Daten nicht vom letzten Handelstag
@@ -650,8 +656,11 @@ def calc_hv_percentile(closes, window=30, lookback=252):
     if available < 30:  # Mindestens 30 historische HV-Punkte für stabilen Percentil
         return None
     lookback = min(lookback, available)  # Adaptiv: nie mehr als vorhanden
+    # Diagnose (temporär)
+    import logging as _lg; _lg.getLogger("aggregator").debug(f"[HVP] available={available} lookback={lookback} closes={len(closes)}")
     try:
         def hv30(cls):
+            # Fix: Filter Nullen/negative Preise (yfinance Datenfehler)
             cls = [c for c in cls if c and c > 0]
             if len(cls) < 2:
                 return None
@@ -660,6 +669,7 @@ def calc_hv_percentile(closes, window=30, lookback=252):
                 return None
             mean_lr = sum(log_rets) / len(log_rets)
             variance = sum(x**2 for x in log_rets) / len(log_rets) - mean_lr**2
+            # Fix: max(0,...) verhindert sqrt negativer Zahl (Float-Precision)
             return math.sqrt(252) * math.sqrt(max(0.0, variance))
 
         # Aktuelle HV
@@ -668,20 +678,21 @@ def calc_hv_percentile(closes, window=30, lookback=252):
             return None
 
         # Historische HV-Serie — per-Window Exception-Handling
-        # (ein schlechtes Fenster killt nicht die gesamte Percentil-Berechnung)
+        # Gemini Fix 1: i=1 statt i=0 → current_hv nicht in historischer Verteilung
+        # (sonst wird current_hv doppelt gezählt → Perzentil-Verzerrung)
         hv_series = []
-        for i in range(lookback):
+        for i in range(1, lookback + 1):
             try:
                 end = len(closes) - i
                 start = end - window
                 if start < 0:
                     break
                 hv = hv30(closes[start:end])
-                if hv is not None:
+                # Gemini Fix 2: hv=0.0 = flache Kurshistorie → unbrauchbar für Perzentil
+                if hv is not None and hv > 0.0:
                     hv_series.append(hv)
             except Exception:
-                continue
-
+                continue  # Schlechtes Fenster überspringen
 
         if not hv_series:
             return None
@@ -1389,40 +1400,38 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     # Kompaktes Format fuer JSON (erweitertes Payload fuer Alpha Desk Scanner-Paritaet)
     master_shortlist = [
-    {
-        "sym":           c["sym"],
-        "price":         c["price"],
-        "strategy":      c["masterStrategy"],
-        "score":         round(c["masterScore"]),
-        "grade":         c["grade"],
-        "rsi":           c["rsi"],
-        "atr":           c["atr"],
-        "shortDir":      c.get("shortDir"),
-        "overheat":      c.get("overheat"),
-        "ema50":         c.get("ema50"),
-        "ema200":        c.get("ema200"),
-        "macdHist":      c.get("macdHist"),
-        "obvTrend":      c.get("obvTrend"),
-        "bbPos":         c.get("bbPos"),
-        "volRatio":      c.get("volRatio"),
-        "hvp":           c.get("hvp"),
-        "hv10":          c.get("hv10"),
-        "pctFromHigh52": c.get("pctFromHigh52"),
-        "dist200":       c.get("dist200"),
-        "dist50":        c.get("dist50"),
-        "high52":        c.get("high52"),
-        "low52":         c.get("low52"),
-        "bullSignals":   c.get("bullSignals"),
-        "sMinervini":    c.get("sMinervini"),
-        "sSwing":        c.get("sSwing"),
-        "sMrLong":       c.get("sMrLong"),
-        "sBreakdown":    c.get("sBreakdown"),
-        "sFading":       c.get("sFading"),
-    }
-    for c in master_shortlist_raw
-]
-Block 2 — hv30() (ersetze die alte def hv30(cls): Funktion):
-python
+        {
+            "sym":           c["sym"],
+            "price":         c["price"],
+            "strategy":      c["masterStrategy"],
+            "score":         round(c["masterScore"]),
+            "grade":         c["grade"],
+            "rsi":           c["rsi"],
+            "atr":           c["atr"],
+            "shortDir":      c.get("shortDir"),
+            "overheat":      c.get("overheat"),
+            # Chart-Metriken fuer Alpha Desk (MACD, OBV, 52W, EMA, Bollinger)
+            "ema50":         c.get("ema50"),
+            "ema200":        c.get("ema200"),
+            "macdHist":      c.get("macdHist"),
+            "obvTrend":      c.get("obvTrend"),
+            "bbPos":         c.get("bbPos"),
+            "volRatio":      c.get("volRatio"),
+            "hvp":           c.get("hvp"),
+            "hv10":          c.get("hv10"),
+            "pctFromHigh52": c.get("pctFromHigh52"),
+            "dist200":       c.get("dist200"),
+            "dist50":        c.get("dist50"),
+            "high52":        c.get("high52"),
+            "low52":         c.get("low52"),
+            "bullSignals":   c.get("bullSignals"),
+            # Alle Strategie-Scores fuer Frontend-Kontext
+            "sMinervini":    c.get("sMinervini"),
+            "sSwing":        c.get("sSwing"),
+            "sMrLong":       c.get("sMrLong"),
+            "sBreakdown":    c.get("sBreakdown"),
+            "sFading":       c.get("sFading"),
+        }
         for c in master_shortlist_raw
     ]
 
@@ -1874,6 +1883,11 @@ def main():
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     log.info("=" * 60)
 
+    # ── CODE-VERIFIKATION (Gemini-Empfehlung) ────────────────────────────────
+    _src = open(__file__).read()
+    log.info(f"[VERIFY] Zeilen={_src.count(chr(10))} | period_2y={'2y' in _src[:_src.find('fetch_batch')+200]} | ema50_in_shortlist={'c.get("ema50")' in _src} | adaptive_guard={'available = len(closes)' in _src}")
+    # ── ENDE VERIFIKATION ─────────────────────────────────────────────────────
+
     # 1. Ticker-Universum aufbauen
     tickers = build_ticker_universe()
     log.info(f"\n📋 Ticker-Universum: {len(tickers)} Titel")
@@ -1885,7 +1899,7 @@ def main():
 
     # 2. Marktdaten laden
     log.info(f"\n📥 Lade Marktdaten...")
-    hist_data = fetch_batch(stock_tickers, period="2y", max_workers=25)
+    hist_data = fetch_batch(stock_tickers, period="1y", max_workers=25)
 
     # Krypto mit 6 Monaten
     if crypto_tickers:
@@ -2208,6 +2222,18 @@ def main():
     import os as _os
     _ant_key = _os.environ.get("ANTHROPIC_API_KEY") or _os.environ.get("ANT_KEY")
     strategy_data = build_leaderboards(results, market_regime=market_regime_str)
+
+    # ── DIAGNOSE-LOG (temporär) ──────────────────────────────────────────────
+    _ms_raw = strategy_data.get("masterShortlist", [])
+    if _ms_raw:
+        _s0 = _ms_raw[0]
+        log.info(f"  [DIAG] masterShortlist[0] Felder: {len(_s0.keys())} — {list(_s0.keys())[:8]}")
+        log.info(f"  [DIAG] ema50={_s0.get('ema50')} hvp={_s0.get('hvp')} sMinervini={_s0.get('sMinervini')}")
+    _sample_hvp = [(r.get('sym'), r.get('hvp'), r.get('bars')) for r in results[:5]]
+    log.info(f"  [DIAG] results[0:5] hvp+bars: {_sample_hvp}")
+    _sample_ema = [(r.get('sym'), r.get('ema50')) for r in results[:3]]
+    log.info(f"  [DIAG] results[0:3] ema50: {_sample_ema}")
+    # ── ENDE DIAGNOSE ────────────────────────────────────────────────────────
     leaderboards_obj  = strategy_data["leaderboards"]
     master_shortlist  = strategy_data["masterShortlist"]
     log.info(f"\n🤖 KI-Enrichment Master Shortlist ({len(master_shortlist)} Kandidaten)...")
@@ -2275,4 +2301,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
