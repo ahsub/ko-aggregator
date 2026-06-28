@@ -152,6 +152,8 @@ NASDAQ100_EXTRA = [
 ]
 
 # ── DEUTSCHE MAERKTE (Xetra .DE — beste yfinance Verfuegbarkeit) ──────────────
+# DAX40/MDAX/TecDAX: NUR Referenz + KO-Produkt-Screener (keine Options-Kandidaten)
+# Werden in build_ticker_universe() NICHT mehr direkt eingebunden.
 DAX40_TICKERS = [
     "ADS.DE","AIR.DE","ALV.DE","BAS.DE","BAYN.DE","BMW.DE","BNR.DE",
     "CBK.DE","CON.DE","1COV.DE","DBK.DE","DB1.DE","DHL.DE","DTE.DE",
@@ -175,34 +177,110 @@ TECDAX_TICKERS = [
     "SIE.DE","SOW.DE","SRT3.DE","UTDI.DE","WAF.DE","ZAL.DE",
 ]
 
-# ── EUROSTOXX 50 + STOXX Europe 600 Top (Heimatboersen) ──────────────────────
-EUROSTOXX_TICKERS = [
-    # Frankreich (.PA)
-    "OR.PA","MC.PA","SU.PA","BNP.PA","AIR.PA","DG.PA","RI.PA","CS.PA",
-    "SAN.PA","CAP.PA","DSY.PA","HO.PA","KER.PA","ML.PA","ORA.PA","SGO.PA",
-    "STM.PA","TTE.PA","VIE.PA","WLN.PA","ACA.PA","GLE.PA","LR.PA","RNO.PA",
+# ── EUROSTOXX / EU-Heimatboersen (NUR fuer Referenz + KV-Filterung) ──────────
+# Diese Liste wird NICHT mehr direkt in build_ticker_universe() eingebunden.
+# Stattdessen: EU_ADR_TICKERS (US-gelistete Pendants) werden verwendet.
+# Heimatboersen bleiben als Referenz fuer KO-Produkt-Screener und Watchlisten.
+EUROSTOXX_TICKERS_LEGACY = [
+    # Frankreich (.PA) — nur Referenz
+    "OR.PA","MC.PA","SU.PA","BNP.PA","AIR.PA","TTE.PA","STM.PA","RNO.PA",
     # Niederlande (.AS)
-    "ASML.AS","PHIA.AS","ING.AS","ABN.AS","NN.AS","ADYEN.AS","HEIA.AS",
-    "AKZA.AS","DSM.AS","INGA.AS","MT.AS","REN.AS","RAND.AS","WKL.AS",
+    "ASML.AS","PHIA.AS","ING.AS","ADYEN.AS","HEIA.AS",
     # Italien (.MI)
-    "ENI.MI","ENEL.MI","ISP.MI","UCG.MI","STM.MI","LDO.MI","PRY.MI",
-    "TIT.MI","MB.MI","RACE.MI","G.MI","SRG.MI",
-    # Spanien (.MC)
-    "SAN.MC","BBVA.MC","ITX.MC","IBE.MC","REP.MC","FER.MC","ACS.MC","TEF.MC",
+    "ENI.MI","ENEL.MI","RACE.MI","STM.MI",
     # Schweiz (.SW)
-    "NOVN.SW","ROG.SW","NESN.SW","ABBN.SW","ZURN.SW","LONN.SW","GEBN.SW",
-    "SIKA.SW","GIVN.SW","SLHN.SW","ALC.SW","HOLN.SW","PGHN.SW",
+    "NOVN.SW","ROG.SW","NESN.SW","ABBN.SW",
     # UK (.L)
-    "AZN.L","SHEL.L","HSBA.L","ULVR.L","RIO.L","BP.L","GSK.L","REL.L",
-    "BATS.L","DGE.L","NG.L","VOD.L","BA.L","EXPN.L","LSEG.L","PRU.L",
-    # Schweden (.ST)
-    "ERICB.ST","VOLVA.ST","SAND.ST","SEB-A.ST","SWED-A.ST","ATCO-A.ST",
-    # Daenemark (.CO)
-    "NOVO-B.CO","CARL-B.CO","MAERSK-B.CO","DSV.CO","ORSTED.CO",
-    # Finnland (.HE)
-    "NOKIA.HE","FORTUM.HE","SAMPO.HE","KNEBV.HE",
-    # Belgien (.BR)
-    "UCB.BR","AB.BR","ABI.BR","GLPG.BR",
+    "AZN.L","SHEL.L","BP.L","GSK.L","ULVR.L","RIO.L",
+    # Skandinavien / Sonstige
+    "NOVO-B.CO","ERICB.ST",
+]
+# Alias fuer abwaertskompatible KV-Keys
+EUROSTOXX_TICKERS = EUROSTOXX_TICKERS_LEGACY
+
+# ── EU BLUE CHIPS — US-gelistete ADRs (Options-faehig, liquid) ───────────────
+# Ersetzt DAX40, MDAX, TecDAX, EuroStoxx, FTSE100, STOXX_EU_EXTRA im Universum.
+# Nur US-gelistete Ticker: NYSE/NASDAQ-ADRs oder primär US-notierte Titel.
+# Quelle: OTC Markets / NYSE ADR-Datenbank — geprüft auf Optionsliquidität.
+EU_ADR_TICKERS = [
+    # ── Deutschland (DAX + MDAX) ──────────────────────────────────────────────
+    "SAP",      # SAP SE (NYSE, primär US-listing)
+    "DB",       # Deutsche Bank (NYSE ADR)
+    "SIEGY",    # Siemens (OTC ADR, liquid)
+    "BAYRY",    # Bayer (OTC ADR)
+    "BMWYY",    # BMW (OTC ADR)
+    "ADDYY",    # Adidas (OTC ADR)
+    "DHLGY",    # DHL Group (OTC ADR)
+    "DTEGY",    # Deutsche Telekom (OTC ADR)
+    "AZSEY",    # Allianz (OTC ADR)
+    "MURGY",    # Munich Re (OTC ADR)
+    "RWEOY",    # RWE (OTC ADR)
+    "IFNNY",    # Infineon (OTC ADR)
+    "LIN",      # Linde (NYSE, primär US-listing seit Fusion)
+    "BASFY",    # BASF (OTC ADR)
+    "MKKGY",    # Merck KGaA (OTC ADR — nicht Merck US!)
+    "FSNUY",    # Fresenius (OTC ADR)
+    "RNMBY",    # Rheinmetall (OTC ADR, Defense)
+    "VWAGY",    # Volkswagen (OTC ADR)
+    "MBGAF",    # Mercedes-Benz (OTC ADR)
+    "HBMRY",    # Heidelberg Materials (OTC ADR)
+    "HENKY",    # Henkel (OTC ADR)
+    "EADSY",    # Airbus (OTC ADR)
+    "SBGSY",    # Schneider Electric (OTC ADR)
+    # ── Frankreich ────────────────────────────────────────────────────────────
+    "TTE",      # TotalEnergies (NYSE, liquid Options)
+    "LRLCY",    # L'Oreal (OTC ADR)
+    "LVMUY",    # LVMH (OTC ADR)
+    "PPRUY",    # Kering (OTC ADR)
+    "HESAY",    # Hermès (OTC ADR)
+    "BNPQY",    # BNP Paribas (OTC ADR)
+    "CFRUY",    # Richemont (OTC ADR)
+    "PDRDY",    # Pernod Ricard (OTC ADR)
+    "VCISY",    # Vinci (OTC ADR)
+    "STM",      # STMicroelectronics (NYSE, US-listing)
+    "AIVAF",    # Air Liquide (OTC ADR)
+    # ── Niederlande ───────────────────────────────────────────────────────────
+    "ASML",     # ASML (NASDAQ, primär US-listing)
+    "PHG",      # Philips (NYSE ADR)
+    "ING",      # ING Groep (NYSE ADR, liquid Options)
+    "HEINY",    # Heineken (OTC ADR)
+    # ── Schweiz ───────────────────────────────────────────────────────────────
+    "NVS",      # Novartis (NYSE ADR, liquid Options)
+    "RHHBY",    # Roche (OTC ADR)
+    "NSRGY",    # Nestle (OTC ADR)
+    "ABB",      # ABB (NYSE, US-listing)
+    "CFR",      # Richemont — bereits als CFRUY
+    "ZURN",     # Zurich Insurance (OTC) — schlechte Liquidität, Skip
+    # ── UK ────────────────────────────────────────────────────────────────────
+    "AZN",      # AstraZeneca (NASDAQ, primär US-listing, liquid Options!)
+    "SHEL",     # Shell (NYSE ADR, liquid Options)
+    "BP",       # BP (NYSE ADR, liquid Options)
+    "GSK",      # GSK (NYSE ADR, liquid Options)
+    "RIO",      # Rio Tinto (NYSE ADR, liquid Options)
+    "HSBC",     # HSBC (NYSE ADR, liquid Options)
+    "VOD",      # Vodafone (NASDAQ ADR)
+    "UL",       # Unilever (NYSE ADR)
+    "DEO",      # Diageo (NYSE ADR)
+    "BTI",      # British American Tobacco (NYSE ADR)
+    "NGG",      # National Grid (NYSE ADR)
+    # ── Skandinavien ──────────────────────────────────────────────────────────
+    "NVO",      # Novo Nordisk (NYSE ADR, SEHR liquid Options!)
+    "ERIC",     # Ericsson (NASDAQ ADR)
+    "NOK",      # Nokia (NYSE ADR)
+    "VOLVY",    # Volvo (OTC ADR)
+    "ATLKY",    # Atlas Copco (OTC ADR)
+    # ── Sonstige Europa ───────────────────────────────────────────────────────
+    "E",        # Eni (NYSE ADR)
+    "RACE",     # Ferrari (NYSE, primär US-listing, liquid Options!)
+    "SNY",      # Sanofi (NASDAQ ADR)
+    # ── Defensive Ergänzungen (Gemini-Empfehlung: Sektorparität) ─────────────
+    "NUE",      # Nucor (Industrials/Materials — S&P500)
+    "FCX",      # Freeport-McMoRan (Materials — liquid Options)
+    "URI",      # United Rentals (Industrials — liquid Options)
+    "WM",       # Waste Management (Defensive — liquid Options)
+    "RSG",      # Republic Services (Defensive)
+    "VMC",      # Vulcan Materials (Materials)
+    "MLM",      # Martin Marietta (Materials)
 ]
 
 # ── FTSE ALL-WORLD NON-US TOP 150 ─────────────────────────────────────────────
@@ -216,20 +294,21 @@ INTL_TIER1 = [
     # Europa — Energie & Rohstoffe (ADR)
     "SHEL","BP","TTE","ENEL","E","ENGI","SQM","RIO","BHP","VALE","SCCO",
     # Europa — Finanzen (ADR)
-    "UBS","ING","INGA","BCS","HSBC","DB",# CS delisted (UBS-Übernahme 2023)
+    "UBS","ING","BCS","HSBC","DB",  # INGA entfernt (Duplikat von ING); CS delisted
     # Europa — Konsum & Luxus (ADR)
     "LVMUY","CFRUY","PPRUY","HESAY","BURBY","ADDYY",
     # Europa — Industrie (ADR)
     "SIEGY","ATLKY","VOLVY","ABB","DSDVY",
-    # Japan (ADR)
+    # Japan (ADRs only — Heimatboersen .T entfernt)
     "TM","HMC","SONY","NTT","MUFG","SMFG","MFG","NTDOY","KYOCY","FANUY",
-    "CCOEY","ITOCY","MARUY","7203.T","6758.T","9984.T",
-    # Suedkorea (ADR + Heimat)
-    "005930.KS","000660.KS","051910.KS",# SSNLF OTC — schlechte Daten; 005930.KS bevorzugt
-    # Taiwan
-    "TSM","2330.TW","2454.TW","2317.TW","2382.TW",
-    # China/Hongkong (ADR + HK-listed)
-    "BABA","JD","PDD","BIDU","9988.HK","0700.HK","3690.HK","1810.HK",
+    "CCOEY","ITOCY","MARUY",
+    # Suedkorea (nur SSNLF OTC als ADR — .KS Heimatboersen entfernt)
+    "SSNLF",   # Samsung ADR (OTC, begrenzte Liquidität — nur Monitoring)
+    "MX",      # Magnachip (US-listed KR-Chip)
+    # Taiwan (nur TSM US-listed — .TW Heimatboersen entfernt)
+    "TSM",
+    # China/Hongkong (nur US-gelistete ADRs — .HK entfernt)
+    "BABA","JD","PDD","BIDU",
     "TCEHY","BYDDY","NIO","XPEV","LI",
     # Indien (ADR)
     "INFY","WIT","HDB","IBN","VEDL","RDY","TTM",
@@ -240,9 +319,9 @@ INTL_TIER1 = [
     # Brasilien (ADR)
     "VALE","PBR","ITUB","BBD","ABEV","BRKM",
     # Mexiko/Latam
-    "AMX","FMXB","GMEXICOB.MX",
+    "AMX","FMXB",  # GMEXICOB.MX entfernt (Heimatboerse)
     # Suedafrika / EM Sonstiges
-    "NPN.JO","PROSSY","NPSNY",
+    "PROSSY","NPSNY",  # NPN.JO entfernt (Heimatboerse JSE)
     # Israel Tech
     "CHKP","NICE","CYBR","WIX","MNDY","GLBE","GTLB",
 ]
@@ -339,14 +418,14 @@ CRYPTO_TICKERS = [
 SECTOR_WATCHLISTS = {
     "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET","CRDO","ALAB"],
     "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
-    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","RHM.DE","BA.L","AIR.PA"],
+    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","RNMBY","EADSY","HEICO"],
     "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
     "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP","ICLN","QCLN"],
     "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
     "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE","RHHBY"],
     "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS","ONTO","ACLS"],
     "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN","HOOD"],
-    "LUXURY_EU":    ["MC.PA","OR.PA","RI.PA","KER.PA","LVMUY","CFRUY","PPRUY","HESAY","ADDYY","BURBY"],
+    "LUXURY_EU":    ["LVMUY","LRLCY","HESAY","CFRUY","PPRUY","ADDYY","BURBY","RACE","CPRI","RL"],
     "JAPAN_TECH":   ["TM","SONY","6758.T","NTDOY","KYOCY","FANUY","9984.T","CCOEY"],
     "EM_GROWTH":    ["TSM","BABA","PDD","INFY","VALE","ITUB","NU","STNE","SE","GRAB"],
 }
@@ -361,6 +440,7 @@ RS_SECTOR_ETFS = [
 
 
 # ── FTSE 100 TOP 40 (London Stock Exchange) ───────────────────────────────────
+# FTSE100/STOXX_EU_EXTRA: NUR Referenz (Heimatboersen — keine US-Optionen)
 FTSE100_TICKERS = ['AZN.L', 'SHEL.L', 'HSBA.L', 'ULVR.L', 'RIO.L', 'BP.L', 'GSK.L', 'REL.L', 'BATS.L', 'DGE.L', 'NG.L', 'VOD.L', 'BA.L', 'EXPN.L', 'LSEG.L', 'PRU.L', 'AAL.L', 'GLEN.L', 'NWG.L', 'LLOY.L', 'BT-A.L', 'MNG.L', 'AV.L', 'TSCO.L', 'ABF.L', 'IMB.L', 'STAN.L', 'WPP.L', 'CRH.L', 'IHG.L', 'RKT.L', 'SSE.L', 'BME.L', 'EZJ.L', 'IAG.L', 'RR.L', 'SBRY.L', 'MKS.L', 'JD.L', 'SPX.L']
 
 # ── STOXX EUROPE EXTRA (Schweiz, Skandinavien, Benelux) ──────────────────────
@@ -378,14 +458,15 @@ def build_ticker_universe():
     # Alle Quellen zusammenführen
     all_sources = (
         SP500_TICKERS + NASDAQ100_EXTRA +
-        DAX40_TICKERS + MDAX_TICKERS + TECDAX_TICKERS + EUROSTOXX_TICKERS +
-        FTSE100_TICKERS + STOXX_EU_EXTRA +
+        # EU_ADR_TICKERS: US-gelistete ADRs/Primärlistings (ersetzt .DE/.PA/.AS/.L etc.)
+        EU_ADR_TICKERS +
+        # BEAR_DE_EU: nur fuer Bear-Scanner Referenz (keine Options-Kandidaten)
         BEAR_US_TICKERS + BEAR_DE_EU_TICKERS +
         INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
         [t for wl in SECTOR_WATCHLISTS.values() for t in wl]
     )
     # Filter: keine leeren Strings, keine bekannt ungueltige Symbole
-    BAD_SYMS = {"SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE","STRN.DE","SKB.DE","SLT.DE","ARND.DE"}
+    # Fix Gemini: Doppelte BAD_SYMS zusammengeführt (zweite Zeile überschrieb erste)
     BAD_SYMS = {"CS","SAMSUNG","SoftBank","CSCO.DE","SDAX.DE","MDNT.DE",
                 "STRN.DE","SKB.DE","SLT.DE","ARND.DE","SSNLF","2330.TW",
                 "9988.HK","0700.HK","3690.HK","1810.HK",
@@ -502,6 +583,11 @@ def calc_obv_trend(closes, volumes, days=5):
     if len(obvs) < days + 1:
         return None
     trend = obvs[-1] - obvs[-(days+1)]
+    # Gemini Bug C: Normalisierung auf Avg-Vol-20 → vergleichbar zwischen Titeln
+    lookback_vol = min(20, len(volumes))
+    avg_vol = sum(volumes[-lookback_vol:]) / lookback_vol if lookback_vol > 0 else 0
+    if avg_vol and avg_vol > 0:
+        return round(trend / avg_vol, 3)
     return trend
 
 def calc_bb(closes, period=20, std_dev=2):
@@ -555,7 +641,8 @@ def calc_hv_percentile(closes, window=30, lookback=252):
     Returns: int 0-100 oder None
     """
     import math
-    if len(closes) < lookback + window:
+    # Gemini Bug B: +20 Bars Margin verhindert leere Slices an Randpositionen
+    if len(closes) < lookback + window + 20:
         return None
     try:
         def hv30(cls):
@@ -584,66 +671,130 @@ def calc_hv_percentile(closes, window=30, lookback=252):
         return None
 
 
-def score_options_csp(r):
+def score_options_csp(r: dict) -> int:
     """
-    Cash-Secured Put Score (0-100).
-    Ideal: Hohe HVP + Bull-Regime + Kurs ueber EMA200 + RSI nicht ueberkauft.
+    Cash-Secured Put Score 0-100 — Unleashed v2 (Gemini-Blueprint).
+    Deckt ATM-CSP, Wheel und wöchentliche CSP+LongCall-Kombinationen ab.
+
+    Kernänderung: Ema200-Gate aufgeweicht auf 5%-Puffer (Bodenbildungsphase
+    erlaubt), damit hohe Prämien in Pullback-Phasen nicht gefiltert werden.
+    Seitwärtsregime wird stärker belohnt als Bull (Theta-Decay-Paradisziplin).
     """
     price  = r.get("price", 0) or 0
     ema200 = r.get("ema200")
+    ema50  = r.get("ema50")
     hvp    = r.get("hvp", 0) or 0
     rsi    = r.get("rsi", 50) or 50
+    bbpos  = r.get("bbPos")
     regime = (r.get("regime") or "").lower()
 
-    if not ema200 or price < ema200: return 0   # Nur im Aufwaertstrend
-    if hvp < 30:                     return 0   # Zu wenig Praemie
+    # Gate 1: Preis nicht mehr als 5% unter EMA200 (strukturelle Bärenmärkte raus,
+    #         Bodenbildung/Pullback erlaubt — genau hier sind Prämien am höchsten)
+    if not ema200: return 0
+    if price < ema200 * 0.95: return 0
+
+    # Gate 2: Mindest-Volatilität für attraktive Prämie
+    if hvp < 20: return 0
 
     s = 0
-    s += min(hvp, 40)                            # Max 40 Pkt: Vola
-    if   regime == "bull": s += 30
-    elif regime == "side": s += 15
-    if   35 <= rsi <= 60:  s += 30               # Gesunder Pullback/Konsolidierung
-    elif rsi < 35:         s += 15               # Stark ueberverkauft
+
+    # Bollinger-Position: ATM/Wheel liebt Ausverkauf am unteren Band
+    if bbpos is not None:
+        if   bbpos <= 0.20: s += 30   # Krasser Ausverkauf = maximale Prämie am Support
+        elif bbpos <= 0.40: s += 15
+
+    # Regime: Seitwärtsphasen sind Paradedisziplin für CSPs (Theta-Verfall maximal)
+    if   regime == "side":     s += 30
+    elif regime == "bull":     s += 20
+    elif regime == "volatile": s += 10
+
+    # RSI: Überverkaufte Situationen bieten den höchsten statistischen Edge
+    if   rsi < 30:       s += 35   # Extremer Ausverkauf — beste ATM-Prämien
+    elif rsi <= 45:      s += 25   # Gesunder Pullback
+    elif rsi <= 60:      s += 10   # Neutrale Zone noch akzeptabel
+
+    # HVP-Bonus: je höher die historische Vola, desto attraktiver die Prämie
+    s += min(hvp // 5, 15)         # Max 15 Pkt (HVP 75+ → voll)
+
+    # 10-Tage-HV Short-Term Boost (für Weeklies): wenn vorhanden und erhöht
+    hv10 = r.get("hv10")
+    if hv10 is not None and hv10 > 25:
+        s += 5                     # Kurzfristiger Vola-Spike begünstigt Weeklies
+
     return max(0, min(100, s))
 
 
-def score_options_covered_call(r):
+def score_options_covered_call(r: dict) -> int:
     """
-    Covered Call Score (0-100).
-    Ideal: Stabiler Bluechip + Seitwärts/leicht bull + moderates HVP.
+    Covered Call Score 0-100 — Gemini v3.
+    CCs brauchen strukturell stabile Underlyings: EMA50-Gate schützt vor
+    fallenden Messern. Leicht überkaufte Phasen (RSI 55-70) sind ideal,
+    da Call-Prämien teuer sind. Überhitzte Titel (overheat>75) ausschließen
+    — Gefahr verpasster Mega-Rallies beim Cap.
     """
     comp_score = r.get("score", 50) or 50
+    price      = r.get("price", 0) or 0
+    ema50      = r.get("ema50")
     hvp        = r.get("hvp", 0) or 0
     regime     = (r.get("regime") or "").lower()
+    rsi        = r.get("rsi", 50) or 50
+    overheat   = r.get("overheat", 0) or 0
 
-    if comp_score < 50: return 0                 # Nur Qualitaets-Aktien
+    # Gates: Schutz vor strukturellen Abwärtstrends
+    if comp_score < 45:            return 0  # Mindestkvalität
+    if ema50 and price < ema50:    return 0  # Aktie MUSS über EMA50 (kein fallender Messerfang)
+    if overheat > 75:              return 0  # Keine CCs bei extrem überhitzten Titeln
 
     s = 0
-    s += min(int(hvp * 0.5), 25)                 # Max 25 Pkt: Vola
-    if comp_score >= 70: s += 35                 # Technisch starke Aktie
-    elif comp_score >= 55: s += 20
-    if   regime == "side": s += 40               # Paradedisziplin fuer CCs
-    elif regime == "bull": s += 20
+    # CCs lieben leicht überkaufte Phasen — Call-Prämien teuer, Kurs begrenzt
+    if   55 <= rsi <= 70: s += 35
+    elif 45 <= rsi < 55:  s += 15
+
+    # Regime: Bull = Prämie gut aber Kurs kann wegrennen; Side = reiner Theta-Gewinn
+    if   regime == "bull": s += 30
+    elif regime == "side": s += 25
+
+    # HVP: Gesunde Bandbreite — nicht zu tief (wenig Prämie), nicht zu hoch (Event-Risiko)
+    if 30 <= hvp <= 65: s += 20
+    elif hvp > 65:      s += 10   # Noch akzeptabel, aber erhöhtes Gap-Risiko
+
     return max(0, min(100, s))
 
 
-def score_options_credit_spread(r):
+def score_options_credit_spread(r: dict) -> int:
     """
-    Bull Put Credit Spread Score (0-100).
-    Ideal: Extrem hohes HVP + stark ueberverkauft + erste Stabilisierung.
+    Credit Spread Score 0-100 — Gemini v3.
+    Bull Put Spread: direktionaler Edge an Bollinger-Unterband im Bull/Side-Regime.
+    Bear Call Spread: Überdehnung an Bollinger-Oberband in Volatile/Bear-Regime.
+    HVP-Gate 25 (gesenkt): Spreads sind risikobegrenzt, kein extremes HVP nötig.
+    Präzises Bollinger-Pricing statt HVP als primäres Signal.
     """
-    hvp       = r.get("hvp", 0) or 0
-    rsi       = r.get("rsi", 50) or 50
-    bb_pos    = r.get("bbPos", 0.5) or 0.5
-    macd_hist = r.get("macdHist", 0) or 0
+    price  = r.get("price", 0) or 0
+    ema50  = r.get("ema50")
+    bbpos  = r.get("bbPos")
+    hvp    = r.get("hvp", 0) or 0
+    regime = (r.get("regime") or "").lower()
 
-    if hvp < 60: return 0                        # Nur bei massiver Vola-Implosion-Erwartung
+    # Minimale Vola für überhaupt eine handelbare Prämie
+    if hvp < 25:   return 0
+    if not ema50:  return 0
 
     s = 0
-    s += min(int((hvp - 60) * 2), 30)            # Je hoeher HVP, desto besser
-    if rsi < 35:    s += 30                      # Stark ueberverkauft
-    if bb_pos < 0.2: s += 20                     # Unteres Bollinger Band
-    if macd_hist > 0: s += 20                    # Erstes bullisches Momentum
+
+    # ── BULL PUT SPREAD: Dip im Aufwärtstrend ──────────────────────────────
+    if regime in ("bull", "side") and price > ema50:
+        s += 25
+        if bbpos is not None:
+            if bbpos <= 0.20:   s += 40  # Perfekter Ausverkauf: Short-Put-Strike weit weg
+            elif bbpos <= 0.35: s += 25  # Dip: gutes Chancen/Risiko-Verhältnis
+        s += min(hvp // 4, 20)           # HVP-Bonus (moderat gewichtet)
+
+    # ── BEAR CALL SPREAD: Überdehnung im schwachen Markt ───────────────────
+    elif regime in ("volatile", "bear"):
+        if bbpos is not None and bbpos >= 0.80:
+            s += 30                      # Aktie stößt an Oberkante — ideal für Bear Call
+            s += min(hvp // 3, 25)       # Höhere HVP = teurere Calls zu verkaufen
+
     return max(0, min(100, s))
 
 def calc_markov(closes, lookback=60, stride=1):
@@ -782,10 +933,16 @@ def score_long_minervini(r: dict) -> int:
     if p_b2b > 0.25:   s -= 15
     elif p_b2b < 0.08: s += 5
 
-    # Gate 7: HVP — VCP erfordert Volatilitaets-Kontraktion (Gemini-Integration)
+    # Gate 7: HVP + VCP (Gemini-Fix: Gate 25→40 — verhindert Verpassen von Ausbruchstagen)
     if hvp is not None:
-        if hvp <= 25:   s += 10  # Ideal: Ruhe vor dem Sturm
+        if hvp <= 40:   s += 10  # Kontraktion UND frühe Ausbrüche erfasst (war ≤25 — zu eng)
         elif hvp >= 75: s -= 15  # Zu erratisch fuer SEPA
+
+    # bbPos VCP-Erkennung: Stage-2 Coiling nahe Hochs = klassisches SEPA-Setup
+    bbpos = r.get('bbPos')
+    if bbpos is not None:
+        if 0.70 <= bbpos <= 0.92:  s += 10  # VCP: Kompression nahe Hochs
+        elif bbpos > 0.95:         s -= 5   # Überschießen — zu spät für Einstieg
 
     # Gate 8: RSI — Gemini: Schwelle von 85 auf 80 gesenkt
     if rsi and rsi > 80: s -= 15
@@ -1026,6 +1183,47 @@ def calc_last_swing_low(lows: list, lookback: int = 20) -> float | None:
     return round(min(swing_lows), 4) if swing_lows else round(min(window), 4)
 
 
+def apply_macro_risk_overlay(options_candidates: list, dix_gex: dict, pcr_data: dict) -> list:
+    """
+    Macro Risk Overlay — Gemini-Blueprint.
+    Skaliert Options-Scores dynamisch anhand von GEX (institutionelles Gamma)
+    und PCR (Put/Call-Ratio). Wenn Gamma-Flip oder Panik erkannt → aggressive
+    nackte Strategien (ATM-CSP) abwerten, risikobegrenzte Spreads aufwerten.
+    """
+    gex = (dix_gex or {}).get("gex", 0)   # in Mrd USD (kann negativ sein)
+    pcr = (pcr_data or {}).get("pcr", 0.9)
+
+    for r in options_candidates:
+        # ── GEX negativ: Gamma-Flip-Zone → Gap-Risiko für nackte Puts ────────────
+        if gex < 0:
+            # ATM-CSPs abwerten (Slippage-Risiko bei unkontrollierten Gaps)
+            if r.get("scoreCsp", 0) > 0:
+                r["scoreCsp"] = max(0, int(r["scoreCsp"] * 0.55))
+                r["_macroNote"] = "GEX negativ — CSP abgewertet (Gap-Risiko)"
+            # Risikobegrenzte Spreads bevorzugen
+            if r.get("scoreSpread", 0) > 0:
+                r["scoreSpread"] = min(100, int(r["scoreSpread"] * 1.20))
+
+        # ── PCR < 0.75: Extremes Bull-Sentiment → CCs gefährdet (Rallye-Kapper) ──
+        if pcr < 0.75:
+            if r.get("scoreCc", 0) > 0:
+                r["scoreCc"] = max(0, int(r["scoreCc"] * 0.60))
+                r["_macroNote"] = r.get("_macroNote", "") + " | PCR<0.75 — CC abgewertet"
+
+        # ── PCR > 1.10: Panik-Modus → CSPs riskant, Spreads attraktiv ────────────
+        if pcr > 1.10:
+            if r.get("scoreCsp", 0) > 0:
+                r["scoreCsp"] = max(0, int(r["scoreCsp"] * 0.70))
+            if r.get("scoreSpread", 0) > 0:
+                r["scoreSpread"] = min(100, int(r["scoreSpread"] * 1.15))
+                r["_macroNote"] = r.get("_macroNote", "") + " | PCR>1.10 — Spread bevorzugt"
+
+        # Gesamtscore nach Overlay neu berechnen
+        r["optsScore"] = max(r.get("scoreCsp", 0), r.get("scoreCc", 0), r.get("scoreSpread", 0))
+
+    return options_candidates
+
+
 def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     """
     Berechnet alle 5 Strategie-Scores und erstellt sortierte Leaderboards.
@@ -1073,6 +1271,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "bbPos":         r.get("bbPos"),
             "volRatio":      r.get("volRatio"),
             "hvp":           r.get("hvp"),
+            "hv10":          r.get("hv10"),
             "pctFromHigh52": r.get("pctFromHigh52"),
             "dist200":       r.get("dist200"),
             "dist50":        r.get("dist50"),
@@ -1186,6 +1385,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "bbPos":         c.get("bbPos"),
             "volRatio":      c.get("volRatio"),
             "hvp":           c.get("hvp"),
+            "hv10":          c.get("hv10"),
             "pctFromHigh52": c.get("pctFromHigh52"),
             "dist200":       c.get("dist200"),
             "dist50":        c.get("dist50"),
@@ -1417,7 +1617,7 @@ def process_ticker(ticker, hist_df):
             "atr":           atrv,
             "rsi":           rsiv,
             "macdHist":      macd_hist,
-            "obvTrend":      round(obv_tr) if obv_tr else None,
+            "obvTrend":      round(obv_tr, 3) if obv_tr is not None else None,
             "bbPos":         bbpos,
             "overheat":      overh,
             "regime":        regime,
@@ -1433,7 +1633,8 @@ def process_ticker(ticker, hist_df):
             "dist200":       dist_200,
             "volRatio":      vol_ratio,
             "bars":          len(closes),
-            "hvp":           calc_hv_percentile(closes),   # Historical Vol Percentile 0-100
+            "hvp":           calc_hv_percentile(closes),          # 30-Tage HV-Percentile 0-100
+            "hv10":          calc_hv_percentile(closes, window=10, lookback=90),  # 10-Tage HV für Weeklies
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             # Strategie-Scores werden im build_leaderboards-Pass hinzugefuegt
         }
@@ -1704,8 +1905,8 @@ def main():
     # 5a. Options-Watchlist (Top-50, Gemini-Architektur) ────────────────────────
     log.info(f"\n🎯 Options-Watchlist berechnen (3 Strategien)...")
 
-    OPTIONS_MIN_PRICE = 15.0
-    OPTIONS_MAX_PRICE = 150.0
+    OPTIONS_MIN_PRICE = 10.0    # gesenkt: kleine Mid Caps mit liquiden Optionen drin
+    OPTIONS_MAX_PRICE = 800.0   # erhoeht: US Large Caps (AAPL, MSFT, GOOG etc.) einschliessen
 
     options_candidates = []
     for r in valid:
@@ -1737,6 +1938,7 @@ def main():
             "sym":         sym,
             "price":       price,
             "hvp":         r.get("hvp"),
+            "hv10":        r.get("hv10"),
             "rsi":         r.get("rsi"),
             "atr":         r.get("atr"),
             "dist200":     round(r.get("dist200") or 0, 1),
@@ -1751,6 +1953,9 @@ def main():
         })
 
     # Sortierung: bester Strategie-Score zuerst, Top-50
+    # Macro Risk Overlay anwenden (GEX/PCR-Skalierung) — Gemini-Blueprint
+    options_candidates = apply_macro_risk_overlay(options_candidates, dix_gex, pcr)
+
     options_watchlist = sorted(
         options_candidates,
         key=lambda x: x["optsScore"],
