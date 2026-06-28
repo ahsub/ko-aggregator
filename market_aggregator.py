@@ -1878,8 +1878,8 @@ def main():
 
     # 4. Externe Datenquellen
     log.info(f"\n🌐 Externe Datenquellen...")
-    dix_gex  = fetch_dix_gex()
-    pcr      = fetch_pcr_cboe()
+    dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
+    pcr      = fetch_pcr_cboe() or {}   # Fallback auf leeres Dict
     vix_term    = fetch_vix_term()
     log.info(f"  Lade MSE History (VVIX/SKEW/VIX 30T)...")
     mse_history = fetch_mse_history(days=30)
@@ -1905,8 +1905,8 @@ def main():
     # 5a. Options-Watchlist (Top-50, Gemini-Architektur) ────────────────────────
     log.info(f"\n🎯 Options-Watchlist berechnen (3 Strategien)...")
 
-    OPTIONS_MIN_PRICE = 10.0    # gesenkt: kleine Mid Caps mit liquiden Optionen drin
-    OPTIONS_MAX_PRICE = 800.0   # erhoeht: US Large Caps (AAPL, MSFT, GOOG etc.) einschliessen
+    # Preisfilter entfernt (war $10-$800 → schloss BRK.A, NVO etc. aus)
+    # Optionsliquidität wird durch Ticker-Universum (US_ADR) sichergestellt
 
     options_candidates = []
     for r in valid:
@@ -1918,8 +1918,7 @@ def main():
             continue
 
         # Preis-Filter
-        if price < OPTIONS_MIN_PRICE or price > OPTIONS_MAX_PRICE:
-            continue
+        # Kein Preisfilter — wird durch US-ADR Universum sichergestellt
 
         # HVP muss vorhanden sein
         if r.get("hvp") is None:
