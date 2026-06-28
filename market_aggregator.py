@@ -1399,7 +1399,6 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "atr":           c["atr"],
             "shortDir":      c.get("shortDir"),
             "overheat":      c.get("overheat"),
-            # Chart-Metriken fuer Alpha Desk (MACD, OBV, 52W, EMA, Bollinger)
             "ema50":         c.get("ema50"),
             "ema200":        c.get("ema200"),
             "macdHist":      c.get("macdHist"),
@@ -1414,13 +1413,16 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "high52":        c.get("high52"),
             "low52":         c.get("low52"),
             "bullSignals":   c.get("bullSignals"),
-            # Alle Strategie-Scores fuer Frontend-Kontext
             "sMinervini":    c.get("sMinervini"),
             "sSwing":        c.get("sSwing"),
             "sMrLong":       c.get("sMrLong"),
             "sBreakdown":    c.get("sBreakdown"),
             "sFading":       c.get("sFading"),
         }
+        for c in master_shortlist_raw
+    ]
+Block 2 — hv30() (ersetze die alte def hv30(cls): Funktion):
+python
         for c in master_shortlist_raw
     ]
 
