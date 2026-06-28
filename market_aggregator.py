@@ -1690,18 +1690,30 @@ def fetch_batch(tickers, period="1y", max_workers=20):
     results = {}
 
     def fetch_one(ticker):
-        # Versuche mehrere Perioden falls primär leer
-        for p in ["2y", period, "6mo"]:  # Fix: 2y zuerst → immer 504 Bars
+        # Fix: Explizite Start/End-Daten statt period="2y"
+        # Yahoo Finance API liefert bei period="2y" intern oft nur 1 Jahr Tagesdaten.
+        # Mit start/end-Datum werden zuverlässig 2 Jahre Bars geliefert.
+        from datetime import datetime, timedelta
+        end_dt   = datetime.now()
+        start_dt = end_dt - timedelta(days=730)  # 2 Jahre
+        start_s  = start_dt.strftime("%Y-%m-%d")
+        end_s    = end_dt.strftime("%Y-%m-%d")
+
+        for attempt, kwargs in [
+            ("2y_explicit", {"start": start_s, "end": end_s}),
+            ("1y_fallback", {"period": "1y"}),
+            ("6mo_fallback", {"period": "6mo"}),
+        ]:
             try:
-                df = yf.download(ticker, period=p, interval="1d",
-                                 auto_adjust=True, progress=False, threads=False)
+                df = yf.download(ticker, interval="1d",
+                                 auto_adjust=True, progress=False, threads=False,
+                                 **kwargs)
                 if df is not None and len(df) >= 20:
-                    # Sicherstellen dass Spalten korrekt sind (MultiIndex flatten)
                     if hasattr(df.columns, 'levels'):
                         df.columns = df.columns.get_level_values(0)
                     return ticker, df
             except Exception as e:
-                log.warning(f"  {ticker} ({p}): {e}")
+                log.warning(f"  {ticker} ({attempt}): {e}")
         return ticker, None
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
