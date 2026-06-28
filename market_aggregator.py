@@ -3,7 +3,7 @@
 KO-Scanner Market Aggregator v2.0
 ==================================
 Zentraler Daten-Aggregator für die KO-Scanner Investment Suite.
-Läuft als GitHub Actions Cron-Job (täglich 22:15 UTC nach US-Schluss).
+Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
 Version 2.0: DE-Märkte (DAX40, MDAX, TecDAX, EuroStoxx), Sektor-Watchlisten,
 robustes Datenladen mit Fallback-Perioden.
 
