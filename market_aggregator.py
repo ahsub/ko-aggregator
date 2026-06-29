@@ -42,15 +42,16 @@ except ImportError:
     os.system("pip install yfinance --quiet")
     import yfinance as yf
 
-# Gemini Fix 4: Verhindert Thread-Konflikte bei parallelem yfinance-Download
-# (Race Conditions bei ThreadPoolExecutor → stille Fehler ohne Exception)
+# Thread-Safety für yfinance
 try:
-    yf.set_tz_cache_path(None)   # Kein Datei-Cache (thread-safe)
+    yf.set_tz_cache_path(None)
+except AttributeError:
+    pass  # Ältere yfinance-Version ohne diese Methode
 except Exception:
     pass
 
 import socket
-socket.setdefaulttimeout(15)  # Gemini Fix: hängende Yahoo-Verbindungen nach 15s kappen
+socket.setdefaulttimeout(30)  # 30s: genug für 2y-Downloads, aber keine ewigen Hänger
 
 logging.basicConfig(
     level=logging.INFO,
@@ -2446,7 +2447,12 @@ def push_to_cloudflare_kv(data, key="master_market_data"):
 
 def main():
     start_time = time.time()
-    print("[START] UnderlyingIQ Market Aggregator v3.0 gestartet", flush=True)
+    import time as _time
+    _t0 = _time.time()
+    def _t(label):
+        elapsed = round(_time.time() - _t0, 1)
+        print(f"[T+{elapsed}s] {label}", flush=True)
+    _t("START — UnderlyingIQ Market Aggregator v3.0")
     log.info("=" * 60)
     log.info("UnderlyingIQ Market Aggregator v3.0")
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -2463,6 +2469,7 @@ def main():
 
     # 1. Ticker-Universum aufbauen
     tickers = build_ticker_universe()
+    _t(f"Ticker-Universum: {len(tickers)} Titel")
     log.info(f"\n📋 Ticker-Universum: {len(tickers)} Titel")
 
     # Krypto separat
@@ -2471,6 +2478,7 @@ def main():
     log.info(f"   Aktien/ETFs: {len(stock_tickers)} | Krypto: {len(crypto_tickers)}")
 
     # 2. Marktdaten laden
+    _t("VOR fetch_batch — Downloads starten jetzt")
     log.info(f"\n📥 Lade Marktdaten...")
     hist_data = fetch_batch(stock_tickers, period="1y", max_workers=12)  # OOM-Fix
 
@@ -2492,6 +2500,7 @@ def main():
         else:
             results.append(result)
 
+    _t(f"NACH fetch_batch — {len(results)} OK / {len(errors)} Fehler")
     log.info(f"   ✅ Erfolgreich: {len(results)} | ❌ Fehler: {len(errors)}")
     # Bars-Statistik (Gemini-Diagnose)
     _bars_all = [r.get("bars", 0) for r in results if r.get("bars")]
@@ -2501,6 +2510,7 @@ def main():
 
     # 4. Externe Datenquellen
     log.info(f"\n🌐 Externe Datenquellen...")
+    _t("Externe APIs: DIX/GEX, PCR, VIX, Fear&Greed, CAPE")
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
     pcr      = fetch_pcr_cboe() or {}   # Fallback auf leeres Dict
     vix_term    = fetch_vix_term()
@@ -2512,7 +2522,7 @@ def main():
     # F&G Proxy wenn CNN nicht verfügbar
     if not fear_greed:
         fear_greed = calc_fg_proxy(vix_term, pcr, sector_rs)
-        log.info(f"  Fear & Greed Proxy: {fear_greed.get("score")} ({fear_greed.get("rating")})")
+        log.info(f"  Fear & Greed Proxy: {fear_greed.get('score')} ({fear_greed.get('rating')})")
     # IOS Market Score (Club-Integration)
     log.info(f"\n🏛️  IOS Market Score berechnen (Breadth/Rotation/Risk)...")
     ios_market = calc_ios_market_score(hist_data, vix_term)
@@ -2895,4 +2905,14 @@ def main():
     log.info(f"{'='*60}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("[ABORT] KeyboardInterrupt", flush=True)
+    except MemoryError:
+        print("[ABORT] MemoryError — OOM Kill", flush=True)
+        raise
+    except Exception as _e:
+        print(f"[ABORT] Unbehandelte Exception: {type(_e).__name__}: {_e}", flush=True)
+        import traceback; traceback.print_exc()
+        raise
