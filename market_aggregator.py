@@ -49,6 +49,9 @@ try:
 except Exception:
     pass
 
+import socket
+socket.setdefaulttimeout(15)  # Gemini Fix: hängende Yahoo-Verbindungen nach 15s kappen
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -62,8 +65,8 @@ def get_last_trading_day():
     Berücksichtigt Wochenenden und US-Feiertage via yfinance SPY-Daten.
     """
     try:
-        spy = yf.download("SPY", period="10d", interval="1d",
-                          auto_adjust=True, progress=False, threads=False)
+        spy = yf.download("SPY", period="5d", interval="1d",
+                          auto_adjust=True, progress=False, threads=False)  # Fix: 10d→5d, socket timeout greift
         if spy is not None and len(spy) > 0:
             last_date = spy.index[-1].date()
             log.info(f"  Letzter Handelstag (via SPY): {last_date}")
@@ -2134,7 +2137,8 @@ def fetch_batch(tickers, period="1y", max_workers=12):
             ticker, df = future.result()
             results[ticker] = df
             done += 1
-            if done % 50 == 0:
+            if done % 25 == 0:
+                print(f"[PROGRESS] {done}/{len(tickers)} Ticker geladen...", flush=True)
                 log.info(f"  {done}/{len(tickers)} geladen...")
 
     return results
@@ -2442,6 +2446,7 @@ def push_to_cloudflare_kv(data, key="master_market_data"):
 
 def main():
     start_time = time.time()
+    print("[START] UnderlyingIQ Market Aggregator v3.0 gestartet", flush=True)
     log.info("=" * 60)
     log.info("UnderlyingIQ Market Aggregator v3.0")
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
