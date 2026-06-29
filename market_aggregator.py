@@ -2103,15 +2103,15 @@ def fetch_batch(tickers, period="1y", max_workers=12):
     log.info(f"Lade {len(tickers)} Ticker (parallel, {max_workers} Threads)...")
     results = {}
 
+    # DEADLOCK-FIX: datetime Import AUSSERHALB fetch_one berechnen
+    # from datetime inside nested function × 716 Threads = Python Import-Lock Deadlock!
+    from datetime import datetime as _dt, timedelta as _td
+    _end_s   = _dt.now().strftime("%Y-%m-%d")
+    _start_s = (_dt.now() - _td(days=730)).strftime("%Y-%m-%d")
+
     def fetch_one(ticker):
-        # Fix: Explizite Start/End-Daten statt period="2y"
-        # Yahoo Finance API liefert bei period="2y" intern oft nur 1 Jahr Tagesdaten.
-        # Mit start/end-Datum werden zuverlässig 2 Jahre Bars geliefert.
-        from datetime import datetime, timedelta
-        end_dt   = datetime.now()
-        start_dt = end_dt - timedelta(days=730)  # 2 Jahre
-        start_s  = start_dt.strftime("%Y-%m-%d")
-        end_s    = end_dt.strftime("%Y-%m-%d")
+        # start/end aus äusserem Scope (kein Import-Lock-Problem)
+        start_s, end_s = _start_s, _end_s
 
         for attempt, kwargs in [
             ("2y_explicit", {"start": start_s, "end": end_s}),
