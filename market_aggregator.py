@@ -725,10 +725,9 @@ def score_options_csp(r: dict) -> int:
     bbpos  = r.get("bbPos")
     regime = (r.get("regime") or "").lower()
 
-    # Gate 1: Preis nicht mehr als 5% unter EMA200 (strukturelle Bärenmärkte raus,
-    #         Bodenbildung/Pullback erlaubt — genau hier sind Prämien am höchsten)
+    # Gate 1 (Gemini Fix: aufgeweicht auf 15% für Bear/MR-Setups)
     if not ema200: return 0
-    if price < ema200 * 0.95: return 0
+    if price < ema200 * 0.85: return 0   # Gemini: war 0.95 → 0.85
 
     # Gate 2: Mindest-Volatilität für attraktive Prämie
     if hvp < 20: return 0
@@ -779,7 +778,7 @@ def score_options_covered_call(r: dict) -> int:
 
     # Gates: Schutz vor strukturellen Abwärtstrends
     if comp_score < 45:            return 0  # Mindestkvalität
-    if ema50 and price < ema50:    return 0  # Aktie MUSS über EMA50 (kein fallender Messerfang)
+    if ema50 and price < ema50 * 0.90: return 0  # Gemini Fix: 10% Puffer erlaubt
     if overheat > 75:              return 0  # Keine CCs bei extrem überhitzten Titeln
 
     s = 0
@@ -828,8 +827,10 @@ def score_options_credit_spread(r: dict) -> int:
 
     # ── BEAR CALL SPREAD: Überdehnung im schwachen Markt ───────────────────
     elif regime in ("volatile", "bear"):
-        if bbpos is not None and bbpos >= 0.80:
-            s += 30                      # Aktie stößt an Oberkante — ideal für Bear Call
+        s += 20  # Gemini Fix: Basis-Punkte für korrektes Regime
+        if bbpos is not None:
+            if bbpos >= 0.80:   s += 30  # Überdehnt = Bear-Call ideal
+            elif bbpos <= 0.20: s += 15  # Gemini Fix: Überverkauft = Bounce-Prämie                      # Aktie stößt an Oberkante — ideal für Bear Call
             s += min(hvp // 3, 25)       # Höhere HVP = teurere Calls zu verkaufen
 
     return max(0, min(100, s))
@@ -2575,6 +2576,15 @@ def main():
         s_csp    = score_options_csp(r)
         s_cc     = score_options_covered_call(r)
         s_spread = score_options_credit_spread(r)
+
+        # ── DIAGNOSE-LOG (erste 5 Ticker) ────────────────────────────────
+        if len(options_candidates) < 3 or sym in ("DDOG","BAH","AAPL","MSFT","NVO"):
+            log.info(f"  [OPT-DIAG] {sym}: price={price:.1f} "
+                     f"ema200={r.get('ema200')} hvp={r.get('hvp')} "
+                     f"rsi={r.get('rsi')} bbPos={r.get('bbPos')} "
+                     f"regime={r.get('regime')} "
+                     f"→ CSP={s_csp} CC={s_cc} Spr={s_spread}")
+        # ── ENDE DIAGNOSE ─────────────────────────────────────────────────
 
         # Mindestens eine Strategie muss > 0 sein
         if max(s_csp, s_cc, s_spread) == 0:
