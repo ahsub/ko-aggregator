@@ -25,14 +25,19 @@ jobs:
           pip install --upgrade pip
           pip install yfinance requests numpy pandas
 
+      - name: Clear yfinance cache
+        run: rm -rf ~/.cache/py-yfinance/ || true
+
       - name: Run Market Aggregator
         env:
           CF_ACCOUNT_ID:      ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN:       ${{ secrets.CF_API_TOKEN }}
           CF_KV_NS_ID:        ${{ secrets.CF_KV_NS_ID }}
           ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          PYTHONUNBUFFERED:   "1"
         run: |
           python market_aggregator.py
+          echo "Exit Code: $?"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
