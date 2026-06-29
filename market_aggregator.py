@@ -1247,11 +1247,14 @@ def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
         return sum(closes[-(n+ago):-ago]) / n
 
     def ratio_ma(a_closes, b_closes, ma_len=50):
-        """Verhältnis zweier Serien gleitend gemittelt."""
+        """Verhältnis zweier Serien — synchronisiert via min-Länge (Gemini Fix 2)."""
+        # Gemini Fix: Längen synchronisieren verhindert Indexverschiebung bei Datalücken
         min_len = min(len(a_closes), len(b_closes))
-        if min_len < ma_len: return None, None
-        ratios = [a_closes[-min_len+i] / b_closes[-min_len+i]
-                  for i in range(min_len) if b_closes[-min_len+i] != 0]
+        if min_len < ma_len + 5: return None, None  # +5 Sicherheitspuffer
+        # Beide auf gleiche Länge kürzen (neueste Daten behalten)
+        a = a_closes[-min_len:]
+        b = b_closes[-min_len:]
+        ratios = [a[i] / b[i] for i in range(min_len) if b[i] != 0]
         if len(ratios) < ma_len: return None, None
         current = ratios[-1]
         ma      = sum(ratios[-ma_len:]) / ma_len
@@ -2092,7 +2095,7 @@ def process_ticker(ticker, hist_df):
 
 # ── MARKT-DATEN LADEN ─────────────────────────────────────────────────────────
 
-def fetch_batch(tickers, period="1y", max_workers=20):
+def fetch_batch(tickers, period="1y", max_workers=12):
     """Lädt OHLCV-Daten für alle Ticker parallel via yfinance."""
     log.info(f"Lade {len(tickers)} Ticker (parallel, {max_workers} Threads)...")
     results = {}
@@ -2464,12 +2467,12 @@ def main():
 
     # 2. Marktdaten laden
     log.info(f"\n📥 Lade Marktdaten...")
-    hist_data = fetch_batch(stock_tickers, period="1y", max_workers=25)
+    hist_data = fetch_batch(stock_tickers, period="1y", max_workers=12)  # OOM-Fix
 
     # Krypto mit 6 Monaten
     if crypto_tickers:
         log.info(f"   Lade Krypto-Daten ({len(crypto_tickers)} Ticker)...")
-        crypto_data = fetch_batch(crypto_tickers, period="6mo", max_workers=10)
+        crypto_data = fetch_batch(crypto_tickers, period="6mo", max_workers=5)  # OOM-Fix
         hist_data.update(crypto_data)
 
     # 3. Indikatoren berechnen
