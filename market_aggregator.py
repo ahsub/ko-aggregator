@@ -2189,6 +2189,146 @@ def fetch_pcr_cboe():
         log.warning(f"  CBOE PCR nicht verfügbar: {e}")
     return None
 
+
+def fetch_fear_greed() -> dict:
+    """
+    CNN Fear & Greed Index (0-100).
+    Fallback: eigener Proxy aus VIX + PCR + Momentum.
+    """
+    import urllib.request, json as _json
+    try:
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer":    "https://www.cnn.com/markets/fear-and-greed",
+            "Accept":     "application/json, text/plain, */*",
+        })
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = _json.loads(r.read())
+        fg = data.get("fear_and_greed", {})
+        score = fg.get("score")
+        if score is not None:
+            score = round(float(score))
+            rating = fg.get("rating", "")
+            prev   = round(float(fg.get("previous_close", score)))
+            log.info(f"  Fear & Greed: {score} ({rating}) | prev: {prev}")
+            return {
+                "score":    score,
+                "rating":   rating,
+                "previous": prev,
+                "source":   "CNN",
+                "proxy":    False,
+            }
+    except Exception as e:
+        log.warning(f"  CNN Fear & Greed nicht verfügbar: {e}")
+    return None
+
+
+def fetch_shiller_cape() -> dict:
+    """
+    Shiller CAPE (cyclically adjusted P/E) via FRED oder multpl.com.
+    Fallback: trailing P/E von SPY via yfinance.
+    """
+    import urllib.request, json as _json, re as _re
+
+    # Versuch 1: FRED API (public, kein Key nötig für diese Serie)
+    try:
+        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CAPE"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            lines = r.read().decode().strip().split('\n')
+        # Letzter valider Wert (nicht ".")
+        for row in reversed(lines[1:]):
+            parts = row.split(',')
+            if len(parts) == 2 and parts[1].strip() != '.':
+                cape = round(float(parts[1].strip()), 1)
+                date = parts[0].strip()
+                log.info(f"  Shiller CAPE (FRED): {cape} ({date})")
+                return {"cape": cape, "date": date, "source": "FRED", "proxy": False}
+    except Exception as e:
+        log.warning(f"  FRED CAPE nicht verfügbar: {e}")
+
+    # Versuch 2: multpl.com
+    try:
+        url = "https://www.multpl.com/shiller-pe/table/by-month"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "text/html,application/xhtml+xml"
+        })
+        with urllib.request.urlopen(req, timeout=10) as r:
+            html = r.read().decode()
+        vals = _re.findall(r'<td[^>]*>(\d{4}-\d{2}-\d{2})</td>\s*<td[^>]*>([\d.]+)</td>', html)
+        if vals:
+            cape = round(float(vals[0][1]), 1)
+            date = vals[0][0]
+            log.info(f"  Shiller CAPE (multpl): {cape} ({date})")
+            return {"cape": cape, "date": date, "source": "multpl.com", "proxy": False}
+    except Exception as e:
+        log.warning(f"  multpl.com CAPE nicht verfügbar: {e}")
+
+    # Fallback: SPY trailing P/E via yfinance (kein echtes CAPE, aber Proxy)
+    try:
+        info = yf.Ticker("SPY").fast_info
+        pe = getattr(info, 'p_e_ratio', None) or getattr(info, 'trailing_pe', None)
+        if pe and float(pe) > 0:
+            pe = round(float(pe), 1)
+            log.info(f"  CAPE Proxy (SPY P/E): {pe}")
+            return {"cape": pe, "date": "aktuell", "source": "SPY trailing P/E (Proxy)", "proxy": True}
+    except Exception as e:
+        log.warning(f"  SPY P/E nicht verfügbar: {e}")
+
+    return None
+
+
+def calc_fg_proxy(vix_term: dict, pcr_data: dict, sector_rs: dict) -> dict:
+    """
+    Eigener Fear & Greed Proxy wenn CNN API nicht verfügbar.
+    Berechnet aus: VIX, PCR, Marktbreite (sector_rs).
+    Skala: 0-100 (0=extreme Fear, 100=extreme Greed).
+    """
+    score = 50  # Neutral
+
+    # VIX-Komponente (30 Punkte)
+    vix = (vix_term or {}).get("vix", 20)
+    if   vix < 13: score += 20   # Extreme Greed
+    elif vix < 16: score += 12   # Greed
+    elif vix < 20: score += 5    # leicht bullisch
+    elif vix > 30: score -= 20   # Fear
+    elif vix > 25: score -= 12   # Erhöhte Angst
+    elif vix > 20: score -= 5    # leicht bärisch
+
+    # VIX Termstruktur (10 Punkte)
+    struct = (vix_term or {}).get("structure", "")
+    if struct == "CONTANGO":    score += 5   # Normal = Greed
+    elif struct == "BACKWARDATION": score -= 10  # Stress = Fear
+
+    # PCR (20 Punkte)
+    pcr = (pcr_data or {}).get("pcr", 0.9)
+    if   pcr < 0.7:  score += 15   # Wenig Puts = Greed
+    elif pcr < 0.85: score += 7
+    elif pcr > 1.1:  score -= 15   # Viele Puts = Fear
+    elif pcr > 0.95: score -= 7
+
+    # Marktbreite via Sektor-RS (10 Punkte)
+    if sector_rs:
+        positive = sum(1 for v in sector_rs.values() if v.get("rs5", 0) > 0)
+        total    = max(1, len(sector_rs))
+        breadth_pct = positive / total * 100
+        if   breadth_pct > 65: score += 8
+        elif breadth_pct > 50: score += 3
+        elif breadth_pct < 35: score -= 8
+        elif breadth_pct < 50: score -= 3
+
+    score = max(0, min(100, score))
+
+    if   score >= 80: rating = "Extreme Greed"
+    elif score >= 60: rating = "Greed"
+    elif score >= 45: rating = "Neutral"
+    elif score >= 25: rating = "Fear"
+    else:             rating = "Extreme Fear"
+
+    return {"score": score, "rating": rating, "source": "UIQ Proxy", "proxy": True}
+
 def fetch_vix_term():
     """VIX Term Structure via Yahoo Finance."""
     try:
@@ -2356,6 +2496,15 @@ def main():
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
     pcr      = fetch_pcr_cboe() or {}   # Fallback auf leeres Dict
     vix_term    = fetch_vix_term()
+    # Fear & Greed + Shiller CAPE
+    log.info(f"  Fear & Greed Index...")
+    fear_greed  = fetch_fear_greed()
+    log.info(f"  Shiller CAPE...")
+    shiller_cape = fetch_shiller_cape()
+    # F&G Proxy wenn CNN nicht verfügbar
+    if not fear_greed:
+        fear_greed = calc_fg_proxy(vix_term, pcr, sector_rs)
+        log.info(f"  Fear & Greed Proxy: {fear_greed.get("score")} ({fear_greed.get("rating")})")
     # IOS Market Score (Club-Integration)
     log.info(f"\n🏛️  IOS Market Score berechnen (Breadth/Rotation/Risk)...")
     ios_market = calc_ios_market_score(hist_data, vix_term)
@@ -2617,6 +2766,8 @@ def main():
             "vixTerm":    vix_term,
             "mseHistory": mse_history,   # 30T VVIX/SKEW/VIX fuer Z-Score
             "iosMarket":  ios_market,    # IOS Market Score v1.0 (Club)
+            "fearGreed":  fear_greed,    # CNN Fear & Greed / UIQ Proxy
+            "shillerCape": shiller_cape, # Shiller CAPE P/E
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
