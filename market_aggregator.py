@@ -2530,8 +2530,12 @@ def fetch_mse_history(days: int = 30) -> dict:
     return result
 
 
-def push_to_cloudflare_kv(data, key="master_market_data"):
-    """Pusht JSON-Daten in Cloudflare KV."""
+def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
+    """Pusht JSON-Daten in Cloudflare KV. Mit einem Retry bei transienten Fehlern
+    (Fix 30.06.2026: der separate "options_watchlist"-Key schlug gelegentlich
+    schweigend fehl, obwohl der Hauptlauf erfolgreich war — Frontend liest seitdem
+    primär aus dem eingebetteten master_market_data.optionsWatchlist, dieser Retry
+    erhöht zusätzlich die Robustheit des separaten Legacy-Keys)."""
     account_id = os.environ.get("CF_ACCOUNT_ID")
     api_token  = os.environ.get("CF_API_TOKEN")
     ns_id      = os.environ.get("CF_KV_NS_ID")
@@ -2547,19 +2551,23 @@ def push_to_cloudflare_kv(data, key="master_market_data"):
         "Content-Type":  "application/json",
     }
     payload = json.dumps(data, ensure_ascii=False)
-    log.info(f"  Upload zu Cloudflare KV ({len(payload)/1024:.1f} KB)...")
+    log.info(f"  Upload zu Cloudflare KV ({len(payload)/1024:.1f} KB)... key={key}")
 
-    try:
-        r = requests.put(url, headers=headers, data=payload.encode("utf-8"), timeout=30)
-        if r.status_code in (200, 201):
-            log.info("  ✅ KV-Upload erfolgreich!")
-            return True
-        else:
-            log.error(f"  ❌ KV-Upload fehlgeschlagen: {r.status_code} — {r.text[:200]}")
-            return False
-    except Exception as e:
-        log.error(f"  ❌ KV-Upload Exception: {e}")
-        return False
+    attempt = 0
+    while attempt <= retries:
+        attempt += 1
+        try:
+            r = requests.put(url, headers=headers, data=payload.encode("utf-8"), timeout=30)
+            if r.status_code in (200, 201):
+                log.info(f"  ✅ KV-Upload erfolgreich! (key={key}, Versuch {attempt})")
+                return True
+            else:
+                log.error(f"  ❌ KV-Upload fehlgeschlagen (key={key}, Versuch {attempt}): {r.status_code} — {r.text[:200]}")
+        except Exception as e:
+            log.error(f"  ❌ KV-Upload Exception (key={key}, Versuch {attempt}): {e}")
+        if attempt <= retries:
+            time.sleep(2)
+    return False
 
 # ── HAUPTPROGRAMM ─────────────────────────────────────────────────────────────
 
