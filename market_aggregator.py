@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.0
+UnderlyingIQ Market Aggregator v3.1
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
 Version 3.0: EU-ADR-Universum (US-gelistete ADRs statt Heimatbörsen .DE/.PA/.L),
 Multi-Strategy Scoring Engine (Gemini v3), Macro Risk Overlay (GEX/PCR),
 KV-basierte Scanner-Architektur (Single Source of Truth).
+Version 3.1 (30.06.2026): Fibonacci-Screening-Modul (Gemini-Blueprint) —
+calc_fibonacci_levels() pro Ticker: Retracement/Extension-Level aus 52W-Range,
+Confluence-Score (0-100), Setup-Klassifikation (CSP_ZONE/BREAKOUT/EXTENSION).
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -1847,6 +1850,14 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "iosEntry":      c.get("iosEntry"),
             "iosIsLeader":   c.get("iosIsLeader"),
             "iosSummary":    c.get("iosSummary"),
+            # Fibonacci-Screening-Modul v1.0
+            "f_setup":       c.get("f_setup"),
+            "f_score":       c.get("f_score"),
+            "f_next_name":   c.get("f_next_name"),
+            "f_next_p":      c.get("f_next_p"),
+            "f_dist_atr":    c.get("f_dist_atr"),
+            "f_strike":      c.get("f_strike"),
+            "f_lvls":        c.get("f_lvls"),
         }
         for c in master_shortlist_raw
     ]
@@ -1997,6 +2008,107 @@ Berechne mathematisch praezise (alle Werte auf 2 Dezimalstellen):
 
 # ── EINZELTITEL VERARBEITUNG ──────────────────────────────────────────────────
 
+def calc_fibonacci_levels(r: dict) -> dict:
+    """
+    Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint, 30.06.2026).
+    Berechnet Retracement/Extension-Level aus der 52-Wochen-Range (high52/low52),
+    einen Confluence-Score (0-100) und klassifiziert handelbare Setups.
+
+    Kompakte Keys (f_*) zur Schonung der KV-Storage-Größe.
+    Performance: <0.2ms pro Ticker, nutzt ausschließlich bereits vorhandene Felder.
+
+    Setup-Typen:
+      CSP_ZONE   — Preis nahe 61.8%/78.6% Retracement + nicht im Bärenmarkt
+                   → Cash-Secured-Put-Kandidat, Strike leicht unterhalb des Levels
+      BREAKOUT   — Preis durchbricht 23.6%/38.2% mit erhöhtem Volumen
+      EXTENSION  — Preis nahe 127.2%/161.8% Extension + überkauft (RSI>70)
+                   → Covered-Call-Kandidat, Strike am Extension-Level
+      NO_SETUP   — keine Confluence / zu weit entfernt
+    """
+    high  = r.get("high52", 0) or 0
+    low   = r.get("low52", 0) or 0
+    price = r.get("price", 0) or 0
+    atr   = r.get("atr", 1.0) or 1.0
+    ema50  = r.get("ema50")
+    ema200 = r.get("ema200")
+    rsi    = r.get("rsi", 50) or 50
+    regime = (r.get("regime") or "").lower()
+    vol_ratio = r.get("volRatio", 1.0) or 1.0
+
+    if high == low or price == 0:
+        return {"f_setup": "NO_SETUP", "f_score": 0}
+
+    rng = high - low
+
+    # ── 1. Levels berechnen (Retracements + Extensions) ──────────────────────
+    fibo = {
+        "r236":  high - rng * 0.236,
+        "r382":  high - rng * 0.382,
+        "r500":  high - rng * 0.500,
+        "r618":  high - rng * 0.618,
+        "r786":  high - rng * 0.786,
+        "e1272": high + rng * 0.272,
+        "e1618": high + rng * 0.618,
+    }
+
+    all_levels = [
+        ("23.6%",  fibo["r236"]),  ("38.2%",  fibo["r382"]), ("50.0%", fibo["r500"]),
+        ("61.8%",  fibo["r618"]),  ("78.6%",  fibo["r786"]),
+        ("127.2%", fibo["e1272"]), ("161.8%", fibo["e1618"]),
+    ]
+
+    # ── 2. Nächstes Level identifizieren ──────────────────────────────────────
+    next_lvl_name, next_lvl_p = min(all_levels, key=lambda x: abs(price - x[1]))
+    dist_atr = abs(price - next_lvl_p) / atr if atr else 99
+
+    # ── 3. Confluence-Score (0-100) ───────────────────────────────────────────
+    # A) Distanz-Dämpfung (max 50 Pkt) — 0 ATR Abstand = 50 Pkt, ab 1.5 ATR = 0
+    s_dist = max(0, 50 * (1 - (dist_atr / 1.5)))
+
+    # B) MA-Confluence (max 25 Pkt) — Fibo-Level deckt sich mit EMA200/EMA50
+    s_ma = 0
+    if ema200 and abs(next_lvl_p - ema200) <= 1.0 * atr:
+        s_ma = 25
+    elif ema50 and abs(next_lvl_p - ema50) <= 1.0 * atr:
+        s_ma = 15
+
+    # C) Technischer Match-Bonus (max 25 Pkt)
+    s_tech = 0
+    is_retracement = next_lvl_name in ("23.6%", "38.2%", "50.0%", "61.8%", "78.6%")
+    if is_retracement:
+        if regime in ("bull", "side"): s_tech += 10
+        if rsi < 35:                   s_tech += 15
+    else:  # Extension (Widerstand)
+        if regime == "bear":  s_tech += 10
+        if rsi > 65:           s_tech += 15
+
+    conf_score = int(min(100, s_dist + s_ma + s_tech))
+
+    # ── 4. Setup-Klassifikation (nur wenn Abstand <= 0.75 ATR) ────────────────
+    setup  = "NO_SETUP"
+    strike = None
+
+    if dist_atr <= 0.75:
+        if next_lvl_name in ("61.8%", "78.6%") and price >= next_lvl_p and regime != "bear":
+            setup  = "CSP_ZONE"
+            strike = round(next_lvl_p - (0.2 * atr), 2)
+        elif next_lvl_name in ("23.6%", "38.2%") and price > next_lvl_p and vol_ratio > 1.2:
+            setup = "BREAKOUT"
+        elif next_lvl_name in ("127.2%", "161.8%") and rsi > 70:
+            setup  = "EXTENSION"
+            strike = round(next_lvl_p, 2)
+
+    return {
+        "f_lvls":      {k: round(v, 2) for k, v in fibo.items()},
+        "f_next_name": next_lvl_name,
+        "f_next_p":    round(next_lvl_p, 2),
+        "f_dist_atr":  round(dist_atr, 2),
+        "f_score":     conf_score,
+        "f_setup":     setup,
+        "f_strike":    strike,
+    }
+
+
 def process_ticker(ticker, hist_df):
     """Berechnet alle Indikatoren für einen Ticker."""
     try:
@@ -2065,7 +2177,7 @@ def process_ticker(ticker, hist_df):
             obv_tr, overh, p_bull2bear, rsiv
         )
 
-        return {
+        result = {
             "sym":           ticker,
             "price":         price,
             "ema50":         round(ema50v, 4) if ema50v else None,
@@ -2095,6 +2207,11 @@ def process_ticker(ticker, hist_df):
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             # Strategie-Scores werden im build_leaderboards-Pass hinzugefuegt
         }
+
+        # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
+        result.update(calc_fibonacci_levels(result))
+
+        return result
     except Exception as e:
         return {"sym": ticker, "error": str(e)}
 
