@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.4
+UnderlyingIQ Market Aggregator v3.5
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -23,6 +23,9 @@ Version 3.4 (30.06.2026): Fibo-Score → Options-Scoring-Boost (offener Punkt au
 Übergabeprotokoll) — score_options_csp() erhält bis zu +15 Pkt bei CSP_ZONE-Setup,
 score_options_covered_call() bis zu +15 Pkt bei EXTENSION-Setup, jeweils skaliert
 mit dem Fibo-Confluence-Score. Hand-verifiziert gegen Live-Daten (SCHW, 30.06.2026).
+Version 3.5 (30.06.2026): f_setup/f_score (als fSetup/fScore) zusätzlich in
+optionsWatchlist-Output aufgenommen — vorher nur intern für die Score-Berechnung
+genutzt, im Output unsichtbar, daher Boost-Wirkung nicht nachvollziehbar/prüfbar.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -54,7 +57,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "3.4"
+AGGREGATOR_VERSION = "3.5"
 
 # yfinance für Marktdaten
 try:
@@ -2803,6 +2806,12 @@ def main():
             "scoreCsp":    s_csp,
             "scoreCc":     s_cc,
             "scoreSpread": s_spread,
+            # NEU (30.06.2026): Fibo-Setup/Score mit ausgeben — macht den in
+            # score_options_csp()/score_options_covered_call() eingerechneten
+            # Fibo-Boost im Output nachvollziehbar (vorher nur intern verwendet,
+            # nicht sichtbar -> Boost-Wirkung liess sich nicht isoliert pruefen).
+            "fSetup":      r.get("f_setup"),
+            "fScore":      r.get("f_score"),
             # Bester Score fuer Sortierung
             "optsScore":   max(s_csp, s_cc, s_spread),
         })
