@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.3
+UnderlyingIQ Market Aggregator v3.4
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -19,6 +19,10 @@ gegen bereits vorhandene Ticker abgleichen kann (Dedupe vor Admin-Review).
 Bugfix: meta["version"] im Output war seit der Fibo-Erweiterung (v3.1) hartcodiert
 "3.0" und lief vom Docstring-Header auseinander — jetzt zentrale AGGREGATOR_VERSION-
 Konstante als einzige Quelle der Wahrheit für beide Stellen.
+Version 3.4 (30.06.2026): Fibo-Score → Options-Scoring-Boost (offener Punkt aus
+Übergabeprotokoll) — score_options_csp() erhält bis zu +15 Pkt bei CSP_ZONE-Setup,
+score_options_covered_call() bis zu +15 Pkt bei EXTENSION-Setup, jeweils skaliert
+mit dem Fibo-Confluence-Score. Hand-verifiziert gegen Live-Daten (SCHW, 30.06.2026).
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -50,7 +54,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "3.3"
+AGGREGATOR_VERSION = "3.4"
 
 # yfinance für Marktdaten
 try:
@@ -809,6 +813,13 @@ def score_options_csp(r: dict) -> int:
     if hv10 is not None and hv10 > 25:
         s += 5                     # Kurzfristiger Vola-Spike begünstigt Weeklies
 
+    # Fibonacci-Boost (NEU 30.06.2026, Gemini-Blueprint-Zuordnung) — CSP_ZONE
+    # bestaetigt unabhaengig von BB/RSI/Regime, dass der Kurs nahe einem
+    # Retracement-Level (61.8%/78.6%) liegt = klassische CSP-Einstiegszone.
+    # Skaliert mit Confluence-Score (0-100), max +15 Pkt bei Score>=75.
+    if r.get("f_setup") == "CSP_ZONE":
+        s += min(int((r.get("f_score", 0) or 0) * 0.20), 15)
+
     return max(0, min(100, s))
 
 
@@ -845,6 +856,13 @@ def score_options_covered_call(r: dict) -> int:
     # HVP: Gesunde Bandbreite — nicht zu tief (wenig Prämie), nicht zu hoch (Event-Risiko)
     if 30 <= hvp <= 65: s += 20
     elif hvp > 65:      s += 10   # Noch akzeptabel, aber erhöhtes Gap-Risiko
+
+    # Fibonacci-Boost (NEU 30.06.2026, Gemini-Blueprint-Zuordnung) — EXTENSION
+    # bestaetigt: Kurs nahe 127.2%/161.8%-Extension + ueberkauft (RSI>70) =
+    # klassische Covered-Call-Zone (Strike am Extension-Level). Skaliert mit
+    # Confluence-Score (0-100), max +15 Pkt bei Score>=75.
+    if r.get("f_setup") == "EXTENSION":
+        s += min(int((r.get("f_score", 0) or 0) * 0.20), 15)
 
     return max(0, min(100, s))
 
