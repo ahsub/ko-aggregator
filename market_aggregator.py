@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.1
+UnderlyingIQ Market Aggregator v3.3
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -10,6 +10,12 @@ KV-basierte Scanner-Architektur (Single Source of Truth).
 Version 3.1 (30.06.2026): Fibonacci-Screening-Modul (Gemini-Blueprint) —
 calc_fibonacci_levels() pro Ticker: Retracement/Extension-Level aus 52W-Range,
 Confluence-Score (0-100), Setup-Klassifikation (CSP_ZONE/BREAKOUT/EXTENSION).
+Version 3.2 (30.06.2026): Extra-Ticker-Erweiterung — fetch_approved_extra_tickers()
+liest admin-freigegebene Ticker-Vorschläge (Fibo-Tab → Pending-Review → KV) und
+mergt sie zusätzlich zu den fest codierten Listen in die Ticker-Universe.
+Version 3.3 (30.06.2026): pusht zusätzlich known_universe_tickers nach KV (volle
+Ticker-Liste nach jedem Lauf), damit der ko-ai Worker Extra-Ticker-Vorschläge
+gegen bereits vorhandene Ticker abgleichen kann (Dedupe vor Admin-Review).
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -468,6 +474,39 @@ BEAR_US_TICKERS = ['SMCI', 'MSTR', 'MRVL', 'ALAB', 'CRWD', 'SNOW', 'NET', 'DDOG'
 # ── BEAR-KANDIDATEN DE/EU (Zykliker, Immobilien, Hochverschuldete) ───────────
 BEAR_DE_EU_TICKERS = ['BAYN.DE', 'VOW3.DE', 'BMW.DE', 'MBG.DE', 'CON.DE', 'DHER.DE', 'ZAL.DE', 'VNA.DE', 'LEG.DE', 'TAG.DE', '1COV.DE', 'EVT.DE', 'SRT.DE', 'NDX1.DE', 'AIXA.DE', 'WAF.DE', 'IFX.DE', 'STLAM.MI', 'RNO.PA', 'VOD.L', 'BT-A.L', 'TEF.MC', 'UCB.BR', 'GLPG.BR', 'ARND.DE', 'WDP.BR', 'RWE.DE', 'ENEL.MI', 'EZJ.L', 'IAG.L', 'DTE.DE', 'GLEN.L', 'AAL.L']
 
+def fetch_approved_extra_tickers():
+    """Liest vom Frontend vorgeschlagene + per Admin-Review freigegebene Ticker
+    aus Cloudflare KV (Key: approved_extra_tickers, geschrieben vom ko-ai Worker
+    nach /extra-tickers/approve). Erweitert die feste Ticker-Universe NEU
+    (30.06.2026) — siehe ko-ai-worker.js für den Review-Workflow.
+    Fehlerfall (KV nicht erreichbar, keine Credentials, leere Liste): gibt
+    einfach [] zurück, bricht den Lauf NICHT ab — fest codierte Listen bleiben
+    die verlässliche Grundlage."""
+    account_id = os.environ.get("CF_ACCOUNT_ID")
+    api_token  = os.environ.get("CF_API_TOKEN")
+    ns_id      = os.environ.get("CF_KV_NS_ID")
+    if not all([account_id, api_token, ns_id]):
+        return []
+
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{ns_id}/values/approved_extra_tickers"
+    headers = {"Authorization": f"Bearer {api_token}"}
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            log.info(f"  Keine approved_extra_tickers in KV (Status {r.status_code}) — übersprungen.")
+            return []
+        entries = r.json()
+        if not isinstance(entries, list):
+            return []
+        syms = [e.get("sym") for e in entries if isinstance(e, dict) and e.get("sym")]
+        if syms:
+            log.info(f"  ✅ {len(syms)} Extra-Ticker aus Admin-Review-KV übernommen: {', '.join(syms[:20])}{' ...' if len(syms) > 20 else ''}")
+        return syms
+    except Exception as e:
+        log.warning(f"  Extra-Ticker-Abruf fehlgeschlagen (nicht kritisch): {e}")
+        return []
+
+
 def build_ticker_universe():
     seen = set()
     result = []
@@ -479,7 +518,9 @@ def build_ticker_universe():
         # BEAR_DE_EU: nur fuer Bear-Scanner Referenz (keine Options-Kandidaten)
         BEAR_US_TICKERS + BEAR_DE_EU_TICKERS +
         INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
-        [t for wl in SECTOR_WATCHLISTS.values() for t in wl]
+        [t for wl in SECTOR_WATCHLISTS.values() for t in wl] +
+        # NEU (30.06.2026): per Fibo-Tab vorgeschlagene + admin-freigegebene Ticker
+        fetch_approved_extra_tickers()
     )
     # Filter: keine leeren Strings, keine bekannt ungueltige Symbole
     # Fix Gemini: Doppelte BAD_SYMS zusammengeführt (zweite Zeile überschrieb erste)
@@ -2597,6 +2638,13 @@ def main():
     tickers = build_ticker_universe()
     _t(f"Ticker-Universum: {len(tickers)} Titel")
     log.info(f"\n📋 Ticker-Universum: {len(tickers)} Titel")
+
+    # NEU (30.06.2026): bekannte Universe-Liste separat in KV pushen — der ko-ai
+    # Worker gleicht Extra-Ticker-Vorschläge (Fibo-Tab) dagegen ab, um Doppel-
+    # Einreichungen für bereits vorhandene Ticker gar nicht erst in die Pending-
+    # Review-Liste zu lassen (sonst unnötiger Admin-Aufwand für längst vorhandene
+    # Ticker wie z.B. AAPL).
+    push_to_cloudflare_kv(tickers, key="known_universe_tickers")
 
     # Krypto separat
     stock_tickers  = [t for t in tickers if not t.endswith("-USD")]
