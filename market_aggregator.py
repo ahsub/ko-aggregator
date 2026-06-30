@@ -16,6 +16,9 @@ mergt sie zusätzlich zu den fest codierten Listen in die Ticker-Universe.
 Version 3.3 (30.06.2026): pusht zusätzlich known_universe_tickers nach KV (volle
 Ticker-Liste nach jedem Lauf), damit der ko-ai Worker Extra-Ticker-Vorschläge
 gegen bereits vorhandene Ticker abgleichen kann (Dedupe vor Admin-Review).
+Bugfix: meta["version"] im Output war seit der Fibo-Erweiterung (v3.1) hartcodiert
+"3.0" und lief vom Docstring-Header auseinander — jetzt zentrale AGGREGATOR_VERSION-
+Konstante als einzige Quelle der Wahrheit für beide Stellen.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -43,6 +46,11 @@ import requests
 import numpy as np
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
+# meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
+# unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
+AGGREGATOR_VERSION = "3.3"
 
 # yfinance für Marktdaten
 try:
@@ -2953,7 +2961,7 @@ def main():
             },
         },
         "meta": {
-            "version":      "3.0",
+            "version":      AGGREGATOR_VERSION,
             "generated":    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "elapsed_s":    elapsed,
             "total":        len(results),
