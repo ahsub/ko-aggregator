@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.8
+UnderlyingIQ Market Aggregator v3.9
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -42,6 +42,15 @@ Scores wurden zwar im Leaderboard-Pass (scored[]) berechnet, aber nie in den
 tickers-Output (results[]) zurückgeschrieben → tickers["squeezeRisk"] war immer
 None. Fix: scored_by_sym-Merge schreibt alle Short-Felder nach dem Leaderboard-
 Pass zurück in results[], sodass sie im tickers-JSON-Output sichtbar werden.
+Version 3.9 (01.07.2026): 3 Erweiterungen:
+1. _calc_squeeze_risk_df(): Gemini-Blueprint v2 — direktionaler Volumen-Check
+   (Spike an grünem Tag) in process_ticker() mit hist_df-Zugriff statt altem
+   nicht-direktionalem Proxy. Berechnung jetzt vor dem Leaderboard-Pass.
+2. Fundamental-Enrichment (Option A): enrich_with_fundamentals() für Top-50
+   Kandidaten (masterShortlist + optionsWatchlist) nach dem Leaderboard-Pass.
+   Felder: peTrailing/Forward, peg, pb, roe, revenueGrowth, earningsGrowth,
+   analystTarget, analystUpside (Fair-Value-Proxy), fcfYield, evEbitda.
+3. macdLine + macdSignal (waren berechnet aber nicht im result-Dict).
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -73,7 +82,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "3.8"
+AGGREGATOR_VERSION = "3.9"
 
 # yfinance für Marktdaten
 try:
@@ -1325,8 +1334,9 @@ def score_short_fading(r: dict) -> int:
     # Hartes Gate (Gemini): Niemals gegen säkulare Allzeithochs shorten
     if high52 and price >= high52 * 0.99: return 0
 
-    # Hartes Gate (Gemini 01.07.2026): Squeeze-Risk-Proxy als blockendes Gate
-    squeeze_risk = calc_squeeze_risk(r)
+    # Hartes Gate (Gemini 01.07.2026): Squeeze-Risk aus process_ticker() lesen
+    # (dort mit Zugriff auf hist_df/direktionalem Volumen-Check berechnet).
+    squeeze_risk = r.get("squeezeRisk") or 0
     if squeeze_risk >= 70: return 0   # Zu gefährlich — kein Fading-Short
 
     dist_atr = (price - ema200) / atr
@@ -1833,6 +1843,44 @@ def apply_ios_market_overlay(options_candidates: list, ios_market: dict) -> list
     return options_candidates
 
 
+def enrich_with_fundamentals(sym: str, price: float, sector: str = None) -> dict:
+    """
+    Fundamentaldaten — bewusst auf 3 Kernfelder reduziert (01.07.2026).
+    Jedes Feld hat direkten kausalen Einfluss auf Handelsentscheidungen:
+
+    - analystUpside: Sentiment-Filter — tradest du mit oder gegen den Konsens?
+    - fcfYield:      CSP/Wheel-Schutz — kein Put auf Cash-Burner schreiben.
+    - debtToEquity:  Short-Gate — hohes D/E stützt Breakdown, ABER:
+                     Versorger/REITs ausgenommen (strukturell hohes D/E = normal).
+
+    Alle anderen Felder (P/E, PEG, ROE, EV/EBITDA etc.) haben keinen
+    ausreichenden kausalen Einfluss auf 2-30-Tage-Setups und wurden
+    bewusst entfernt (80/20-Entscheidung, Gemini + Claude Review 01.07.2026).
+    Bei Bedarf: on-demand im DeepDive-Button laden, nicht im Nachtlauf.
+    """
+    _STRUCTURAL_HIGH_DEBT_SECTORS = {"utilities", "real estate", "reits"}
+    try:
+        info     = yf.Ticker(sym).info
+        target   = info.get("targetMeanPrice")
+        upside   = round((target - price) / price * 100, 1) if target and price else None
+        fcf      = info.get("freeCashflow")
+        mcap     = info.get("marketCap")
+        fcf_yield= round(fcf / mcap * 100, 2) if fcf and mcap and mcap > 0 else None
+        # D/E nur für Nicht-Versorger/REIT aussagekräftig
+        det_sector = (sector or info.get("sector") or "").lower()
+        is_structural_debt = any(s in det_sector for s in _STRUCTURAL_HIGH_DEBT_SECTORS)
+        de_raw   = info.get("debtToEquity")
+        d_eq     = round(de_raw, 1) if de_raw and not is_structural_debt else None
+        return {
+            "analystUpside":  upside,
+            "fcfYield":       fcf_yield,
+            "debtToEquity":   d_eq,
+        }
+    except Exception as e:
+        log.warning(f"  Fundamental-Fetch {sym}: {e}")
+        return {}
+
+
 def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     """
     Berechnet alle 5 Strategie-Scores und erstellt sortierte Leaderboards.
@@ -1862,12 +1910,9 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         if ios_data.get("iosIsLeader") and s_minervini > 0:
             s_minervini = min(100, s_minervini + 10)
 
-        # Squeeze-Risiko-Proxy (Gemini 01.07.2026) — wird als Gate in
-        # score_short_fading() genutzt, aber auch separat im Output
-        # gespeichert damit das Frontend ihn als Warnung anzeigen kann.
-        squeeze_risk = calc_squeeze_risk(r)
-
-        # KO-Short-Hebelempfehlung (Gemini 01.07.2026) — dynamisch aus ATR/Preis
+        # Squeeze-Risiko bereits in process_ticker() mit hist_df berechnet (Gemini v2)
+        squeeze_risk = r.get("squeezeRisk") or 0
+        # KO-Short-Hebelempfehlung (dynamisch aus ATR/Preis)
         ko_short_lev = calc_ko_short_leverage(r) if s_fading >= 35 else None
 
         # Best Long / Short Score
@@ -2322,6 +2367,59 @@ def calc_fibonacci_levels(r: dict) -> dict:
     }
 
 
+def _calc_squeeze_risk_df(closes: list, volumes: list, hvp: int, rsi: float) -> int:
+    """
+    Squeeze-Risiko-Score (0-100) — Gemini-Blueprint v2 (01.07.2026).
+    Verbesserte Version ggü. calc_squeeze_risk(r): nutzt direktionalen
+    Volumen-Check (Spike an grünem Tag = potenzielle Short-Eindeckung),
+    was das entscheidende Squeeze-Frühwarnsignal ist.
+
+    Gate für score_short_fading(): Score >=70 sperrt Fading-Shorts.
+
+    Kombinations-Logik:
+    - Niedrige HVP + überverkaufter RSI + Volumen-Spike an grünem Tag
+      = maximales Squeeze-Signal (85 Punkte, sofortiger Gate-Trigger)
+    - Breiterer Score für Zwischenwerte (kein Alles-oder-Nichts)
+    """
+    if not closes or not volumes or len(closes) < 21:
+        return 0
+
+    score = 0
+
+    # A) Niedrige implizite Volatilität — aufgestaute Spannung
+    if hvp is not None:
+        if hvp < 15:   score += 30
+        elif hvp < 25: score += 15
+
+    # B) RSI überverkauft — potenzielle Eindeckungs-Kandidaten warten
+    if rsi is not None:
+        if rsi < 25:   score += 25
+        elif rsi < 35: score += 12
+
+    # C) Direktionaler Volumen-Check (Gemini-Blueprint):
+    # Volumen-Spike speziell an einem grünen Tag = Eindeckung beginnt
+    try:
+        last_close  = closes[-1]
+        last_open   = closes[-2]        # Proxy: vorheriger Close als Open
+        last_vol    = volumes[-1] if volumes[-1] else 0
+        vol_mean_20 = sum(v for v in volumes[-21:-1] if v) / 20 if len(volumes) >= 21 else 0
+        vol_spike   = vol_mean_20 > 0 and last_vol > vol_mean_20 * 1.5
+        price_up    = last_close > last_open
+
+        # Maximales Signal (Gemini): alle drei Bedingungen erfüllt
+        if hvp is not None and hvp < 20 and rsi is not None and rsi < 30 and vol_spike and price_up:
+            return 85   # Kritisches Squeeze-Risiko → Gate schließt sofort
+
+        if vol_spike and price_up:
+            score += 20
+        elif vol_spike:
+            score += 10
+    except Exception:
+        pass
+
+    return max(0, min(100, score))
+
+
 def process_ticker(ticker, hist_df):
     """Berechnet alle Indikatoren für einen Ticker."""
     try:
@@ -2398,6 +2496,8 @@ def process_ticker(ticker, hist_df):
             "atr":           atrv,
             "rsi":           rsiv,
             "macdHist":      macd_hist,
+            "macdLine":      round(macd_val, 4) if macd_val is not None else None,   # NEU: MACD-Linie
+            "macdSignal":    round(macd_sig, 4) if macd_sig is not None else None,   # NEU: Signal-Linie
             "obvTrend":      round(obv_tr, 3) if obv_tr is not None else None,
             "bbPos":         bbpos,
             "overheat":      overh,
@@ -2415,10 +2515,14 @@ def process_ticker(ticker, hist_df):
             "volRatio":      vol_ratio,
             "bars":          len(closes),
             "_bars_raw":     len(hist_df) if hist_df is not None else 0,
-            "hvp":           calc_hv_percentile(closes),          # 30-Tage HV-Percentile 0-100
-            "hv10":          calc_hv_percentile(closes, window=10, lookback=90),  # 10-Tage HV für Weeklies
+            "hvp":           calc_hv_percentile(closes),
+            "hv10":          calc_hv_percentile(closes, window=10, lookback=90),
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            # Strategie-Scores werden im build_leaderboards-Pass hinzugefuegt
+            # NEU (01.07.2026): Squeeze-Risiko direkt in process_ticker berechnet,
+            # wo hist_df verfügbar ist — Gemini-Blueprint: direktionaler Volumen-
+            # Check (Spike an grünem Tag) ist präziser als nicht-direktionales
+            # volRatio-Proxy aus dem früheren calc_squeeze_risk(r)-Ansatz.
+            "squeezeRisk":   _calc_squeeze_risk_df(closes, volumes, hvp=calc_hv_percentile(closes), rsi=rsiv),
         }
 
         # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
@@ -3221,6 +3325,47 @@ def main():
         )
     else:
         log.warning("  ANTHROPIC_API_KEY fehlt — KI-Enrichment uebersprungen")
+
+    # ── FUNDAMENTAL ENRICHMENT (Option A, 01.07.2026) ────────────────────────
+    # Bewertungskennzahlen für Top-Kandidaten via yfinance .info.
+    # Nur für masterShortlist + optionsWatchlist (max ~50 Titel, ~1s/Ticker).
+    # Felder: peTrailing, peForward, peg, pb, roe, revenueGrowth, earningsGrowth,
+    #         analystTarget, analystUpside (Fair-Value-Proxy), fcfYield, evEbitda.
+    # ETFs und Krypto werden übersprungen (keine sinnvollen KGV-Werte).
+    _ETF_CRYPTOSUFFIXES = ("-USD", "SPY", "QQQ", "GLD", "SLV", "USO", "UNG",
+                           "XL", "XBI", "IBB", "IAU", "VIX", "TLT", "HYG",
+                           "SH", "SQQQ", "EWH", "EWG", "EWJ")
+    _fund_candidates = list({c["sym"] for c in master_shortlist + options_watchlist
+                             if not any(c["sym"].startswith(pfx) or c["sym"].endswith(pfx)
+                                        for pfx in _ETF_CRYPTOSUFFIXES)})[:50]
+    if _fund_candidates:
+        log.info(f"\n📊 Fundamental-Enrichment: {len(_fund_candidates)} Kandidaten...")
+        _fund_cache = {}
+        for _fsym in _fund_candidates:
+            _fprice = next((r.get("price") for r in results if r.get("sym") == _fsym), None)
+            _fdata  = enrich_with_fundamentals(_fsym, _fprice)
+            if _fdata:
+                _fund_cache[_fsym] = _fdata
+                log.info(f"  {_fsym}: P/E={_fdata.get('peTrailing')} "
+                         f"PEG={_fdata.get('peg')} "
+                         f"Upside={_fdata.get('analystUpside')}% "
+                         f"ROE={_fdata.get('roe')}%")
+        # Felder in masterShortlist einhängen
+        for c in master_shortlist:
+            if c.get("sym") in _fund_cache:
+                c.update(_fund_cache[c["sym"]])
+        # Felder in optionsWatchlist einhängen
+        for c in options_watchlist:
+            if c.get("sym") in _fund_cache:
+                c.update(_fund_cache[c["sym"]])
+        # Felder auch in results[] für tickers-Output
+        _fund_by_sym = {c["sym"]: _fund_cache[c["sym"]] for c in master_shortlist if c.get("sym") in _fund_cache}
+        for r in results:
+            if r.get("sym") in _fund_by_sym:
+                r.update(_fund_by_sym[r["sym"]])
+        log.info(f"  ✅ Fundamental-Enrichment: {len(_fund_cache)}/{len(_fund_candidates)} erfolgreich")
+    else:
+        log.info("  Fundamental-Enrichment: keine Kandidaten (alle ETF/Krypto)")
 
     # Leaderboards + Shortlist in master dict einfuegen
     master["leaderboards"]     = leaderboards_obj
