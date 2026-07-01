@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.5
+UnderlyingIQ Market Aggregator v3.7
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -26,6 +26,17 @@ mit dem Fibo-Confluence-Score. Hand-verifiziert gegen Live-Daten (SCHW, 30.06.20
 Version 3.5 (30.06.2026): f_setup/f_score (als fSetup/fScore) zusätzlich in
 optionsWatchlist-Output aufgenommen — vorher nur intern für die Score-Berechnung
 genutzt, im Output unsichtbar, daher Boost-Wirkung nicht nachvollziehbar/prüfbar.
+Version 3.6 (30.06.2026): IOS v1.2 Leader-Boost in Minervini-Scoring integriert
+(Batch-2-Punkt aus Übergabeprotokoll) — score_long_minervini() erhält +10 Pkt
+wenn iosIsLeader=true UND Stage-2-Gate bereits bestanden (s_minervini>0). Vorher
+liefen IOS-Score und Minervini-Score komplett unabhängig nebeneinander her.
+Version 3.7 (01.07.2026): Short-Strategien Phase 1 (Gemini-Blueprint):
+calc_squeeze_risk() — Proxy-Score (0-100) für Short-Squeeze-Risiko aus HVP/RSI/
+BB-Position/Volumen (kein SI-API nötig), hartes Gate für score_short_fading().
+calc_ko_short_leverage() — dynamische Hebelempfehlung (3-8x) aus ATR/Preis.
+score_short_fading() erweitert: Squeeze-Risk-Gate, Penny-Stock-Gate (<$15),
+ATH-Gate (kein Short nahe 52W-Hoch), Sektor-RS-Boost (_sector_rs5 Feld).
+squeezeRisk + koShortLev im Scored-Output sichtbar für Frontend-Darstellung.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -57,7 +68,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "3.5"
+AGGREGATOR_VERSION = "3.7"
 
 # yfinance für Marktdaten
 try:
@@ -1219,10 +1230,74 @@ def score_short_breakdown(r: dict) -> int:
     return max(0, min(100, s))
 
 
+def calc_squeeze_risk(r: dict) -> int:
+    """
+    Short-Squeeze-Risiko-Proxy (Gemini-Blueprint, 01.07.2026).
+    Kein Short-Interest-API verfügbar — Proxy aus Volumen-/Vola-Struktur.
+    Gibt Score 0-100 zurück: >=70 = hartes Gate für alle Short-Strategien.
+
+    Kernlogik: Aktie im Keller (BB-Bottom) + plötzlicher Volumen-Spike an
+    grünem Tag + historisch tiefes Volatilität-Percentil → elastische Feder,
+    Squeeze-Wahrscheinlichkeit sehr hoch.
+    """
+    hvp      = r.get("hvp")
+    rsi      = r.get("rsi")
+    bbpos    = r.get("bbPos")
+    vol_ratio= r.get("volRatio", 1) or 1
+    price    = r.get("price", 0)
+    open_    = r.get("open_last")   # Intraday-Open nicht immer verfügbar
+
+    score = 0
+
+    # Primärsignal: HVP extrem niedrig + RSI überverkauft → aufgebaute Spannung
+    if hvp is not None and hvp < 15:
+        score += 30
+    elif hvp is not None and hvp < 25:
+        score += 15
+
+    if rsi is not None and rsi < 25:
+        score += 25
+    elif rsi is not None and rsi < 35:
+        score += 12
+
+    # BB-Position im Keller (aufgestaute Energie)
+    if bbpos is not None and bbpos < 0.10:
+        score += 20
+    elif bbpos is not None and bbpos < 0.20:
+        score += 10
+
+    # Volumen-Spike (Proxy für institutionelles Eindecken)
+    if vol_ratio >= 2.0:
+        score += 20
+    elif vol_ratio >= 1.5:
+        score += 10
+
+    return max(0, min(100, score))
+
+
+def calc_ko_short_leverage(r: dict) -> int:
+    """
+    Dynamische KO-Short-Hebelempfehlung (Gemini-Blueprint, 01.07.2026).
+    Formel: Hebel = clamp(1.5 / (ATR / Preis), 3, 8).
+    Hohe ATR = niedriger Hebel (weiter KO-Strike-Abstand nötig) und umgekehrt.
+    Gibt empfohlenen Hebel als Integer zurück (3-8).
+    """
+    price = r.get("price", 0)
+    atr   = r.get("atr")
+    if not price or not atr or atr <= 0:
+        return 3   # konservativer Fallback
+    atr_pct = atr / price
+    if atr_pct <= 0:
+        return 3
+    leverage = 1.5 / atr_pct
+    return max(3, min(8, round(leverage)))
+
+
 def score_short_fading(r: dict) -> int:
     """
     Short Fading (FOMO-Climax): Extreme Ueberdehnung + Kauf-Erschoepfung.
     Gemini-Fix v2: BBPos-Schwelle 0.92->0.85, HVP Squeeze-Schutz.
+    Gemini-Review 01.07.2026: Squeeze-Risk-Gate + Sektor-RS-Boost.
     """
     s = 0
     price    = r.get("price", 0)
@@ -1235,8 +1310,20 @@ def score_short_fading(r: dict) -> int:
     p_b2b    = r.get("pBull2Bear", 0) or 0
     obv      = r.get("obvTrend", 0) or 0
     hvp      = r.get("hvp")
+    high52   = r.get("high52")
 
     if not ema200 or not atr or atr == 0: return 0
+
+    # Hartes Gate (Gemini): Penny-Stock-Schutz
+    if price < 15.0: return 0
+
+    # Hartes Gate (Gemini): Niemals gegen säkulare Allzeithochs shorten
+    if high52 and price >= high52 * 0.99: return 0
+
+    # Hartes Gate (Gemini 01.07.2026): Squeeze-Risk-Proxy als blockendes Gate
+    squeeze_risk = calc_squeeze_risk(r)
+    if squeeze_risk >= 70: return 0   # Zu gefährlich — kein Fading-Short
+
     dist_atr = (price - ema200) / atr
 
     if dist_atr < 2.5: return 0
@@ -1265,6 +1352,14 @@ def score_short_fading(r: dict) -> int:
     if hvp is not None:
         if hvp >= 85:   s -= 20  # Short-Squeeze / Meme-Stock Gefahr
         elif hvp <= 40: s += 8   # Ruhiger Erschoepfungs-Peak
+
+    # Sektor-RS-Boost (Gemini 01.07.2026): Schwacher Sektor verstärkt Fading-Signal.
+    # Nutzt sektor_rs (relatives Momentum des Sektor-ETFs) falls in r vorhanden.
+    # Wird in build_leaderboards() gesetzt wenn Sektor-Daten geladen wurden.
+    sector_rs = r.get("_sector_rs5")
+    if sector_rs is not None and sector_rs < -1.0:
+        # Sektor underperformt SPY um >1% (5-Tage) → Tailwind für Short
+        s += 15 if sector_rs < -2.0 else 8
 
     return max(0, min(100, s))
 
@@ -1752,6 +1847,24 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         s_breakdown = score_short_breakdown(r)
         s_fading    = score_short_fading(r)
 
+        # IOS Foundation v1.2 — NEU (30.06.2026, Batch-2-Punkt aus Übergabeprotokoll):
+        # vorher liefen IOS-Score und Minervini-Score komplett unabhängig
+        # nebeneinander her, obwohl iosIsLeader (Quality >= 85%) inhaltlich ein
+        # starkes Bestätigungssignal für SEPA-Stage-2-Setups ist. Boost nur wenn
+        # Gate 1 (Stage-2-Uptrend) in score_long_minervini() bereits bestanden
+        # wurde (s_minervini > 0) — Leader-Status soll kein totes Setup retten.
+        ios_data = calc_ios_score(r)
+        if ios_data.get("iosIsLeader") and s_minervini > 0:
+            s_minervini = min(100, s_minervini + 10)
+
+        # Squeeze-Risiko-Proxy (Gemini 01.07.2026) — wird als Gate in
+        # score_short_fading() genutzt, aber auch separat im Output
+        # gespeichert damit das Frontend ihn als Warnung anzeigen kann.
+        squeeze_risk = calc_squeeze_risk(r)
+
+        # KO-Short-Hebelempfehlung (Gemini 01.07.2026) — dynamisch aus ATR/Preis
+        ko_short_lev = calc_ko_short_leverage(r) if s_fading >= 35 else None
+
         # Best Long / Short Score
         best_long  = max(s_minervini, s_swing, s_mr_long)
         best_short = max(s_breakdown, s_fading)
@@ -1796,8 +1909,11 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "bestLong":      best_long,
             "bestShort":     best_short,
             "shortDir":      short_dir,
+            # Short-spezifische Felder (Gemini 01.07.2026)
+            "squeezeRisk":   squeeze_risk,      # 0-100, >=70 = Fading-Gate geschlossen
+            "koShortLev":    ko_short_lev,      # Empfohlener Hebel (3-8) oder None
             # IOS Foundation Rating (Club-Integration)
-            **calc_ios_score(r),
+            **ios_data,
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
