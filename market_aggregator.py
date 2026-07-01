@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.0
+UnderlyingIQ Market Aggregator v4.1
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -87,7 +87,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.0"
+AGGREGATOR_VERSION = "4.1"
 
 # yfinance für Marktdaten
 try:
@@ -361,20 +361,27 @@ INTL_TIER1 = [
     # Europa — Energie & Rohstoffe (ADR)
     "SHEL","BP","TTE","ENLAY","E","ENGIY","SQM","RIO","BHP","VALE","SCCO",
     # Europa — Finanzen (ADR)
-    "UBS","ING","BCS","HSBC","DB",  # INGA entfernt (Duplikat von ING); CS delisted
+    "UBS","ING","BCS","HSBC","DB",
     # Europa — Konsum & Luxus (ADR)
     "LVMUY","CFRUY","PPRUY","HESAY","BURBY","ADDYY",
     # Europa — Industrie (ADR)
     "SIEGY","ATLKY","VOLVY","ABB","DSDVY",
-    # Japan (ADRs only — Heimatboersen .T entfernt)
+    # Europa — Defence (DIREKT .DE/.PA — OTC-ADRs wie RHTRY haben schlechten API-Feed)
+    # NEU (01.07.2026): Rheinmetall, BAE Systems, Saab, Thales, Leonardo über
+    # Heimatboersen-Suffix statt OTC-ADR — stabiler yfinance-Feed via Yahoo .DE/.PA/.ST
+    "RHM.DE",   # Rheinmetall AG (XETRA) — kein stabiler OTC-ADR verfügbar
+    "BA.L",     # BAE Systems (London) — BAESY OTC zu dünn
+    "SAAB-B.ST",# Saab AB (Stockholm) — SAABY OTC zu dünn
+    "HO.PA",    # Thales SA (Euronext Paris) — THLLY OTC zu dünn
+    "LDO.MI",   # Leonardo SpA (Milano)
+    # Japan (ADRs only)
     "TM","HMC","SONY","NTT","MUFG","SMFG","MFG","NTDOY","KYOCY","FANUY",
     "CCOEY","ITOCY","MARUY",
-    # Suedkorea (nur SSNLF OTC als ADR — .KS Heimatboersen entfernt)
-    "SSNLF",   # Samsung ADR (OTC, begrenzte Liquidität — nur Monitoring)
-    "MX",      # Magnachip (US-listed KR-Chip)
-    # Taiwan (nur TSM US-listed — .TW Heimatboersen entfernt)
+    # Suedkorea
+    "SSNLF","MX",
+    # Taiwan
     "TSM",
-    # China/Hongkong (nur US-gelistete ADRs — .HK entfernt)
+    # China/Hongkong (US-gelistete ADRs)
     "BABA","JD","PDD","BIDU",
     "TCEHY","BYDDY","NIO","XPEV","LI",
     # Indien (ADR)
@@ -386,9 +393,9 @@ INTL_TIER1 = [
     # Brasilien (ADR)
     "VALE","PBR","ITUB","BBD","ABEV","BRKM",
     # Mexiko/Latam
-    "AMX","FMXB",  # GMEXICOB.MX entfernt (Heimatboerse)
+    "AMX","FMXB",
     # Suedafrika / EM Sonstiges
-    "PROSSY","NPSNY",  # NPN.JO entfernt (Heimatboerse JSE)
+    "PROSSY","NPSNY",
     # Israel Tech
     "CHKP","NICE","CYBR","WIX","MNDY","GLBE","GTLB",
 ]
@@ -485,10 +492,10 @@ CRYPTO_TICKERS = [
 SECTOR_WATCHLISTS = {
     "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET","CRDO","ALAB"],
     "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
-    # Defence erweitert (01.07.2026): europäische Titel als US-ADRs ergänzt.
-    # RHTRY=Rheinmetall, BAESY=BAE Systems, SAABY=Saab, THLLY=Thales, LDOS=Leidos
+    # Defence: US-Titel + europäische Heimatbörsen-Symbole (ADRs wie RHTRY haben keinen stabilen API-Feed)
     "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","HEICO",
-                     "LDOS","SAIC","CACI","MOOG","TXT","CW","DRS","RHTRY","BAESY","SAABY","THLLY","EADSY"],
+                     "LDOS","SAIC","CACI","MOOG","TXT","CW","DRS",
+                     "RHM.DE","BA.L","SAAB-B.ST","HO.PA","LDO.MI"],
     # Robotics/AI-Hardware (01.07.2026): IRBO neu, bestehende konsolidiert
     "ROBOTICS":     ["NVDA","ABB","FANUY","IRBO","BOTZ","ROBO","ISRG","KEYS","TER","BRKS","ONTO","NDSN"],
     "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
