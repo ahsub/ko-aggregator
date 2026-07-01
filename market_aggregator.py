@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.7
+UnderlyingIQ Market Aggregator v3.8
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -37,6 +37,11 @@ calc_ko_short_leverage() — dynamische Hebelempfehlung (3-8x) aus ATR/Preis.
 score_short_fading() erweitert: Squeeze-Risk-Gate, Penny-Stock-Gate (<$15),
 ATH-Gate (kein Short nahe 52W-Hoch), Sektor-RS-Boost (_sector_rs5 Feld).
 squeezeRisk + koShortLev im Scored-Output sichtbar für Frontend-Darstellung.
+Version 3.8 (01.07.2026): Bugfix — squeezeRisk/koShortLev und alle Strategie-
+Scores wurden zwar im Leaderboard-Pass (scored[]) berechnet, aber nie in den
+tickers-Output (results[]) zurückgeschrieben → tickers["squeezeRisk"] war immer
+None. Fix: scored_by_sym-Merge schreibt alle Short-Felder nach dem Leaderboard-
+Pass zurück in results[], sodass sie im tickers-JSON-Output sichtbar werden.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -68,7 +73,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "3.7"
+AGGREGATOR_VERSION = "3.8"
 
 # yfinance für Marktdaten
 try:
@@ -1924,6 +1929,28 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             for x in sorted(scored, key=lambda x: x[key], reverse=True)
             if x[key] >= min_score
         ][:20]
+
+    # NEU (01.07.2026): Strategie-Scores + Short-Felder (squeezeRisk, koShortLev)
+    # aus dem scored-Pass zurück in results mergen, damit sie auch im
+    # "tickers"-Output sichtbar sind (tickers=results, nicht tickers=scored).
+    # Vorher: squeezeRisk/koShortLev == None in tickers weil Felder nur in
+    # scored[] standen, das ausschliesslich für Leaderboards/masterShortlist
+    # genutzt wurde.
+    scored_by_sym = {x["sym"]: x for x in scored}
+    for r in results:
+        s = scored_by_sym.get(r.get("sym"))
+        if not s:
+            continue
+        r["sMinervini"]    = s.get("sMinervini",    0)
+        r["sSwing"]        = s.get("sSwing",         0)
+        r["sMrLong"]       = s.get("sMrLong",        0)
+        r["sBreakdown"]    = s.get("sBreakdown",     0)
+        r["sFading"]       = s.get("sFading",        0)
+        r["bestLong"]      = s.get("bestLong",       0)
+        r["bestShort"]     = s.get("bestShort",      0)
+        r["shortDir"]      = s.get("shortDir")
+        r["squeezeRisk"]   = s.get("squeezeRisk")   # 0-100, >=70 = Fading-Gate zu
+        r["koShortLev"]    = s.get("koShortLev")    # Empfohlener Hebel (3-8) oder None
 
     leaderboards = {
         "long_minervini": top20("sMinervini", 40),
