@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v3.9
+UnderlyingIQ Market Aggregator v4.0
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -46,11 +46,16 @@ Version 3.9 (01.07.2026): 3 Erweiterungen:
 1. _calc_squeeze_risk_df(): Gemini-Blueprint v2 — direktionaler Volumen-Check
    (Spike an grünem Tag) in process_ticker() mit hist_df-Zugriff statt altem
    nicht-direktionalem Proxy. Berechnung jetzt vor dem Leaderboard-Pass.
-2. Fundamental-Enrichment (Option A): enrich_with_fundamentals() für Top-50
-   Kandidaten (masterShortlist + optionsWatchlist) nach dem Leaderboard-Pass.
-   Felder: peTrailing/Forward, peg, pb, roe, revenueGrowth, earningsGrowth,
-   analystTarget, analystUpside (Fair-Value-Proxy), fcfYield, evEbitda.
+2. Fundamental-Enrichment auf 3 Kernfelder reduziert (80/20-Review):
+   analystUpside, fcfYield, debtToEquity (Versorger/REITs ausgenommen).
 3. macdLine + macdSignal (waren berechnet aber nicht im result-Dict).
+Version 4.0 (01.07.2026): Sektor-Tag-Architektur (Zwischenstufe):
+TICKER_SECTOR_TAG automatisch aus SECTOR_WATCHLISTS invertiert — jeder Ticker
+bekommt ein sectors-Feld [...] im Output. Governance: neue Ticker NUR in
+SECTOR_WATCHLISTS eintragen, TICKER_SECTOR_TAG wird automatisch abgeleitet.
+Defence erweitert (RHTRY/BAESY/SAABY/THLLY + US-Titel). ROBOTICS als eigene
+Watchlist. RS_SECTOR_ETFS: XAR, PPA, DFEN, IRBO, ROBO neu aufgenommen.
+Mittelfristig: Migration zu TICKER_SECTOR_MAP als echter Single Source of Truth.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -82,7 +87,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "3.9"
+AGGREGATOR_VERSION = "4.0"
 
 # yfinance für Marktdaten
 try:
@@ -480,22 +485,49 @@ CRYPTO_TICKERS = [
 SECTOR_WATCHLISTS = {
     "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET","CRDO","ALAB"],
     "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
-    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","RNMBY","EADSY","HEICO"],
+    # Defence erweitert (01.07.2026): europäische Titel als US-ADRs ergänzt.
+    # RHTRY=Rheinmetall, BAESY=BAE Systems, SAABY=Saab, THLLY=Thales, LDOS=Leidos
+    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","HEICO",
+                     "LDOS","SAIC","CACI","MOOG","TXT","CW","DRS","RHTRY","BAESY","SAABY","THLLY","EADSY"],
+    # Robotics/AI-Hardware (01.07.2026): IRBO neu, bestehende konsolidiert
+    "ROBOTICS":     ["NVDA","ABB","FANUY","IRBO","BOTZ","ROBO","ISRG","KEYS","TER","BRKS","ONTO","NDSN"],
     "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
     "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP","ICLN","QCLN"],
     "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
     "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE","RHHBY"],
     "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS","ONTO","ACLS"],
-    "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN","HOOD"],
+    "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN"],
     "LUXURY_EU":    ["LVMUY","LRLCY","HESAY","CFRUY","PPRUY","ADDYY","BURBY","RACE","CPRI","RL"],
-    "JAPAN_TECH":   ["TM","SONY","NTDOY","KYOCY","FANUY","CCOEY","SONY","HMC"],
+    "JAPAN_TECH":   ["TM","SONY","NTDOY","KYOCY","FANUY","CCOEY","HMC"],
     "EM_GROWTH":    ["TSM","BABA","PDD","INFY","VALE","ITUB","NU","STNE","SE","GRAB"],
 }
+
+# ── SEKTOR-TAG-INDEX (automatisch abgeleitet, NICHT manuell pflegen!) ─────────
+# Invertierung von SECTOR_WATCHLISTS: {ticker → [sektoren]}.
+# Zwischenstufe auf dem Weg zu TICKER_SECTOR_MAP als einziger Wahrheitsquelle.
+#
+# GOVERNANCE — NEUE TICKER AUFNEHMEN:
+#   1. Ticker zur passenden Liste in SECTOR_WATCHLISTS oben eintragen
+#   2. TICKER_SECTOR_TAG wird automatisch neu berechnet
+#   3. KEIN manueller Eintrag hier nötig — diese Variable nie direkt editieren!
+#
+# MITTELFRISTIG (eigene Session):
+#   Migration zu TICKER_SECTOR_MAP = {"NVDA": ["AI_TECH","SEMIS",...], ...}
+#   als echter Single Source of Truth — dann entfällt auch die Duplikation
+#   zwischen SECTOR_WATCHLISTS und SP500_TICKERS/NASDAQ100_EXTRA.
+TICKER_SECTOR_TAG = {}
+for _sector, _tickers in SECTOR_WATCHLISTS.items():
+    for _t in _tickers:
+        TICKER_SECTOR_TAG.setdefault(_t, []).append(_sector)
 
 # ── RS-REFERENZ ETFs fuer Sektor Relative-Staerke ─────────────────────────────
 RS_SECTOR_ETFS = [
     "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
     "SMH","SOXX","IBB","XBI","ARKK","BOTZ","ITA","ICLN","VNQ",
+    # Defence & Aerospace (01.07.2026 ergänzt)
+    "XAR","PPA","DFEN",
+    # Robotics & AI-Hardware (01.07.2026 ergänzt)
+    "IRBO","ROBO",
     # Ex-US RS
     "EZU","EWJ","EWG","FXI","INDA","EWZ","EWY","EWT",
 ]
@@ -2523,6 +2555,8 @@ def process_ticker(ticker, hist_df):
             # Check (Spike an grünem Tag) ist präziser als nicht-direktionales
             # volRatio-Proxy aus dem früheren calc_squeeze_risk(r)-Ansatz.
             "squeezeRisk":   _calc_squeeze_risk_df(closes, volumes, hvp=calc_hv_percentile(closes), rsi=rsiv),
+            # Sektor-Tags (automatisch aus SECTOR_WATCHLISTS invertiert — nie manuell editieren)
+            "sectors":       TICKER_SECTOR_TAG.get(ticker, []),
         }
 
         # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
