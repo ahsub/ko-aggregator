@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.1
+UnderlyingIQ Market Aggregator v4.2
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -56,6 +56,21 @@ SECTOR_WATCHLISTS eintragen, TICKER_SECTOR_TAG wird automatisch abgeleitet.
 Defence erweitert (RHTRY/BAESY/SAABY/THLLY + US-Titel). ROBOTICS als eigene
 Watchlist. RS_SECTOR_ETFS: XAR, PPA, DFEN, IRBO, ROBO neu aufgenommen.
 Mittelfristig: Migration zu TICKER_SECTOR_MAP als echter Single Source of Truth.
+Version 4.2 (02.07.2026): Ticker-Erweiterung (Gemini-Liste, Governance-konform):
+DEFENSE +4 (AVAV/LHX/BWXT/PLTR), ROBOTICS +11 (SYM/ROK/MBLY/TDY/CGNX/PATH/
+ZBRA/IR/ADI/NXPI/MCHP), 5 neue Watchlists: MATERIALS, CYBERSECURITY,
+NUCLEAR_ENERGY, SPACE, BIOTECH_LONGEVITY. Governance-Entscheidungen: CEG nur
+in NUCLEAR_ENERGY (Kernkraft-Versorger, kein Rohstoffwert); IBM/HON nicht in
+CYBERSECURITY (Mischkonzerne verwässern Sektor-Filter); COGN aus Gemini-Liste
+→ CGNX korrigiert (Cognex). RS_SECTOR_ETFS + SECTOR_ETFS_US erweitert:
+HACK/CIBR (Cyber), NLR/URA (Nuclear), ARKX (Space), ARKG (Biotech).
+Ticker-Korrekturen Bestand: HEICO→HEI, BRKS→AZTA (Umbenennung 2022),
+CCO→CCJ (CCO = Clear Channel Outdoor, nicht Cameco — falsche Firma!).
+Bugfix (latent, kritisch): calc_fg_proxy()-Fallback referenzierte sector_rs
+VOR dessen Definition (Schritt 5b) → NameError-Crash bei CNN-API-Ausfall.
+Fallback-Block hinter die Sektor-RS-Berechnung verschoben.
+Kosmetik: Startup-Log nutzt AGGREGATOR_VERSION statt hartcodiert "v3.0";
+Fundamental-Log printet die 3 realen Felder statt der in v3.9 entfernten.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -87,7 +102,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.1"
+AGGREGATOR_VERSION = "4.2"
 
 # yfinance für Marktdaten
 try:
@@ -387,7 +402,8 @@ INTL_TIER1 = [
     # Indien (ADR)
     "INFY","WIT","HDB","IBN","VEDL","RDY","TTM",
     # Kanada (US-listed)
-    "SHOP","CNQ","SU","CNI","CP","TD","RY","BNS","ENB","TRP","NTR","CCO",
+    # v4.2-Fix: CCO war Clear Channel Outdoor (falsche Firma!) — Cameco = CCJ
+    "SHOP","CNQ","SU","CNI","CP","TD","RY","BNS","ENB","TRP","NTR","CCJ",
     # Australien (ADR)
     "BHP","RIO","WDS","ORG",
     # Brasilien (ADR)
@@ -428,6 +444,8 @@ SECTOR_ETFS_US = [
     "XLI","VIS","IYJ",
     # Defense & Aerospace
     "ITA","XAR","DFEN","PPA",
+    # Nuclear / Uranium / Space (v4.2, 02.07.2026 — RS-Referenz neue Watchlists)
+    "NLR","URA","ARKX",
     # Consumer Discretionary
     "XLY","VCR","IYC",
     # Consumer Staples
@@ -442,8 +460,10 @@ SECTOR_ETFS_US = [
     "XLC","VOX","IYZ",
     # Clean Energy / ESG
     "ICLN","QCLN","CNRG","ACES","ESGU",
-    # AI & Robotics
-    "BOTZ","ROBO","IRBO","AIQ","THNQ",
+    # AI & Robotics / Innovation
+    # v4.2-Fix: ARKK stand seit v4.0 in RS_SECTOR_ETFS, fehlte aber im
+    # Download-Universum → RS-Berechnung wurde nachts still übersprungen
+    "BOTZ","ROBO","IRBO","AIQ","THNQ","ARKK",
     # Crypto-related
     "BITO","GBTC","ETHA",
     # Commodities
@@ -493,11 +513,15 @@ SECTOR_WATCHLISTS = {
     "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET","CRDO","ALAB"],
     "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
     # Defence: US-Titel + europäische Heimatbörsen-Symbole (ADRs wie RHTRY haben keinen stabilen API-Feed)
-    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","HEICO",
+    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","HEI",
                      "LDOS","SAIC","CACI","MOOG","TXT","CW","DRS",
+                     # v4.2 (02.07.2026): Gemini-Liste — Drohnen/Nuklear/Defense-Tech
+                     "AVAV","LHX","BWXT","PLTR",
                      "RHM.DE","BA.L","SAAB-B.ST","HO.PA","LDO.MI"],
     # Robotics/AI-Hardware (01.07.2026): IRBO neu, bestehende konsolidiert
-    "ROBOTICS":     ["NVDA","ABB","FANUY","IRBO","BOTZ","ROBO","ISRG","KEYS","TER","BRKS","ONTO","NDSN"],
+    "ROBOTICS":     ["NVDA","ABB","FANUY","IRBO","BOTZ","ROBO","ISRG","KEYS","TER","AZTA","ONTO","NDSN",
+                     # v4.2 (02.07.2026): Gemini-Liste — Automation/Vision/Chips (COGN→CGNX korrigiert)
+                     "SYM","ROK","MBLY","TDY","CGNX","PATH","ZBRA","IR","ADI","NXPI","MCHP"],
     "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
     "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP","ICLN","QCLN"],
     "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
@@ -507,6 +531,15 @@ SECTOR_WATCHLISTS = {
     "LUXURY_EU":    ["LVMUY","LRLCY","HESAY","CFRUY","PPRUY","ADDYY","BURBY","RACE","CPRI","RL"],
     "JAPAN_TECH":   ["TM","SONY","NTDOY","KYOCY","FANUY","CCOEY","HMC"],
     "EM_GROWTH":    ["TSM","BABA","PDD","INFY","VALE","ITUB","NU","STNE","SE","GRAB"],
+    # ── v4.2 (02.07.2026): 5 neue Sektoren (Gemini-Liste, Kausalitätsprüfung bestanden) ──
+    # Governance: CEG NUR hier unter NUCLEAR_ENERGY (Kernkraft-Versorger, kein
+    # Rohstoffwert). IBM/HON bewusst NICHT in CYBERSECURITY (Mischkonzerne mit
+    # Cyber-Anteil <10% Umsatz — würden den Sektor-Filter im Scanner verwässern).
+    "MATERIALS":    ["FCX","ALB","MP","TECK","CCJ","SCCO","VALE","SQM","BHP","RIO"],
+    "CYBERSECURITY":["PANW","CRWD","FTNT","NET","ZS","OKTA"],
+    "NUCLEAR_ENERGY":["CEG","VST","NRG","TLN","SMR","OKLO","ETN","PWR","HUBB"],
+    "SPACE":        ["RKLB","ASTS","HWM","TDG"],
+    "BIOTECH_LONGEVITY":["CRSP","BEAM","NTLA","EXAS","ILMN","RXRX","DXCM","ALGN"],
 }
 
 # ── SEKTOR-TAG-INDEX (automatisch abgeleitet, NICHT manuell pflegen!) ─────────
@@ -535,6 +568,12 @@ RS_SECTOR_ETFS = [
     "XAR","PPA","DFEN",
     # Robotics & AI-Hardware (01.07.2026 ergänzt)
     "IRBO","ROBO",
+    # v4.2 (02.07.2026): RS-Referenzen der neuen Watchlists —
+    # XLB (Materials) und ITA/XBI bereits oben vorhanden
+    "HACK","CIBR",   # Cybersecurity
+    "NLR","URA",     # Nuclear Energy / Uran
+    "ARKX",          # Space
+    "ARKG",          # Biotech/Genomics (BIOTECH_LONGEVITY)
     # Ex-US RS
     "EZU","EWJ","EWG","FXI","INDA","EWZ","EWY","EWT",
 ]
@@ -2936,9 +2975,9 @@ def main():
     def _t(label):
         elapsed = round(_time.time() - _t0, 1)
         print(f"[T+{elapsed}s] {label}", flush=True)
-    _t("START — UnderlyingIQ Market Aggregator v3.0")
+    _t(f"START — UnderlyingIQ Market Aggregator v{AGGREGATOR_VERSION}")
     log.info("=" * 60)
-    log.info("UnderlyingIQ Market Aggregator v3.0")
+    log.info(f"UnderlyingIQ Market Aggregator v{AGGREGATOR_VERSION}")
     log.info(f"Start: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     log.info("=" * 60)
 
@@ -3010,10 +3049,8 @@ def main():
     fear_greed  = fetch_fear_greed()
     log.info(f"  Shiller CAPE...")
     shiller_cape = fetch_shiller_cape()
-    # F&G Proxy wenn CNN nicht verfügbar
-    if not fear_greed:
-        fear_greed = calc_fg_proxy(vix_term, pcr, sector_rs)
-        log.info(f"  Fear & Greed Proxy: {fear_greed.get('score')} ({fear_greed.get('rating')})")
+    # F&G Proxy-Fallback: v4.2 nach Schritt 5b verschoben — sector_rs existiert
+    # hier noch nicht (latenter NameError-Crash bei CNN-API-Ausfall behoben).
     # IOS Market Score (Club-Integration)
     log.info(f"\n🏛️  IOS Market Score berechnen (Breadth/Rotation/Risk)...")
     ios_market = calc_ios_market_score(hist_data, vix_term)
@@ -3172,6 +3209,13 @@ def main():
             key=lambda x: x["rs5"], reverse=True
         )
         log.info(f"  Top-3 Sektoren (RS5): {[r['sym'] for r in rs_sorted[:3]]}")
+
+    # F&G Proxy wenn CNN nicht verfügbar (v4.2: hierher verschoben — am alten
+    # Aufrufort in Schritt 4 war sector_rs noch nicht definiert → NameError
+    # bei CNN-API-Ausfall. Jetzt fließt die Marktbreite korrekt in den Proxy ein.)
+    if not fear_greed:
+        fear_greed = calc_fg_proxy(vix_term, pcr, sector_rs)
+        log.info(f"  Fear & Greed Proxy: {fear_greed.get('score')} ({fear_greed.get('rating')})")
 
     # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
     market_regime_str = 'NEUTRAL'
@@ -3387,10 +3431,9 @@ def main():
             _fdata  = enrich_with_fundamentals(_fsym, _fprice)
             if _fdata:
                 _fund_cache[_fsym] = _fdata
-                log.info(f"  {_fsym}: P/E={_fdata.get('peTrailing')} "
-                         f"PEG={_fdata.get('peg')} "
-                         f"Upside={_fdata.get('analystUpside')}% "
-                         f"ROE={_fdata.get('roe')}%")
+                log.info(f"  {_fsym}: Upside={_fdata.get('analystUpside')}% "
+                         f"FCF-Yield={_fdata.get('fcfYield')}% "
+                         f"D/E={_fdata.get('debtToEquity')}")
         # Felder in masterShortlist einhängen
         for c in master_shortlist:
             if c.get("sym") in _fund_cache:
