@@ -1,1 +1,183 @@
 
+# UnderlyingIQ — Strategiedokument v1.1
+**Stand: 02.07.2026 (Abend-Update: Internationalisierung) | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
+
+Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
+
+---
+
+## 1. Ausgangslage
+
+UIQ (underlyingiq.com) ist eine browserbasierte Market-Analysis-PWA, entstanden 2025/26 als Solo-Projekt. Aktueller Stand: 590 Ticker im nächtlichen Aggregator-Lauf, 4-Regime Market State Engine, Strategiemodul v2.1.0 (Momentum, Trendfolge, Knock-out, Mean Reversion, einkommensorientierte Optionsstrategien), Sektor-Tag-Architektur, KI-gestützte Deep-Dive-Analysen, Morning Briefing. Infrastruktur: Cloudflare Pages/Workers/KV, GitHub Actions, jsDelivr-CDN-Module.
+
+Das Projekt wird als kommerziell aussichtsreich eingeschätzt. Dieses Dokument definiert, was UIQ ist, was es nicht ist, und in welcher Reihenfolge der Weg zur Marktreife sinnvoll ist.
+
+---
+
+## 2. Leitbild
+
+> **UIQ erkennt die aktuelle Marktverfassung und führt den Nutzer zur dafür geeigneten Handelsstrategie und den besten Underlyings — vom kurzfristigen Hebel-Trade bis zum einkommensorientierten Portfolio.**
+
+UIQ ist ein **Strategie-Router**, kein Screener und keine Einzelstrategie-App. Die Wertschöpfungskette lautet:
+
+**Regime-Erkennung → Strategie-Routing → Underlying-Auswahl → Instrumenten-Vorschlag**
+
+Diese Kette ist die Differenzierung gegenüber dem gesamten Wettbewerb, der jeweils nur einzelne Glieder abbildet. Jedes Feature muss mindestens ein Glied dieser Kette messbar stärken.
+
+### Zieldefinition Strategiefamilien
+
+| Familie | Status | Horizont |
+|---|---|---|
+| Momentum / Trendfolge | ✅ produktiv | — |
+| Knock-out (KO) | ✅ produktiv | — |
+| Mean Reversion | ✅ produktiv | — |
+| Options-Einkommen (Wheel, CSP, CC) | ✅ produktiv | — |
+| Options-Erweiterung (LEAP, Spreads, Ketten) | geplant | mittelfristig |
+| Value / Portfoliodesign (Sektorebene) | geplant (ValueMatrix als Vorleistung) | mittelfristig |
+| Devisen | geplant | langfristig (eigene Analytik-Welt: Carry, Zinsdifferenzen, Makro) |
+| Selbstlernende Optimierung | Vision | langfristig, setzt Track-Record-Layer voraus |
+
+### Zielgruppe
+
+Selbstentscheidende deutschsprachige Privatanleger mit Broker-Zugang (IBKR/CapTrader-Typ), die Optionsstrategien und/oder KO-Zertifikate aktiv handeln. Kein Massenmarkt, aber nachweislich zahlungsbereit (Vergleichspreise: TrendSpider, Option Samurai: 30–80 €/Monat). Synergie: identische Zielgruppe wie Refundex → Bundling-Potenzial.
+
+---
+
+## 3. SWOT-Analyse
+
+### Stärken
+- **Einzigartige Kette** Regime → Strategie → Underlying → Instrument; in dieser Form ohne bekannten direkten Wettbewerber.
+- **Deutsche Perspektive als Feature:** Heimatbörsen-Symbole, KO-Zertifikate (genuin deutsches Produkt), BaFin-bewusstes Design von Beginn an.
+- **Saubere, kostengünstige Architektur:** Cloudflare-Stack nahezu kostenfrei skalierbar, modulare Strategie-Engine (v2.1.0) nimmt neue Familien ohne Umbau auf.
+- **Etablierte Entwicklungsdisziplin:** 80/20-Regel, Kausalitätsprüfung, Governance-Regeln, Batch-Deployment.
+- **Gründer versteht beide Seiten:** aktiver Trader (Wheel, KO) und Entwickler — Produktentscheidungen aus eigener Handelspraxis.
+- **Refundex als Schwesterprodukt** mit identischer Zielgruppe.
+
+### Schwächen
+- **Kein belegter Track-Record.** Empfehlungen werden nicht protokolliert und nicht gegen die Marktrealität ausgewertet. Ohne Trefferquoten-Nachweis fehlt das zentrale Verkaufsargument. *(→ Roadmap Phase 0, höchste Priorität)*
+- **Single Point of Failure (SPOF):** Eine Person kennt System, Schlüssel, Betrieb. Keine Dokumentation für Dritte. *(→ Bus-Factor-Dokument, Phase 0)*
+- **Datenbasis yfinance:** inoffiziell, ohne SLA, jederzeit drossel-/abschaltbar. Für Privatnutzung akzeptabel, für zahlende Kunden Ausfallrisiko. *(→ Phase 2: lizenzierte Datenquelle, 50–500 €/Monat einpreisen)*
+- **Technische Altlast Frontend:** monolithische index.html (u.a. 1266 hardcodierte font-size-Angaben); v2.0-Migration (ES6-Module) nötig, bevor externe Entwickler mitarbeiten könnten.
+- **Begrenzte Entwicklungskapazität:** Nebenprojekt neben Vollzeit-Praxis.
+
+### Chancen
+- **Echte Marktlücke** im deutschsprachigen Raum (siehe Stärken 1–2).
+- **Community-Zugang:** Optionshandel-Szene (Wheel/CSP-Umfeld), Investmentclub als Beta-Kanal.
+- **Bundling UIQ + Refundex:** "Handeln + Steuern" aus einer Hand — hohe Kundenbindung.
+- **KI-Differenzierung:** Deep-Dive-Analysen und Morning Briefing als KI-Features, die klassische Screener nicht bieten.
+- **Track-Record als Burggraben:** Sobald 12–18 Monate belegter Performance-Daten existieren, ist der Vorsprung für Nachahmer kaum aufholbar.
+
+### Risiken
+- **Regulatorik:** Grenze Finanzanalyse ↔ Anlageberatung (WpIG/WpHG). Mitigation: Compliance by Design (s. Abschnitt 5), Rechtsgutachten vor Kommerzialisierung (~800 €).
+- **Datenquellen-Abschaltung** (yfinance) vor Umstieg auf lizenzierte Daten.
+- **Schlüsselperson-Ausfall** vor Fertigstellung der Betriebsdokumentation.
+- **Nischen-Größe:** Zielgruppe zahlungskräftig, aber klein; Wachstum jenseits einiger hundert Abonnenten ungewiss.
+- **Plattformrisiko Cloudflare/GitHub:** gering, aber vorhanden (Vendor-Lock-in KV-Datenmodell).
+
+---
+
+## 4. Kommerzielle Roadmap
+
+### Phase 0 — Fundament (ab sofort, ~2–3 Monate)
+*Ziel: Nachweisbarkeit und Betriebssicherheit herstellen. Kein Kundenkontakt.*
+
+1. **Track-Record-Layer** *(höchste Priorität — die Uhr läuft erst ab Go-live des Loggings)*
+   - Jede Empfehlung wird in KV protokolliert: Strategie, Ticker, Regime, Score, Zeitstempel, implizite Erwartung.
+   - Nachtlauf bewertet nach 7/30/90 Tagen gegen tatsächliche Kursentwicklung.
+   - Auswertung: Trefferquote und CRV **pro Strategie × Regime**.
+   - Nebeneffekt: Kalibrierungsdaten für Score-Schwellen; später Datenbasis für ML-Vision.
+   - Umsetzung als erstes echtes ES6-Modul (v2.0-Blaupause).
+2. **Bus-Factor-Dokument** im Repo: Systemüberblick, Schlüsselverzeichnis, Nachtlauf-Ablauf, Störungs-Runbook, Wiederanlauf-Anleitung.
+3. Laufende Feature-Arbeit nach Session-Backlog-Modus (Batch-Deployments), gefiltert durch Abschnitt 6.
+
+### Phase 1 — Geschlossene Beta (nach Phase 0, ~3–6 Monate)
+*Ziel: Fremdnutzer-Feedback ohne kommerzielles Risiko.*
+
+- Beta-Kreis aus Investmentclub (5–15 Nutzer), kostenfrei, mit klarem "Analyse-Tool, keine Beratung"-Rahmen.
+- Erkenntnisziele: Verständlichkeit ohne Erklärung durch den Autor, Feature-Nutzung real vs. vermutet, Zahlungsbereitschaft (Befragung).
+- Parallel: Track-Record reift.
+
+### Phase 2 — Kommerzialisierungs-Voraussetzungen (parallel zu Phase 1 vorbereiten)
+*Ziel: Alle Blocker beseitigen, bevor der erste Euro fließt.*
+
+- **Rechtsgutachten** (Fachanwalt Kapitalmarktrecht): Bestätigung Finanzanalyse-Status, Disclaimer-Prüfung, AGB-Grundlage.
+- **Datenquellen-Upgrade:** Evaluierung EODHD / Polygon / Twelve Data; Migration des Aggregators.
+- **Gesellschaftsform:** GmbH-Entscheidung inkl. Rollenklärung (s. Abschnitt 7 — offene Entscheidung Mitgründung).
+- **Preismodell-Hypothese:** Freemium (Public-Modus) + Abo (Expert-Features), Zielkorridor 20–50 €/Monat; Bundle-Option mit Refundex.
+
+### Phase 3 — Launch & Ausbau
+- Öffentlicher Launch mit belegtem Track-Record als zentralem Marketing-Asset.
+- Ausbau Strategiefamilien in dieser Reihenfolge: Options-Erweiterung (LEAP/Spreads) → Value/Portfoliodesign (ValueMatrix-Integration) → Devisen.
+- ML-Optimierung erst, wenn Track-Record-Datenbasis ≥ 12 Monate.
+
+**Internationalisierungs-Stufenplan** (Reihenfolge verbindlich):
+1. **DACH** (deutsch) mit belegtem Track-Record — Kernmarkt, konkurrenzlos, KO-Familie voll gültig.
+2. **Englischsprachiges Europa** (Nordics, Benelux, UK): KO-/Turbo-/Mini-Future-Kultur existiert dort ebenso (DEGIRO, Nordnet); volle Feature-Parität, nur Sprachwechsel. Heimatbörsen-Governance ist bereits die passende Datenbasis.
+3. **USA** nur als optionale Fernstufe: KO-Familie entfällt, Router + Options-Familie träfe auf gesättigten Wettbewerb (OptionStrat, Market Chameleon, Unusual Whales). Grenznutzen deutlich geringer — keine aktive Planung.
+
+*Hinweis Bundling: Refundex bleibt strukturell deutsch (Anlage KAP); Bundle-Argument gilt daher nur im DACH-Kernmarkt.*
+
+---
+
+## 5. Regulatorischer Rahmen (Compliance by Design)
+
+**Grundsatz:** UIQ ist im Public-/User-Modus ein **Informations- und Analysewerkzeug**, keine Anlageberatung.
+
+- **Keine personalisierten Instrumenten-Empfehlungen im Public-Modus.** Portfoliodesign ausschließlich auf Sektor-/Allokationsebene und generisch formuliert ("In Regime X waren defensive Sektoren historisch relativ stark").
+- **Architektonische Absicherung:** Keine Kopplung von Personendaten an Empfehlungslogik im Public-Modus. Was das System nicht kann, kann rechtlich nicht vorgeworfen werden.
+- **Disclaimer-Layer:** rendert statisch bei allen Portfolio- und Strategie-Ausgaben mit.
+- **EIC-Expert-Modus (PIN):** bleibt Konstrukt für den Eigengebrauch; ist **keine** tragfähige Lösung für zahlende Dritte mit individuellen Empfehlungen.
+- **Redlichkeitspflichten** (§ 85 WpHG) bei Finanzanalysen beachten: sachgerechte Darstellung, Offenlegung von Interessenkonflikten (Eigenpositionen!).
+- **Pflichttermin:** einmalige anwaltliche Prüfung vor Phase 3 (eingeplant in Phase 2).
+
+---
+
+## 6. Entscheidungsfilter für neue Features
+
+Jede Idee durchläuft vor Aufnahme ins Session-Backlog drei Fragen:
+
+1. **Router-Frage:** Stärkt das Feature messbar ein Glied der Kette Regime → Strategie → Underlying → Instrument? *(Wenn nein: verwerfen oder Parkliste.)*
+2. **80/20-Frage:** Würde dieser Wert eine konkrete Handelsentscheidung in den nächsten 30 Tagen verändern? *(Wenn nicht eindeutig ja: nicht in den Nachtlauf.)*
+3. **v2.0-Frage:** Ist die Umsetzung ES6-konform und portierungsarm angelegt? *(Wenn nein: Umsetzungsentwurf überarbeiten.)*
+4. **i18n-Frage:** Bezieht neuer Code alle nutzersichtbaren Texte aus einem zentralen String-Objekt statt Inline-Verdrahtung? *(Kostet beim Schreiben nichts, macht v2.0 übersetzungsfähig by design. Bestandscode wird nicht präventiv umgebaut.)*
+
+**Deployment-Disziplin:** Sammeln im Session-Backlog; Deployment nur bei lohnendem Batch oder kritischem Bug. Claude weist aktiv auf erreichte Deployment-Schwelle hin.
+
+### Bestehende Todo-Liste nach Filterlauf (02.07.2026)
+
+| Punkt | Router-Beitrag | Priorität neu |
+|---|---|---|
+| **Track-Record-Layer** *(neu)* | Fundament für alles | **1 — strategisch** |
+| **Bus-Factor-Dokument** *(neu)* | Betriebssicherheit | **2 — strategisch** |
+| Ticker-Erweiterung (Gemini-Liste) | Underlying-Auswahl | 3 — nächster Aggregator-Batch |
+| TTM Squeeze (sqzOn/sqzOff) | Timing Options-Familie × Regime | 4 — hoch |
+| TICKER_SECTOR_MAP Migration | Datenbasis aller Familien, v2.0-Baustein | 5 — hoch |
+| KO-Leaderboard | Instrumenten-Vorschlag KO-Familie | 6 — mittel |
+| Short-Strategie Phase 2 (Bear-Put-Spread) | neue Strategieoption | 7 — mittel |
+| Liquidity Sweep Score | Indikator, kein Router-Glied | 8 — Mittelfeld |
+| Fair Value Gaps | Indikator, kein Router-Glied | 9 — Mittelfeld |
+| BSL/SSL für DeepDive-Prompts | KI-Anreicherung | 10 — niedrig |
+| Sektor-Treiber als persistente WL | Komfort | 11 — niedrig |
+
+---
+
+## 7. Risikoregister & offene Entscheidungen
+
+| Risiko | Schwere | Mitigation | Status |
+|---|---|---|---|
+| SPOF (Wissen nur bei Gründer) | hoch | Bus-Factor-Dokument; mittelfristig zweite Person | offen — Phase 0 |
+| yfinance-Ausfall | hoch | lizenzierte Datenquelle vor Launch | geplant — Phase 2 |
+| Regulatorik-Fehleinschätzung | mittel | Compliance by Design + Rechtsgutachten | teilmitigiert |
+| Frontend-Monolith blockiert Mitarbeit Dritter | mittel | v2.0/ES6-Migration; neuer Code ab sofort ES6-konform | laufend |
+| Nischengröße begrenzt Umsatz | mittel | Bundling mit Refundex; Beta validiert Zahlungsbereitschaft | offen — Phase 1 |
+
+**Offene strategische Entscheidungen** (bewusst nicht terminiert):
+1. **Mitgründung Tochter:** Rollenfrage klären (Entwicklung vs. Geschäftsführung/Organisation — unterschiedliche Anforderungsprofile). Vorgeschlagener Weg: Testballon ohne Festlegung — dieses Dokument + Bus-Factor-Dokument zum Lesen geben, offenes Gespräch über Interesse.
+2. **Preismodell final** (nach Beta-Befragung).
+3. **Claude-Team-Lizenz** für 2–4 Mitarbeiter (gekoppelt an Entscheidung 1).
+
+---
+
+## 8. Fortschreibung
+
+Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortgeschrieben (v1.1, v1.2 …) und liegt im Repo neben dem Bus-Factor-Dokument. Es ist Bestandteil jedes Session-Übergabeprotokolls (Verweis genügt).
