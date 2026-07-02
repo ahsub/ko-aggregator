@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.2
+UnderlyingIQ Market Aggregator v4.3
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -71,6 +71,23 @@ VOR dessen Definition (Schritt 5b) → NameError-Crash bei CNN-API-Ausfall.
 Fallback-Block hinter die Sektor-RS-Berechnung verschoben.
 Kosmetik: Startup-Log nutzt AGGREGATOR_VERSION statt hartcodiert "v3.0";
 Fundamental-Log printet die 3 realen Felder statt der in v3.9 entfernten.
+Version 4.3 (02.07.2026): KRITISCHER FIX — Regime-Routing war invertiert:
+vix_term['ratio'] (VIX/VIX3M, <1=gesund) wurde gegen Schwellen der inversen
+Konvention VIX3M/VIX geprüft → ruhiger Contango-Markt als STRESS_UNSTABLE
+geroutet (Lauf v4.2: 13× MR-Long + 7 Shorts bei VIX 16/CONTANGO). Fix:
+_regime_ratio jetzt einheitlich VIX3M/VIX aus Rohwerten. Ticker-Fixes:
+SQ→XYZ (Block-Umbenennung 01/2025), NOVA entfernt (Sunnova delistet nach
+Insolvenz), MOOG→MOG-A (Yahoo-Symbolik). Zusätzlich 10 strukturell tote
+Ticker aus dem Fehler-Log des v4.2-Laufs bereinigt: SGEN (Pfizer 2023),
+ANSS (Synopsys 2025), INFN (Nokia 2025), TTM/VEDL (ADRs delistet),
+EWF (ungültig, Frankreich=EWQ), FMXB→FMX, PROSSY→PROSY, ZI→GTM
+(ZoomInfo-Umbenennung 2025), ORG→ORG.AX. Verbleibende Fehlticker (MMC,
+ABB, EXAS, NTT, 1COV.DE, CYBR u.a.) bewusst NICHT angefasst — Regel:
+erst nach 2. Fehllauf in Folge als strukturell behandeln (transiente
+yfinance-Aussetzer vs. echte Delistings). Entdeckt durch Output-Review
+des ersten v4.2-Laufs. Shiller CAPE komplett entfernt (80/20: alle drei
+Quellen defekt, kein Einfluss auf 2-30-Tage-Setups) — Frontend behandelt
+fehlendes market.shillerCape bereits sauber als n/v.
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -102,7 +119,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.2"
+AGGREGATOR_VERSION = "4.3"
 
 # yfinance für Marktdaten
 try:
@@ -203,7 +220,7 @@ SP500_TICKERS = [
     # Utilities & REITs
     "NEE","DUK","SO","AEP","D","SRE","EXC","PLD","AMT","EQIX","CCI","PSA","O","VICI",
     # Tech & Software
-    "V","MA","INTU","ADBE","CRM","NOW","SNPS","CDNS","ANSS","ADSK","WDAY","TEAM",
+    "V","MA","INTU","ADBE","CRM","NOW","SNPS","CDNS","ADSK","WDAY","TEAM",  # v4.3: ANSS delistet (Synopsys-Übernahme 2025)
     "PANW","CRWD","FTNT","ZS","OKTA","S","DDOG","MDB","SNOW","NET","CFLT","ESTC",
     "QCOM","TXN","ADI","MCHP","NXPI","KLAC","LRCX","AMAT","MU","WDC","STX",
     "IBM","CSCO","ACN","HPQ","HPE","DELL","NTAP",
@@ -211,7 +228,7 @@ SP500_TICKERS = [
     "ARM","SMCI","MRVL","MSTR","PLTR","COIN",
     # E-Commerce / Consumer Tech
     "NFLX","UBER","ABNB","LYFT","RBLX","SNAP","PINS","MTCH","ZM","DOCU",
-    "SHOP","MELI","SE","GRAB","SQ","HOOD","SOFI","AFRM","UPST","PYPL",
+    "SHOP","MELI","SE","GRAB","XYZ","HOOD","SOFI","AFRM","UPST","PYPL",  # v4.3: SQ→XYZ (Block-Umbenennung 01/2025)
     # China ADRs (US-listed)
     "BABA","JD","PDD","BIDU","NTES","TCOM","FUTU","NIO","XPEV","LI",
     # Auto
@@ -219,14 +236,14 @@ SP500_TICKERS = [
     # Materials
     "LIN","APD","ECL","SHW","FCX","NEM","GOLD","ALB","MP",
     # Biotech / Pharma Growth
-    "MRNA","BNTX","BIIB","ILMN","SGEN","RARE","EXAS","INCY","NBIX","ALLO",
+    "MRNA","BNTX","BIIB","ILMN","RARE","EXAS","INCY","NBIX","ALLO",  # v4.3: SGEN delistet (Pfizer-Übernahme 2023)
     "VKTX","RYTM","ACAD","MRUS","PRCT",
     # Clean Energy
-    "ENPH","FSLR","SEDG","RUN","ARRY","NOVA","BE","PLUG","BLDP","NEE",
+    "ENPH","FSLR","SEDG","RUN","ARRY","BE","PLUG","BLDP","NEE",  # v4.3: NOVA (Sunnova) delistet nach Insolvenz 2025
     # Fintech
     "HOOD","AFRM","UPST","SOFI",
     # Misc Growth
-    "GLW","LDOS","SAIC","CACI","BAH","HUBS","ZI","GTLB","BILL","PCTY",
+    "GLW","LDOS","SAIC","CACI","BAH","HUBS","GTM","GTLB","BILL","PCTY",  # v4.3: ZI→GTM (ZoomInfo-Umbenennung 2025)
 ]
 
 NASDAQ100_EXTRA = [
@@ -370,7 +387,7 @@ EU_ADR_TICKERS = [
 # Heimatboersen als Fallback fuer Titel ohne liquides ADR
 INTL_TIER1 = [
     # Europa — Technologie (ADR/US-listed)
-    "ASML","STM","ERIC","NOK","SAP","INFN","KEYS",
+    "ASML","STM","ERIC","NOK","SAP","KEYS",  # v4.3: INFN delistet (Nokia-Übernahme 2025)
     # Europa — Healthcare (ADR)
     "NVO","AZN","NVS","RHHBY","SNY","GSK","BAYRY","NVCR",
     # Europa — Energie & Rohstoffe (ADR)
@@ -400,18 +417,18 @@ INTL_TIER1 = [
     "BABA","JD","PDD","BIDU",
     "TCEHY","BYDDY","NIO","XPEV","LI",
     # Indien (ADR)
-    "INFY","WIT","HDB","IBN","VEDL","RDY","TTM",
+    "INFY","WIT","HDB","IBN","RDY",  # v4.3: VEDL + TTM (ADRs delistet)
     # Kanada (US-listed)
     # v4.2-Fix: CCO war Clear Channel Outdoor (falsche Firma!) — Cameco = CCJ
     "SHOP","CNQ","SU","CNI","CP","TD","RY","BNS","ENB","TRP","NTR","CCJ",
     # Australien (ADR)
-    "BHP","RIO","WDS","ORG",
+    "BHP","RIO","WDS","ORG.AX",  # v4.3: ORG hat kein US-Listing → Heimatbörse ASX
     # Brasilien (ADR)
     "VALE","PBR","ITUB","BBD","ABEV","BRKM",
     # Mexiko/Latam
-    "AMX","FMXB",
+    "AMX","FMX",  # v4.3: Femsa-NYSE-Symbol ist FMX (FMXB ungültig)
     # Suedafrika / EM Sonstiges
-    "PROSSY","NPSNY",
+    "PROSY","NPSNY",  # v4.3: Prosus-OTC-Symbol ist PROSY (PROSSY ungültig)
     # Israel Tech
     "CHKP","NICE","CYBR","WIX","MNDY","GLBE","GTLB",
 ]
@@ -475,7 +492,7 @@ SECTOR_ETFS_US = [
 # Ex-US Sektoren (iShares / Vanguard international)
 SECTOR_ETFS_EXUS = [
     # Europa
-    "EZU","VGK","IEUR","FEZ","EWG","EWU","EWF","EWI","EWQ","EWP","EWN","EWD","EWL",
+    "EZU","VGK","IEUR","FEZ","EWG","EWU","EWI","EWQ","EWP","EWN","EWD","EWL",  # v4.3: EWF existiert nicht (Frankreich = EWQ)
     # Asien Developed
     "EWJ","EWA","EWH","EWS","EWY",
     # Asien Emerging
@@ -514,7 +531,7 @@ SECTOR_WATCHLISTS = {
     "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
     # Defence: US-Titel + europäische Heimatbörsen-Symbole (ADRs wie RHTRY haben keinen stabilen API-Feed)
     "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","HEI",
-                     "LDOS","SAIC","CACI","MOOG","TXT","CW","DRS",
+                     "LDOS","SAIC","CACI","MOG-A","TXT","CW","DRS",  # v4.3: Yahoo-Symbol für Moog ist MOG-A
                      # v4.2 (02.07.2026): Gemini-Liste — Drohnen/Nuklear/Defense-Tech
                      "AVAV","LHX","BWXT","PLTR",
                      "RHM.DE","BA.L","SAAB-B.ST","HO.PA","LDO.MI"],
@@ -523,8 +540,8 @@ SECTOR_WATCHLISTS = {
                      # v4.2 (02.07.2026): Gemini-Liste — Automation/Vision/Chips (COGN→CGNX korrigiert)
                      "SYM","ROK","MBLY","TDY","CGNX","PATH","ZBRA","IR","ADI","NXPI","MCHP"],
     "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
-    "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","NOVA","BLDP","ICLN","QCLN"],
-    "FINTECH":      ["SQ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
+    "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","BLDP","ICLN","QCLN"],
+    "FINTECH":      ["XYZ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
     "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE","RHHBY"],
     "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS","ONTO","ACLS"],
     "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN"],
@@ -587,7 +604,7 @@ FTSE100_TICKERS = ['AZN.L', 'SHEL.L', 'HSBA.L', 'ULVR.L', 'RIO.L', 'BP.L', 'GSK.
 STOXX_EU_EXTRA = ['NOVO-B.CO', 'DSV.CO', 'CARL-B.CO', 'ORSTED.CO', 'MAERSK-B.CO', 'GIVN.SW', 'SIKA.SW', 'LONN.SW', 'ROG.SW', 'NOVN.SW', 'ABBN.SW', 'ZURN.SW', 'ALC.SW', 'PGHN.SW', 'HOLN.SW', 'ERICB.ST', 'VOLVA.ST', 'ATCO-A.ST', 'SAND.ST', 'SEB-A.ST', 'UCB.BR', 'KER.PA', 'KNEBV.HE']
 
 # ── BEAR-KANDIDATEN US (Momentum/Hype-Titel mit hohem Rückschlagpotenzial) ───
-BEAR_US_TICKERS = ['SMCI', 'MSTR', 'MRVL', 'ALAB', 'CRWD', 'SNOW', 'NET', 'DDOG', 'MDB', 'SHOP', 'SQ', 'HOOD', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'ENPH', 'FSLR', 'PLUG', 'BE', 'MRNA', 'BNTX', 'ILMN', 'BIIB', 'ZM', 'DOCU', 'UBER', 'LYFT', 'ABNB', 'DASH', 'RBLX', 'SNAP', 'PINS', 'MTCH', 'UPST', 'AFRM', 'SOFI', 'GME', 'PLTR', 'COIN', 'TSLA', 'BABA', 'PDD', 'BIDU', 'AMD', 'NVDA', 'ARM']
+BEAR_US_TICKERS = ['SMCI', 'MSTR', 'MRVL', 'ALAB', 'CRWD', 'SNOW', 'NET', 'DDOG', 'MDB', 'SHOP', 'XYZ', 'HOOD', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'ENPH', 'FSLR', 'PLUG', 'BE', 'MRNA', 'BNTX', 'ILMN', 'BIIB', 'ZM', 'DOCU', 'UBER', 'LYFT', 'ABNB', 'DASH', 'RBLX', 'SNAP', 'PINS', 'MTCH', 'UPST', 'AFRM', 'SOFI', 'GME', 'PLTR', 'COIN', 'TSLA', 'BABA', 'PDD', 'BIDU', 'AMD', 'NVDA', 'ARM']
 
 # ── BEAR-KANDIDATEN DE/EU (Zykliker, Immobilien, Hochverschuldete) ───────────
 BEAR_DE_EU_TICKERS = ['BAYN.DE', 'VOW3.DE', 'BMW.DE', 'MBG.DE', 'CON.DE', 'DHER.DE', 'ZAL.DE', 'VNA.DE', 'LEG.DE', 'TAG.DE', '1COV.DE', 'EVT.DE', 'SRT.DE', 'NDX1.DE', 'AIXA.DE', 'WAF.DE', 'IFX.DE', 'STLAM.MI', 'RNO.PA', 'VOD.L', 'BT-A.L', 'TEF.MC', 'UCB.BR', 'GLPG.BR', 'ARND.DE', 'WDP.BR', 'RWE.DE', 'ENEL.MI', 'EZJ.L', 'IAG.L', 'DTE.DE', 'GLEN.L', 'AAL.L']
@@ -2747,62 +2764,6 @@ def fetch_fear_greed() -> dict:
     return None
 
 
-def fetch_shiller_cape() -> dict:
-    """
-    Shiller CAPE (cyclically adjusted P/E) via FRED oder multpl.com.
-    Fallback: trailing P/E von SPY via yfinance.
-    """
-    import urllib.request, json as _json, re as _re
-
-    # Versuch 1: FRED API (public, kein Key nötig für diese Serie)
-    try:
-        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CAPE"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            lines = r.read().decode().strip().split('\n')
-        # Letzter valider Wert (nicht ".")
-        for row in reversed(lines[1:]):
-            parts = row.split(',')
-            if len(parts) == 2 and parts[1].strip() != '.':
-                cape = round(float(parts[1].strip()), 1)
-                date = parts[0].strip()
-                log.info(f"  Shiller CAPE (FRED): {cape} ({date})")
-                return {"cape": cape, "date": date, "source": "FRED", "proxy": False}
-    except Exception as e:
-        log.warning(f"  FRED CAPE nicht verfügbar: {e}")
-
-    # Versuch 2: multpl.com
-    try:
-        url = "https://www.multpl.com/shiller-pe/table/by-month"
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "text/html,application/xhtml+xml"
-        })
-        with urllib.request.urlopen(req, timeout=10) as r:
-            html = r.read().decode()
-        vals = _re.findall(r'<td[^>]*>(\d{4}-\d{2}-\d{2})</td>\s*<td[^>]*>([\d.]+)</td>', html)
-        if vals:
-            cape = round(float(vals[0][1]), 1)
-            date = vals[0][0]
-            log.info(f"  Shiller CAPE (multpl): {cape} ({date})")
-            return {"cape": cape, "date": date, "source": "multpl.com", "proxy": False}
-    except Exception as e:
-        log.warning(f"  multpl.com CAPE nicht verfügbar: {e}")
-
-    # Fallback: SPY trailing P/E via yfinance (kein echtes CAPE, aber Proxy)
-    try:
-        info = yf.Ticker("SPY").fast_info
-        pe = getattr(info, 'p_e_ratio', None) or getattr(info, 'trailing_pe', None)
-        if pe and float(pe) > 0:
-            pe = round(float(pe), 1)
-            log.info(f"  CAPE Proxy (SPY P/E): {pe}")
-            return {"cape": pe, "date": "aktuell", "source": "SPY trailing P/E (Proxy)", "proxy": True}
-    except Exception as e:
-        log.warning(f"  SPY P/E nicht verfügbar: {e}")
-
-    return None
-
-
 def calc_fg_proxy(vix_term: dict, pcr_data: dict, sector_rs: dict) -> dict:
     """
     Eigener Fear & Greed Proxy wenn CNN API nicht verfügbar.
@@ -3044,11 +3005,12 @@ def main():
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
     pcr      = fetch_pcr_cboe() or {}   # Fallback auf leeres Dict
     vix_term    = fetch_vix_term()
-    # Fear & Greed + Shiller CAPE
+    # Fear & Greed
     log.info(f"  Fear & Greed Index...")
     fear_greed  = fetch_fear_greed()
-    log.info(f"  Shiller CAPE...")
-    shiller_cape = fetch_shiller_cape()
+    # v4.3: Shiller CAPE gestrichen (80/20-Entscheidung 02.07.2026) — alle drei
+    # Quellen defekt (FRED-Serie "CAPE" existiert nicht, multpl-Scrape fragil,
+    # SPY-P/E-Fallback leer) UND kein kausaler Einfluss auf 2-30-Tage-Setups.
     # F&G Proxy-Fallback: v4.2 nach Schritt 5b verschoben — sector_rs existiert
     # hier noch nicht (latenter NameError-Crash bei CNN-API-Ausfall behoben).
     # IOS Market Score (Club-Integration)
@@ -3219,12 +3181,19 @@ def main():
 
     # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
     market_regime_str = 'NEUTRAL'
-    # Primärquelle: VIX Term Structure (VIX/VIX3M Ratio)
+    # Primärquelle: VIX Term Structure — KONVENTION: VIX3M/VIX (>1 = Contango/gesund)
+    # v4.3 KRITISCHER FIX (02.07.2026): vix_term['ratio'] ist VIX/VIX3M (<1 = gesund),
+    # die Schwellen unten (<0.98 STRESS, <1.05 POST_PANIC, sonst BULL) wurden aber
+    # für die INVERSE Konvention VIX3M/VIX geschrieben (wie mseHistory.vixRatio).
+    # Folge: ruhiger Contango-Markt wurde als STRESS_UNSTABLE geroutet und umgekehrt
+    # — Master-Shortlist lief im Bärenmodus bei gesunder Marktlage (Lauf v4.2:
+    # VIX 16.15 / VIX3M 19.04 / CONTANGO → fälschlich STRESS_UNSTABLE, 13× MR-Long
+    # + 7 Shorts). Fix: Ratio aus vix/vix3m-Rohwerten in VIX3M/VIX-Konvention bilden.
     _regime_ratio = None
-    if vix_term and vix_term.get('ratio'):
-        _regime_ratio = vix_term['ratio']
+    if vix_term and vix_term.get('vix') and vix_term.get('vix3m'):
+        _regime_ratio = round(vix_term['vix3m'] / vix_term['vix'], 3)
     elif mse_history and mse_history.get('vixRatio') and mse_history['vixRatio']:
-        _regime_ratio = mse_history['vixRatio'][-1]
+        _regime_ratio = mse_history['vixRatio'][-1]   # bereits VIX3M/VIX
 
     if _regime_ratio:
         if _regime_ratio < 0.98:
@@ -3335,7 +3304,6 @@ def main():
             "mseHistory": mse_history,   # 30T VVIX/SKEW/VIX fuer Z-Score
             "iosMarket":  ios_market,    # IOS Market Score v1.0 (Club)
             "fearGreed":  fear_greed,    # CNN Fear & Greed / UIQ Proxy
-            "shillerCape": shiller_cape, # Shiller CAPE P/E
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
