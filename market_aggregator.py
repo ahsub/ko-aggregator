@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.4
+UnderlyingIQ Market Aggregator v4.5
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -95,6 +95,15 @@ gegen Vortag) nach tr:snap:<Handelstag> + tr:index. Fehlerisoliert: Layer-
 Fehler brechen den Hauptlauf nie; Schreibstatus in master["trackRecord"].
 Cron-Härtung im Workflow: 03:37 UTC statt 04:00 (GitHub-Queue-Verzögerungen
 zur vollen Stunde, am 02.07. waren es 3h23min).
+Version 4.5 (03.07.2026): Track-Record-Layer Phase B — Evaluator + Aggregation
+(tr_layer.py v1.1, Spez v1.2): bewertet fällige Snapshot-Tage nach 7/30/90
+Handelstagen (Bar-Zählung, +3-Bar-Puffer für EU-Kalender) gegen die im Lauf
+ohnehin geladene Historie; richtungsgerechte Rendite, Alpha vs. SPY, MFE/MAE,
+KI-Trade-Simulation (Same-Bar konservativ = STOP). Schreibt tr:eval:<Tag> und
+aggregiert tr:stats (Zellen Strategie×Regime×Horizont, fresh-getrennt,
+noData-Ausweis, h30-Rollups). Zusätzlich tr_backup.py: samstäglicher Export
+aller tr:*-Keys nach backups/ (Workflow-Commit — Git-History als Archiv,
+RUNBOOK §7.3). Erste Bewertungen fällig ab ~13.07.2026 (Tag 0 + 7 Bars + Puffer).
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -126,7 +135,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.4"
+AGGREGATOR_VERSION = "4.5"
 
 # yfinance für Marktdaten
 try:
@@ -3450,6 +3459,13 @@ def main():
             tday=master["meta"].get("last_trading_day"),
             agg_version=AGGREGATOR_VERSION,
         )
+        # Phase B (v4.5): fällige Horizonte bewerten + tr:stats aggregieren.
+        # Nutzt das bereits geladene hist_data — keine zusätzlichen Downloads.
+        try:
+            master["trackRecord"]["evaluation"] = tr_layer.run_evaluation(hist_data=hist_data)
+        except Exception as _tre2:
+            log.warning(f"  [TR] Evaluator übersprungen (nicht kritisch): {_tre2}")
+            master["trackRecord"]["evaluation"] = {"evaluated": 0, "reason": f"exception: {_tre2}"}
     except Exception as _tre:
         log.warning(f"  [TR] Track-Record-Layer übersprungen (nicht kritisch): {_tre}")
         master["trackRecord"] = {"written": False, "reason": f"exception: {_tre}"}
