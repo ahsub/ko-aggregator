@@ -2,8 +2,10 @@ name: KO-Scanner Market Aggregator
 
 on:
   schedule:
-    - cron: '00 04 * * 2-6'   # Di-Sa 04:00 UTC (nach Mo-Fr US After-Hours)
-    - cron: '00 04 * * 1'     # Mo 04:00 UTC (nach Freitag After-Hours)
+    # v4.4 (03.07.2026): 03:37 statt 04:00 — GitHub-Schedules zur vollen Stunde
+    # verzögern regelmäßig um Stunden (02.07.: 3h23min); unrunde Minute + früherer
+    # Start puffern das ab. Mo-Sa deckt Mo-Fr US-After-Hours ab (Mo = Freitagsdaten).
+    - cron: '37 03 * * 1-6'
   workflow_dispatch:
 
 jobs:
