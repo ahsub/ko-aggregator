@@ -1,5 +1,5 @@
-# UIQ Track-Record-Layer — Umsetzungsspezifikation v1.1
-**Stand: 03.07.2026 | Status: VERABSCHIEDET — Phase A in Umsetzung | Referenz: STRATEGIE.md Phase 0, Punkt 1**
+# UIQ Track-Record-Layer — Umsetzungsspezifikation v1.2
+**Stand: 03.07.2026 | Status: Phase A + B DEPLOYED (Aggregator v4.5) | Referenz: STRATEGIE.md Phase 0, Punkt 1**
 
 ## 1. Zweck & Einordnung
 
@@ -119,6 +119,14 @@ Architektur-Vorgabe: `tr_layer.py` als in sich geschlossenes Modul (reine Funkti
 2. **Leitmetrik:** hit30 (richtungsgerecht, fresh-primär) als Headline; KI-Trade-Simulation als separate Zweitspalte. ✅
 3. **Sichtbarkeit:** ausschließlich Expert/EIC; Public erst nach expliziter Freigabe (n≥20-Zellen + Disclaimer). ✅
 
+### Implementierungsnotizen Phase B (v1.2)
+- Fälligkeit = Horizont **+ 3 SPY-Bars Puffer** (EU-Ticker mit eigenem Feiertagskalender haben dann sicher genug eigene Bars).
+- v1 zählt fehlende Bewertbarkeit als `noData` je Zelle; explizite Delisting-Erkennung (Einzel-Fetch) folgt in B.1.
+- `tr:stats` wird nightly voll neu aggregiert (alle `tr:eval:*` per GET); inkrementelle Aggregation als Optimierung ab ~150 Tagen vorgemerkt.
+- Renditen aus der konsistent adjustierten Historie desselben Downloads (nicht aus gespeichertem p0 — Dividenden-Readjustierung würde sonst verzerren; p0 bleibt Dokumentation).
+- **tr-Backup (§7.3 RUNBOOK):** samstäglicher Export aller `tr:*`-Keys nach `backups/tr_backup_latest.json`, per Workflow committet — die Git-History ist das Archiv.
+
 ## 10. Changelog
+- v1.2 (03.07.2026): Phase B deployed (Evaluator, tr:stats, tr-Backup); Implementierungsnotizen ergänzt.
 - v1.1 (03.07.2026): §9-Entscheidungen fixiert; Phase B+ (Backtest-Modus) mit Ehrlichkeits-Auflagen ergänzt. Phase A deployed mit Aggregator v4.4 — Tag 0 = Handelstag 02.07.2026.
 - v1.0 (03.07.2026): Erstfassung nach Konzept-Session.
