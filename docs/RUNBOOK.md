@@ -1,5 +1,5 @@
 # UIQ RUNBOOK — Betriebs- und Störungshandbuch (Bus-Factor-Dokument)
-**Version 1.0 | Stand: 03.07.2026 | Zweck: Ein fähiger Dritter kann das System mit diesem Dokument verstehen, betreiben und im Störfall wiederherstellen.**
+**Version 1.1 | Stand: 03.07.2026 | Zweck: Ein fähiger Dritter kann das System mit diesem Dokument verstehen, betreiben und im Störfall wiederherstellen.**
 
 > Platzhalter im Format `[VOM INHABER ZU ERGÄNZEN: …]` müssen von Dr. Axel Hildebrand befüllt werden. Dieses Dokument enthält bewusst **keine Secrets** — nur deren Fundorte.
 
@@ -26,7 +26,9 @@ UIQ (underlyingiq.com) ist eine browserbasierte Marktanalyse-PWA. Ein nächtlich
 
 ## 3. Der Nachtlauf (das Herz des Systems)
 
-**Zeitplan:** GitHub Actions, Cron `37 03 * * 1-6` UTC (Mo–Sa; Mo verarbeitet Freitagsdaten). Workflow: `.github/workflows/market-aggregator.yml`, Name „KO-Scanner Market Aggregator". **Achtung: GitHub-Cron ist best effort** — Verzögerungen von Minuten bis Stunden sind normal (dokumentiert: 3h23min am 02.07.2026). Deshalb 03:37 statt 04:00. Langfristig geplant: minutengenauer Dispatch via Cloudflare-Worker-Cron.
+**Zeitplan:** GitHub Actions, Cron `37 03 * * 1-6` UTC (Mo–Sa). Workflow: `.github/workflows/market-aggregator.yml`, Name „KO-Scanner Market Aggregator". **Achtung: GitHub-Cron ist best effort** — Verzögerungen von Minuten bis Stunden sind normal (dokumentiert: 3h23min am 02.07.2026). Deshalb 03:37 statt 04:00. Langfristig geplant: minutengenauer Dispatch via Cloudflare-Worker-Cron.
+
+**Datenreferenz-Prinzip (wichtig):** Der Cron bestimmt nur, *wann* gelaufen wird — niemals, *welche* Daten gelten. Jeder Lauf verarbeitet den **letzten abgeschlossenen Handelstag**, zur Laufzeit ermittelt via `get_last_trading_day()` (SPY-Daten, erkennt Wochenenden UND Börsenfeiertage automatisch). Es gibt keine feste Wochentags-Zuordnung wie „Montag = Freitagsdaten". Läuft der Cron an einem Tag ohne neuen Handelstag (Feiertag, Wochenende), entsteht derselbe Referenztag wie beim Vorlauf: `master_market_data` wird harmlos aktualisiert, der Track-Record-Layer dedupliziert über den Handelstag und schreibt nichts doppelt. Beispiel 03./04.07.2026 (US-Feiertag + Samstag): Läufe am Fr/Sa/Mo referenzieren alle Handelstag 02.07.; erster neuer Snapshot am Di mit Montagsschluss.
 
 **Ablauf (Schritte im Log nachvollziehbar):**
 1. Ticker-Universum bauen (fest codierte Listen + admin-freigegebene Extra-Ticker aus KV)
@@ -127,4 +129,6 @@ Alles Wiederherstellbare liegt in den GitHub-Repos (Quelle der Wahrheit):
 
 Dieses Dokument wird bei jeder Infrastruktur-Änderung mitversioniert (Pflichtteil der Deploy-Disziplin). Prüfroutine: einmal pro Quartal alle Platzhalter und §5-Fundorte gegenchecken.
 
-**Changelog:** v1.0 (03.07.2026) — Erstfassung.
+**Changelog:**
+- v1.1 (03.07.2026): §3 präzisiert — Datenreferenz ist immer „letzter Handelstag" (Feiertags-robust), keine feste Wochentags-Zuordnung.
+- v1.0 (03.07.2026): Erstfassung.
