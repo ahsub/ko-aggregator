@@ -1,5 +1,5 @@
 # UIQ RUNBOOK — Betriebs- und Störungshandbuch (Bus-Factor-Dokument)
-**Version 1.1 | Stand: 03.07.2026 | Zweck: Ein fähiger Dritter kann das System mit diesem Dokument verstehen, betreiben und im Störfall wiederherstellen.**
+**Version 1.2 | Stand: 03.07.2026 | Zweck: Ein fähiger Dritter kann das System mit diesem Dokument verstehen, betreiben und im Störfall wiederherstellen.**
 
 > Platzhalter im Format `[VOM INHABER ZU ERGÄNZEN: …]` müssen von Dr. Axel Hildebrand befüllt werden. Dieses Dokument enthält bewusst **keine Secrets** — nur deren Fundorte.
 
@@ -99,7 +99,7 @@ Log des Steps „Run Market Aggregator" lesen. Häufigste Ursachen:
 
 ### 7.3 Track-Record-Probleme
 - `master["trackRecord"].written == false`: `reason` lesen. `exists` = Dedupe (normal an Feiertagen/Doppel-Runs); `no_kv_creds`/`kv_put_failed` = Secrets prüfen; `exception:` = Bug melden, **Hauptlauf ist davon nie betroffen**.
-- **Backup (offene Maßnahme, hohe Priorität):** `tr:*`-Keys sind die einzigen unwiederbringlichen Daten. Vorgesehen: wöchentlicher Export aller `tr:`-Keys als Workflow-Artifact oder Repo-Commit (`backups/`). Bis dahin: gelegentlicher manueller Export über die Cloudflare-KV-Konsole.
+- **Backup (implementiert 03.07.2026):** `tr_backup.py` exportiert **jeden Samstag** im Nachtlauf alle `tr:*`-Keys nach `backups/tr_backup_latest.json`; der Workflow committet die Datei — **die Git-History ist das Archiv** (jede Woche ein Stand). Wiederherstellung: gewünschten Stand aus der History holen, Keys per Cloudflare-API/Konsole zurückschreiben. Manuell auslösbar: Workflow-Run mit Env `TR_BACKUP_FORCE=1` (oder Script lokal mit CF-Credentials).
 
 ### 7.4 Externe Quellen leer (dixGex/pcr/fearGreed im Output = `{}`/null)
 Bekannt und nicht lauf-kritisch — Overlays laufen dann neutral. Stand 03.07.2026: squeezemetrics + CBOE liefern von Actions-IPs aus wiederholt nicht (Beobachtung läuft; ggf. Quellen ersetzen). Fear&Greed (CNN) funktioniert.
@@ -130,5 +130,6 @@ Alles Wiederherstellbare liegt in den GitHub-Repos (Quelle der Wahrheit):
 Dieses Dokument wird bei jeder Infrastruktur-Änderung mitversioniert (Pflichtteil der Deploy-Disziplin). Prüfroutine: einmal pro Quartal alle Platzhalter und §5-Fundorte gegenchecken.
 
 **Changelog:**
+- v1.2 (03.07.2026): §7.3 — tr-Backup implementiert (samstags, Git-History als Archiv); Phase B (Evaluator) live.
 - v1.1 (03.07.2026): §3 präzisiert — Datenreferenz ist immer „letzter Handelstag" (Feiertags-robust), keine feste Wochentags-Zuordnung.
 - v1.0 (03.07.2026): Erstfassung.
