@@ -1,5 +1,5 @@
 
-# UnderlyingIQ — Strategiedokument v1.2
+# UnderlyingIQ — Strategiedokument v1.3
 **Stand: 03.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
@@ -172,6 +172,9 @@ Jede Idee durchläuft vor Aufnahme ins Session-Backlog drei Fragen:
 | Regulatorik-Fehleinschätzung | mittel | Compliance by Design + Rechtsgutachten | teilmitigiert |
 | Frontend-Monolith blockiert Mitarbeit Dritter | mittel | v2.0/ES6-Migration; neuer Code ab sofort ES6-konform | laufend |
 | Nischengröße begrenzt Umsatz | mittel | Bundling mit Refundex; Beta validiert Zahlungsbereitschaft | offen — Phase 1 |
+| yfinance-Ausfall VOR Phase-2-Migration (Interim) | hoch | **Plan B light (03.07.2026):** (a) Graceful Degradation — letzter erfolgreicher Nachtlauf bleibt mit sichtbarem Stale-Banner nutzbar, App stirbt nie; (b) eigener Twelve-Data-Key als Notbetrieb für Kern-Indikatorensatz (800 Calls/Tag ≈ Minimalversorgung 590 Ticker, ehrlich dokumentiert); (c) Phase-2-Datenquellen-Evaluierung wird bei Ausfall zeitlich vorgezogen. **Verworfen:** serverseitige Nutzung der Nutzer-Twelve-Data-Keys (Gemini-Vorschlag) — architektonisch unmöglich (Keys per Design nur im localStorage der Nutzer-Browser) und lizenzwidrig (personengebundene Free-Keys) | definiert |
+| KI-Kosten-Skalierung (Deep Dive/Briefing je Nutzer) | mittel→hoch bei Beta | **Rate-Limiting im ko-ai Worker** (KV-Tageszähler je Token-Hash; Startlimits: 5 Deep Dives, 2 Briefings/Tag, konfigurierbar) macht Beta-Kosten fix statt nur beobachtbar; KI-Kosten/Nutzer/Monat als Pflicht-Metrik Phase 1 vor Preisfestlegung | beschlossen — Umsetzung Leitprojekt |
+| ko-ai-Worker-Quellcode nicht versioniert | mittel | Befund 03.07.2026: Worker v4 existiert nur im CF-Dashboard, nicht in Git — SPOF-Verschärfung. Quellcode ins workers-Repo exportieren (RUNBOOK-Ergänzung); Rate-Limit-Patch liegt bereits dort als Startpunkt | offen — Phase 0 |
 
 **Offene strategische Entscheidungen** (bewusst nicht terminiert):
 1. **Mitgründung Tochter:** Rollenfrage klären (Entwicklung vs. Geschäftsführung/Organisation — unterschiedliche Anforderungsprofile). Vorgeschlagener Weg: Testballon ohne Festlegung — dieses Dokument + Bus-Factor-Dokument zum Lesen geben, offenes Gespräch über Interesse.
@@ -195,3 +198,5 @@ Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortges
 | 02.07.2026 | **Aggregator v4.3 deployed: kritischer Regime-Routing-Fix** — VIX-Ratio-Konvention war invertiert, ruhige Contango-Märkte wurden als STRESS_UNSTABLE geroutet (entdeckt durch Output-Review des ersten v4.2-Laufs). Zusätzlich 13 tote Ticker bereinigt; Shiller CAPE per 80/20 gestrichen (alle Quellen defekt, kein 30-Tage-Entscheidungseinfluss). |
 | 03.07.2026 | Track-Record-Spec v1.1 verabschiedet (docs/TRACK_RECORD_SPEC.md) inkl. der drei §9-Entscheidungen; Backtest-Rolle definiert (Phase B+, nur Kalibrierung). |
 | 03.07.2026 | Cron-Härtung: Nachtlauf auf 03:37 UTC verlegt (GitHub-Actions-Queues verzögern zur vollen Stunde regelmäßig um Stunden; 02.07: 3h23min). Langfristig: CF-Worker-Dispatch für minutengenaue Auslösung (RUNBOOK/Phase 0). |
+| 03.07.2026 | Suite-Governance etabliert: SUITE.md (Meta-Repo UIQ-Suite) mit Prioritäten-Wirbelsäule — UIQ Phase 0 ist Leitprojekt mit absoluter Build-Priorität; Refundex Wartungsmodus, PO geparkt, DepotIQ/Ruhestand eingefroren. Recherche-Gates aller Module laufen weiter (Denk- vs. Build-Kapazität). |
+| 03.07.2026 | Meta-SWOT (Claude + Gemini-Cross-Check) in SUITE.md §5; Risikoregister ergänzt: yfinance-Plan-B-light (Gemini-Vorschlag Nutzer-Keys serverseitig verworfen: localStorage-Architektur + Lizenzbindung), KI-Rate-Limiting beschlossen (5 DD / 2 Briefings pro Token/Tag), Befund ko-ai-Quellcode unversioniert. |
