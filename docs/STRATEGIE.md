@@ -1,6 +1,6 @@
 
-# UnderlyingIQ — Strategiedokument v1.1
-**Stand: 02.07.2026 (Abend-Update: Internationalisierung) | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
+# UnderlyingIQ — Strategiedokument v1.2
+**Stand: 03.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
 
@@ -87,6 +87,8 @@ Selbstentscheidende deutschsprachige Privatanleger mit Broker-Zugang (IBKR/CapTr
    - Auswertung: Trefferquote und CRV **pro Strategie × Regime**.
    - Nebeneffekt: Kalibrierungsdaten für Score-Schwellen; später Datenbasis für ML-Vision.
    - Umsetzung als erstes echtes ES6-Modul (v2.0-Blaupause).
+   - **→ Verabschiedete Umsetzungsspezifikation: `docs/TRACK_RECORD_SPEC.md` v1.1 (03.07.2026).** Kernentscheidungen: Log-Umfang Shortlist + Top-10 je Leaderboard (~70/Tag); Leitmetrik hit30 auf frischen Signalen (KI-Trade-Simulation als Zweitspalte); Sichtbarkeit zunächst nur Expert/EIC. **Phase A (Snapshot-Logging) deployed mit Aggregator v4.4 — Tag 0 = Handelstag 02.07.2026.**
+   - Backtest 2023–2026 als Phase B+ definiert: Rolle ausschließlich Kalibrierung/Plausibilisierung, niemals Marketing (Survivorship-, Kuratierungs- und In-Sample-Verzerrungen sind strukturell nicht behebbar); Ergebnisse strikt getrennt in `tr:backtest`.
 2. **Bus-Factor-Dokument** im Repo: Systemüberblick, Schlüsselverzeichnis, Nachtlauf-Ablauf, Störungs-Runbook, Wiederanlauf-Anleitung.
 3. Laufende Feature-Arbeit nach Session-Backlog-Modus (Batch-Deployments), gefiltert durch Abschnitt 6.
 
@@ -181,3 +183,15 @@ Jede Idee durchläuft vor Aufnahme ins Session-Backlog drei Fragen:
 ## 8. Fortschreibung
 
 Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortgeschrieben (v1.1, v1.2 …) und liegt im Repo neben dem Bus-Factor-Dokument. Es ist Bestandteil jedes Session-Übergabeprotokolls (Verweis genügt).
+
+---
+
+## 9. Entscheidungs-Log
+
+| Datum | Entscheidung |
+|---|---|
+| 02.07.2026 | Leitbild „Strategie-Router" verabschiedet; SWOT + Roadmap Phase 0–3; i18n-Stufenplan (DACH → EN-Europa → USA optional); vierstufiger Entscheidungsfilter. |
+| 02.07.2026 | Aggregator v4.2 deployed: Ticker-Erweiterung 7 Watchlists (+61), RS-ETFs, CEG nur NUCLEAR_ENERGY, IBM/HON nicht in CYBERSECURITY. |
+| 02.07.2026 | **Aggregator v4.3 deployed: kritischer Regime-Routing-Fix** — VIX-Ratio-Konvention war invertiert, ruhige Contango-Märkte wurden als STRESS_UNSTABLE geroutet (entdeckt durch Output-Review des ersten v4.2-Laufs). Zusätzlich 13 tote Ticker bereinigt; Shiller CAPE per 80/20 gestrichen (alle Quellen defekt, kein 30-Tage-Entscheidungseinfluss). |
+| 03.07.2026 | Track-Record-Spec v1.1 verabschiedet (docs/TRACK_RECORD_SPEC.md) inkl. der drei §9-Entscheidungen; Backtest-Rolle definiert (Phase B+, nur Kalibrierung). |
+| 03.07.2026 | Cron-Härtung: Nachtlauf auf 03:37 UTC verlegt (GitHub-Actions-Queues verzögern zur vollen Stunde regelmäßig um Stunden; 02.07: 3h23min). Langfristig: CF-Worker-Dispatch für minutengenaue Auslösung (RUNBOOK/Phase 0). |
