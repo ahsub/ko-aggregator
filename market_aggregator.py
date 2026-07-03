@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.3
+UnderlyingIQ Market Aggregator v4.4
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -88,6 +88,13 @@ yfinance-Aussetzer vs. echte Delistings). Entdeckt durch Output-Review
 des ersten v4.2-Laufs. Shiller CAPE komplett entfernt (80/20: alle drei
 Quellen defekt, kein Einfluss auf 2-30-Tage-Setups) — Frontend behandelt
 fehlendes market.shillerCape bereits sauber als n/v.
+Version 4.4 (03.07.2026): Track-Record-Layer Phase A (tr_layer.py, Spez:
+docs/TRACK_RECORD_SPEC.md v1.1) — nächtlicher Snapshot aller Empfehlungen
+(masterShortlist + Top-10 je Leaderboard, tages-dedupliziert, fresh-Flag
+gegen Vortag) nach tr:snap:<Handelstag> + tr:index. Fehlerisoliert: Layer-
+Fehler brechen den Hauptlauf nie; Schreibstatus in master["trackRecord"].
+Cron-Härtung im Workflow: 03:37 UTC statt 04:00 (GitHub-Queue-Verzögerungen
+zur vollen Stunde, am 02.07. waren es 3h23min).
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -119,7 +126,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.3"
+AGGREGATOR_VERSION = "4.4"
 
 # yfinance für Marktdaten
 try:
@@ -3428,6 +3435,24 @@ def main():
         "timestamp":   strategy_data["timestamp"],
         "enriched":    bool(_ant_key),
     }
+
+    # ── TRACK-RECORD-LAYER Phase A (v4.4, Spez: docs/TRACK_RECORD_SPEC.md) ──
+    # Snapshot der heutigen Empfehlungen nach tr:snap:<Handelstag> + tr:index.
+    # Fehlerisoliert: Ein Fehler hier darf den Hauptlauf NIEMALS brechen (§4).
+    # Schreibstatus landet in master["trackRecord"] — Verifikation im Output.
+    try:
+        import tr_layer
+        master["trackRecord"] = tr_layer.run_snapshot(
+            shortlist=master_shortlist,
+            leaderboards=leaderboards_obj,
+            tickers=results,
+            regime=market_regime_str,
+            tday=master["meta"].get("last_trading_day"),
+            agg_version=AGGREGATOR_VERSION,
+        )
+    except Exception as _tre:
+        log.warning(f"  [TR] Track-Record-Layer übersprungen (nicht kritisch): {_tre}")
+        master["trackRecord"] = {"written": False, "reason": f"exception: {_tre}"}
 
     payload_size = len(json.dumps(master)) / 1024
     log.info(f"\n📊 Master-JSON: {payload_size:.0f} KB | {len(results)} Ticker")
