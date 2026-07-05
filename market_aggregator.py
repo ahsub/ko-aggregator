@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.6
+UnderlyingIQ Market Aggregator v4.7
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -114,6 +114,13 @@ fin:shard:<1-5>; Samstag Merge → data/fundamentals/<YYYY-WW>.json.gz per
 Workflow-Commit (Git-History = Archiv). Implementiert nebenbei die VAL-MOD-
 Layer-1-Sharding-Infrastruktur. Status in master["finArchive"].
 
+Version 4.7 (05.07.2026): Supercycle-Sektoren (Gemini-Brainstorm, Claude-
+Audit: ~15% der Vorschläge waren tote/falsche Ticker — aussortiert): 5 neue
+Watchlists GRID_ELECTRIFICATION, PRECIOUS_METALS, AGRICULTURE, WATER sowie
+PICKS_SHOVELS (vom Frontend-Index-Slot zum getaggten Sektor befördert);
+NUCLEAR_ENERGY +Fuel-Cycle (LEU/UEC/UUUU/NXE), MATERIALS +HBM/ERO/LAC.
+Demografie-Titel als Value-Thema ins VAL-MOD-Register (kein Scan-Sektor).
+
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
   2. Berechnet technische Indikatoren (EMA, RSI, MACD, OBV, ATR, BB, HVP, hv10)
@@ -144,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.6"
+AGGREGATOR_VERSION = "4.7"
 
 # yfinance für Marktdaten
 try:
@@ -577,11 +584,26 @@ SECTOR_WATCHLISTS = {
     # Governance: CEG NUR hier unter NUCLEAR_ENERGY (Kernkraft-Versorger, kein
     # Rohstoffwert). IBM/HON bewusst NICHT in CYBERSECURITY (Mischkonzerne mit
     # Cyber-Anteil <10% Umsatz — würden den Sektor-Filter im Scanner verwässern).
-    "MATERIALS":    ["FCX","ALB","MP","TECK","CCJ","SCCO","VALE","SQM","BHP","RIO"],
+    "MATERIALS":    ["FCX","ALB","MP","TECK","CCJ","SCCO","VALE","SQM","BHP","RIO",
+                     "HBM","ERO","LAC"],  # v4.7: Kupfer-Mid-Caps + Lithium (Gemini, verifiziert)
     "CYBERSECURITY":["PANW","CRWD","FTNT","NET","ZS","OKTA"],
-    "NUCLEAR_ENERGY":["CEG","VST","NRG","TLN","SMR","OKLO","ETN","PWR","HUBB"],
+    "NUCLEAR_ENERGY":["CEG","VST","NRG","TLN","SMR","OKLO","ETN","PWR","HUBB",
+                     "LEU","UEC","UUUU","NXE"],  # v4.7: Uran-Fuel-Cycle (Gemini, verifiziert)
     "SPACE":        ["RKLB","ASTS","HWM","TDG"],
     "BIOTECH_LONGEVITY":["CRSP","BEAM","NTLA","EXAS","ILMN","RXRX","DXCM","ALGN"],
+    # v4.7 (05.07.2026): Supercycle-Sektoren (Gemini-Vorschlag, Claude-verifiziert —
+    # 10 Fehlticker/Fehlklassifikationen aussortiert: VERT→VRT, PRE→PLPC, GOLD→B,
+    # SILV/PEAK/UHR/CNHI veraltet, FI/TTE Fehlkategorie, RKDA Nano-Cap).
+    # Demografie-Qualitätstitel bewusst NICHT als Scan-Sektor (Value-Thema →
+    # docs/VALUE_MOD_KONZEPT.md Themenregister; FIN-Archiv sammelt sie via R3000).
+    "GRID_ELECTRIFICATION": ["GEV","EMR","VMI","AME","POWL","AEIS","PLPC"],
+    "PRECIOUS_METALS":      ["NEM","B","WPM","FNV","RGLD","PAAS","HL","AG","EXK","FSM","MAG"],
+    "AGRICULTURE":          ["DE","AGCO","CTVA","NTR","MOS","CF","FMC","DAR","CNH","AVD"],
+    "WATER":                ["XYL","AWK","WTS","AOS","ECL","BMI"],
+    # v4.7: Picks&Shovels vom Frontend-Index-Slot zum getaggten Sektor befördert
+    # (Axel: "hat nichts zu suchen in der Kategorie S&P500/Nasdaq")
+    "PICKS_SHOVELS":        ["NVDA","AMD","AVGO","AMAT","LRCX","KLAC","MRVL","ARM","TSM","SMCI",
+                             "MSFT","AMZN","GOOGL","META","ORCL","VRT","ETN","PWR","HUBB","CEG"],
 }
 
 # ── SEKTOR-TAG-INDEX (automatisch abgeleitet, NICHT manuell pflegen!) ─────────
