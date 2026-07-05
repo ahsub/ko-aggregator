@@ -247,3 +247,17 @@ charttechnische und volumetrische Anomalien zu erfassen:
 > prüft das System automatisch die IV der Optionskette, um den optimalen
 > Einstiegstrigger (direkter Kauf vs. Cash-Secured Put) an die
 > Trader-Suite zu übergeben.
+
+
+---
+
+## Anhang A: Value-Themenregister (Kandidaten für VAL-MOD-Modelle, KEINE Scan-Sektoren)
+
+Diese Titel compounden über Jahre statt in Wochenfenstern zu "laufen" — als Trading-Scan-Sektor
+wären sie tote Dropdown-Einträge (80/20). Das FIN-Archiv sammelt ihre Fundamentaldaten bereits
+wöchentlich (alle im Russell 3000); bei VAL-MOD-Aktivierung dienen sie als erste Modell-Testfälle.
+
+**Demografie / Silver Society (05.07.2026, Gemini-Vorschlag, verifiziert):**
+ENSG (Ensign Group), CHE (Chemed), STE (Steris), SEM (Select Medical), AMN (AMN Healthcare),
+MMS (Maximus), HCA (HCA Healthcare), SYK (Stryker), MDT (Medtronic); Health-REITs: WELL, VTR,
+DOC (ex PEAK), UHT (nicht "UHR" — Gemini-Fehlticker korrigiert).
