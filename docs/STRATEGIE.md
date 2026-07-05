@@ -1,5 +1,5 @@
 
-# UnderlyingIQ — Strategiedokument v1.4
+# UnderlyingIQ — Strategiedokument v1.5
 **Stand: 05.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
@@ -202,3 +202,5 @@ Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortges
 | 03.07.2026 | Meta-SWOT (Claude + Gemini-Cross-Check) in SUITE.md §5; Risikoregister ergänzt: yfinance-Plan-B-light (Gemini-Vorschlag Nutzer-Keys serverseitig verworfen: localStorage-Architektur + Lizenzbindung), KI-Rate-Limiting beschlossen (5 DD / 2 Briefings pro Token/Tag), Befund ko-ai-Quellcode unversioniert. |
 | 05.07.2026 | **VAL-MOD-Konzept v4 archiviert** (docs/VALUE_MOD_KONZEPT.md, Status GEPARKT): 3-Layer-Sieve + Wheel-Synergie-Router (Value-Kandidat → IV-Prüfung → Direktkauf vs. CSP). Claude-Review: Datenmodell statt C++-Implementierung, Track-Record-Anbindung ab Tag 1, Momentum-Value-Bias als dokumentierte Hypothese. Löst ValueMatrix-Konzept ab. |
 | 05.07.2026 | **FIN-Archiv GO (Aggregator v4.6):** Point-in-Time-Fundamentaldaten sind nicht rückwirkend beschaffbar → wöchentliche Rohdaten-Archivierung startet sofort (Value-Modul Phase 0, VAL-MOD bleibt geparkt). Universum: Russell 3000 (IWV-Holdings, Konstituenten mit-archiviert = survivorship-frei) ∪ Smart-Picks (data/value_smart_picks.txt) ∪ UIQ — Begründung: 10-Bagger/Value-Perlen entstehen jenseits des Trading-Universums. Sharding Mo–Fr, Samstag-Merge nach data/fundamentals/ (Git-History = Archiv). Erste Vollwoche: 2026-W28 (Archiv am 11.07.). |
+| 05.07.2026 | **Supercycle-Sektoren (Aggregator v4.7):** 5 neue Watchlists (GRID_ELECTRIFICATION, PRECIOUS_METALS, AGRICULTURE, WATER, PICKS_SHOVELS als getaggter Sektor statt Index-Slot) + Fuel-Cycle/Kupfer-Erweiterungen; Universum 644→678. Arbeitsmuster etabliert: Gemini als Ideen-Generator, Claude-Verifikations-Filter vor jeder Integration (hier ~15% Fehlticker aussortiert). Demografie-Titel als Value-Thema ins VAL-MOD-Register statt Scan-Sektor. |
+| 05.07.2026 | **UI-Leitprinzip beschlossen: Form follows Function** — oberstes Prinzip jeder UI-Änderung; Tab-Folge orientiert sich am Tages-Workflow (Tagesstart → Markt-Kontext → Arbeit → Verwaltung). Frontend-Reorg v243: DarkPool in Makro integriert (kein eigener Tab), Journal-Tab entfernt (8 Monate unbenutzt, 80/20; Git-History = Archiv), Tab-Container-Strukturschuld behoben. |
