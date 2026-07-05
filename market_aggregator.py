@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v4.5
+UnderlyingIQ Market Aggregator v4.6
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -104,6 +104,15 @@ aggregiert tr:stats (Zellen Strategie×Regime×Horizont, fresh-getrennt,
 noData-Ausweis, h30-Rollups). Zusätzlich tr_backup.py: samstäglicher Export
 aller tr:*-Keys nach backups/ (Workflow-Commit — Git-History als Archiv,
 RUNBOOK §7.3). Erste Bewertungen fällig ab ~13.07.2026 (Tag 0 + 7 Bars + Puffer).
+Version 4.6 (05.07.2026): FIN-Archiv (fin_layer.py, Value-Modul Phase 0):
+Point-in-Time-Fundamentaldaten-Archiv — Fundamentaldaten sind nicht
+rückwirkend beschaffbar, daher wöchentliche Rohdaten-Sammlung (24 Felder,
+modellagnostisch) über Russell 3000 (iShares-IWV-Holdings, Konstituenten
+mit-archiviert → survivorship-frei) ∪ Smart-Picks (data/value_smart_picks
+.txt) ∪ UIQ-Universum. Wochentags-Sharding Mo–Fr (crc32, ~600/Nacht) → KV
+fin:shard:<1-5>; Samstag Merge → data/fundamentals/<YYYY-WW>.json.gz per
+Workflow-Commit (Git-History = Archiv). Implementiert nebenbei die VAL-MOD-
+Layer-1-Sharding-Infrastruktur. Status in master["finArchive"].
 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
@@ -135,7 +144,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.5"
+AGGREGATOR_VERSION = "4.6"
 
 # yfinance für Marktdaten
 try:
@@ -3469,6 +3478,17 @@ def main():
     except Exception as _tre:
         log.warning(f"  [TR] Track-Record-Layer übersprungen (nicht kritisch): {_tre}")
         master["trackRecord"] = {"written": False, "reason": f"exception: {_tre}"}
+
+    # ── FIN-ARCHIV (v4.6, Value-Modul Phase 0 — Konzept: docs/VALUE_MOD_KONZEPT.md) ──
+    # Point-in-Time-Fundamentaldaten: Mo–Fr Tages-Shard (Russell3000∪SmartPicks∪UIQ)
+    # → KV; Sa Wochen-Merge → data/fundamentals/<YYYY-WW>.json.gz (Workflow-Commit).
+    # Fehlerisoliert wie tr_layer — bricht den Hauptlauf niemals.
+    try:
+        import fin_layer
+        master["finArchive"] = fin_layer.run(uiq_universe=tickers)
+    except Exception as _fe:
+        log.warning(f"  [FIN] FIN-Archiv übersprungen (nicht kritisch): {_fe}")
+        master["finArchive"] = {"ok": False, "reason": f"exception: {_fe}"}
 
     payload_size = len(json.dumps(master)) / 1024
     log.info(f"\n📊 Master-JSON: {payload_size:.0f} KB | {len(results)} Ticker")
