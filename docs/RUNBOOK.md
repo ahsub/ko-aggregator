@@ -13,7 +13,7 @@ UIQ (underlyingiq.com) ist eine browserbasierte Marktanalyse-PWA. Ein nächtlich
 
 | Komponente | Ort | Zweck |
 |---|---|---|
-| **Frontend** | Repo `ahsub/axel-scanner` → Cloudflare Pages → underlyingiq.com | UI; monolithische `index.html` (aktuell v241) |
+| **Frontend** | Repo `ahsub/axel-scanner` → Cloudflare Pages → underlyingiq.com | UI; monolithische `index.html` + `help.html` (Online-Hilfe; beide gemeinsam versionieren!) |
 | **Aggregator** | Repo `ahsub/ko-aggregator` (`market_aggregator.py`, aktuell v4.4) | Nächtlicher Datenlauf via GitHub Actions |
 | **Track-Record-Layer** | `ahsub/ko-aggregator/tr_layer.py` | Snapshot-Logging der Empfehlungen (Spez: `docs/TRACK_RECORD_SPEC.md`) |
 | **ko-modules (CDN)** | Repo `ahsub/ko-modules` via jsDelivr, **Hash-pinned** | Geteilte ES6-Module (ko-strategies.js v2.1.0 = Commit `785e61e` u.a.) |
