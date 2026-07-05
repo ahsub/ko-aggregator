@@ -1,6 +1,6 @@
 
-# UnderlyingIQ — Strategiedokument v1.3
-**Stand: 03.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
+# UnderlyingIQ — Strategiedokument v1.4
+**Stand: 05.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
 
@@ -200,3 +200,5 @@ Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortges
 | 03.07.2026 | Cron-Härtung: Nachtlauf auf 03:37 UTC verlegt (GitHub-Actions-Queues verzögern zur vollen Stunde regelmäßig um Stunden; 02.07: 3h23min). Langfristig: CF-Worker-Dispatch für minutengenaue Auslösung (RUNBOOK/Phase 0). |
 | 03.07.2026 | Suite-Governance etabliert: SUITE.md (Meta-Repo UIQ-Suite) mit Prioritäten-Wirbelsäule — UIQ Phase 0 ist Leitprojekt mit absoluter Build-Priorität; Refundex Wartungsmodus, PO geparkt, DepotIQ/Ruhestand eingefroren. Recherche-Gates aller Module laufen weiter (Denk- vs. Build-Kapazität). |
 | 03.07.2026 | Meta-SWOT (Claude + Gemini-Cross-Check) in SUITE.md §5; Risikoregister ergänzt: yfinance-Plan-B-light (Gemini-Vorschlag Nutzer-Keys serverseitig verworfen: localStorage-Architektur + Lizenzbindung), KI-Rate-Limiting beschlossen (5 DD / 2 Briefings pro Token/Tag), Befund ko-ai-Quellcode unversioniert. |
+| 05.07.2026 | **VAL-MOD-Konzept v4 archiviert** (docs/VALUE_MOD_KONZEPT.md, Status GEPARKT): 3-Layer-Sieve + Wheel-Synergie-Router (Value-Kandidat → IV-Prüfung → Direktkauf vs. CSP). Claude-Review: Datenmodell statt C++-Implementierung, Track-Record-Anbindung ab Tag 1, Momentum-Value-Bias als dokumentierte Hypothese. Löst ValueMatrix-Konzept ab. |
+| 05.07.2026 | **FIN-Archiv GO (Aggregator v4.6):** Point-in-Time-Fundamentaldaten sind nicht rückwirkend beschaffbar → wöchentliche Rohdaten-Archivierung startet sofort (Value-Modul Phase 0, VAL-MOD bleibt geparkt). Universum: Russell 3000 (IWV-Holdings, Konstituenten mit-archiviert = survivorship-frei) ∪ Smart-Picks (data/value_smart_picks.txt) ∪ UIQ — Begründung: 10-Bagger/Value-Perlen entstehen jenseits des Trading-Universums. Sharding Mo–Fr, Samstag-Merge nach data/fundamentals/ (Git-History = Archiv). Erste Vollwoche: 2026-W28 (Archiv am 11.07.). |
