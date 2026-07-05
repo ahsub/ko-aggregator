@@ -54,15 +54,14 @@ jobs:
           CF_KV_NS_ID:    ${{ secrets.CF_KV_NS_ID }}
         run: python tr_backup.py
 
-      - name: Track-Record Backup committen (Git-History = Archiv)
+      - name: Archive committen (tr-Backup + FIN-Archiv, Git-History = Archiv)
         if: always()
         run: |
-          if [ -f backups/tr_backup_latest.json ]; then
-            git config user.name "uiq-nightly"
-            git config user.email "actions@users.noreply.github.com"
-            git add backups/tr_backup_latest.json
-            git diff --cached --quiet || (git commit -m "backup: Track-Record KV-Export $(date -u +%F)" && git push)
-          fi
+          git config user.name "uiq-nightly"
+          git config user.email "actions@users.noreply.github.com"
+          [ -f backups/tr_backup_latest.json ] && git add backups/tr_backup_latest.json || true
+          [ -d data/fundamentals ] && git add data/fundamentals || true
+          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup/FIN-Archiv $(date -u +%F)" && git push)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
