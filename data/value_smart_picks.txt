@@ -1,0 +1,6 @@
+# UIQ FIN-Archiv — Smart-Picks (händisch gepflegte Value-Kandidaten)
+# Eine Zeile = ein Yahoo-Ticker. Kommentarzeilen mit #.
+# Pflege direkt im GitHub-Web-Editor (auch mobil) — der nächste
+# Nachtlauf nimmt neue Ticker automatisch in sein Shard-Schema auf.
+# Beispiel:
+# EVVTY
