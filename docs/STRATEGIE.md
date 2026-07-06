@@ -1,6 +1,6 @@
 
-# UnderlyingIQ — Strategiedokument v1.5
-**Stand: 05.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
+# UnderlyingIQ — Strategiedokument v1.6
+**Stand: 06.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
 
@@ -109,6 +109,7 @@ Selbstentscheidende deutschsprachige Privatanleger mit Broker-Zugang (IBKR/CapTr
 
 ### Phase 3 — Launch & Ausbau
 - Öffentlicher Launch mit belegtem Track-Record als zentralem Marketing-Asset.
+- **Vite/React-Migration (v2.0)** ist der natürliche Träger für den Suite-Design-System-Rollout (siehe SUITE.md §3.6/§3.7, Phase D2). UIQ-Corporate-Design, öffentliche Web-Präsenz und Rechtsseiten (Impressum, Datenschutz, Kontakt, FAQ) gehen mit v2.0 live — kein Vorziehen in den v1.x-Monolithen, weil doppelt gebaut.
 - Ausbau Strategiefamilien in dieser Reihenfolge: Options-Erweiterung (LEAP/Spreads) → Value/Portfoliodesign (ValueMatrix-Integration) → Devisen.
 - ML-Optimierung erst, wenn Track-Record-Datenbasis ≥ 12 Monate.
 
@@ -204,3 +205,5 @@ Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortges
 | 05.07.2026 | **FIN-Archiv GO (Aggregator v4.6):** Point-in-Time-Fundamentaldaten sind nicht rückwirkend beschaffbar → wöchentliche Rohdaten-Archivierung startet sofort (Value-Modul Phase 0, VAL-MOD bleibt geparkt). Universum: Russell 3000 (IWV-Holdings, Konstituenten mit-archiviert = survivorship-frei) ∪ Smart-Picks (data/value_smart_picks.txt) ∪ UIQ — Begründung: 10-Bagger/Value-Perlen entstehen jenseits des Trading-Universums. Sharding Mo–Fr, Samstag-Merge nach data/fundamentals/ (Git-History = Archiv). Erste Vollwoche: 2026-W28 (Archiv am 11.07.). |
 | 05.07.2026 | **Supercycle-Sektoren (Aggregator v4.7):** 5 neue Watchlists (GRID_ELECTRIFICATION, PRECIOUS_METALS, AGRICULTURE, WATER, PICKS_SHOVELS als getaggter Sektor statt Index-Slot) + Fuel-Cycle/Kupfer-Erweiterungen; Universum 644→678. Arbeitsmuster etabliert: Gemini als Ideen-Generator, Claude-Verifikations-Filter vor jeder Integration (hier ~15% Fehlticker aussortiert). Demografie-Titel als Value-Thema ins VAL-MOD-Register statt Scan-Sektor. |
 | 05.07.2026 | **UI-Leitprinzip beschlossen: Form follows Function** — oberstes Prinzip jeder UI-Änderung; Tab-Folge orientiert sich am Tages-Workflow (Tagesstart → Markt-Kontext → Arbeit → Verwaltung). Frontend-Reorg v243: DarkPool in Makro integriert (kein eigener Tab), Journal-Tab entfernt (8 Monate unbenutzt, 80/20; Git-History = Archiv), Tab-Container-Strukturschuld behoben. |
+| 06.07.2026 | **Corporate Design & Web-Präsenz-Rollout an v2.0 gekoppelt (SUITE.md §3.7 Phase D2, Q4 2026):** Suite-übergreifender Timeframe verabschiedet (D0 Sammelbecken ab sofort → D1 Konzept ~Ende Juli/August → D2 Rollout mit Vite/React-Migration Q4 2026 → D3 Suite-weit 2027). Bewusste Effizienz-Kopplung: Design-System nicht in v1.x-Monolithen zurückbauen (Doppelarbeit); Warnpflicht bleibt auf UIQ Phase 0 aktiv, Design bleibt bis D2 reine Denk-Kapazität. |
+| 06.07.2026 | Scanner-UX v244 deployed: Long/Bear-Segmentschalter statt zweier separater Buttons neben Scan-Button (FFF-konform, ein Bear-Button pro Tab-Kontext war Streuner); KI-Analyse-Dropdown erst nach Scan sichtbar und mit sprechendem Label „KI-Analyse der Treffer" statt reinem Icon; help.html BaFin-Sprachhygiene: „Frühausstieg-Regel" → „Frühausstieg-Empfehlung". |
