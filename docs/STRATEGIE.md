@@ -1,6 +1,6 @@
 
-# UnderlyingIQ — Strategiedokument v1.7
-**Stand: 06.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
+# UnderlyingIQ — Strategiedokument v1.8
+**Stand: 08.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
 
@@ -92,6 +92,38 @@ Selbstentscheidende deutschsprachige Privatanleger mit Broker-Zugang (IBKR/CapTr
 2. **Bus-Factor-Dokument** im Repo: Systemüberblick, Schlüsselverzeichnis, Nachtlauf-Ablauf, Störungs-Runbook, Wiederanlauf-Anleitung.
 3. Laufende Feature-Arbeit nach Session-Backlog-Modus (Batch-Deployments), gefiltert durch Abschnitt 6.
 
+### Phase 0.5 — UX-Reifung vor Beta (zwischen Phase 0 und Phase 1)
+*Ziel: Die App fremdnutzertauglich machen, bevor Beta-Tester eingeladen werden.*
+
+Auslöser: Externes UX-Review vom 07.07.2026 durch tech-affinen Ex-Praxispartner (QM-Erfahrung Medizin-KI, Canfield-Kontext, ohne Trading-Vorwissen). Zentraler Befund: **Konzept beeindruckend, Bedienbarkeit abschreckend.** Nerd-Faktor hoch, Buttons irreführend, Workflow inkonsistent, versehentliche Trigger häufig. Ohne Behebung dieser Punkte kein sinnvoller Beta-Test möglich (Beta-Tester springen ab, bevor sie den Kern-Wert erleben).
+
+**Verortung:** Zwischen h7-Reife (~14.07., Phase-0-Abschluss) und Phase-1-Beta-Start. Zeitfenster ~zweite Julihälfte / Anfang August 2026.
+
+**Reifekriterium:** Ein fremder Nutzer (kein Autor, kein Trader) kann ohne mündliche Erklärung den Kern-Workflow (Morning Briefing → Marktlage → Alpha Desk → Ticker-Analyse) durchlaufen und versteht, was er sieht und was das nächste sinnvolle Handeln wäre.
+
+**Phase-0-Blocker (muss zuerst, unabhängig von 0.5):**
+- **KI-Halluzinations-Datum im Scanner-KI-Aufruf** (07.07.: „19. Januar 2025" bzw. „6. Januar 2025" wechselnd zwischen zwei Aufrufen). Direkte Widerlegung der Präsentations-Kernaussage (Slides 2/6/7). Ursache-Prüfung: Grounding-Kontrakt (aktuelles Datum im Prompt?) + Post-Filter auf halluzinierte Zeitangaben. Höchste Priorität.
+
+**Arbeitspakete Phase 0.5 (gruppiert):**
+
+A. **Homescreen / Landing** — Klick auf „UnderlyingIQ" in Sidebar oben links öffnet Home-Panel: heutiges Datum, Status Morning Briefing (erledigt/ausstehend, mit Uhrzeit), letztes gecachtes Briefing + Makro-Einschätzung + KI-Beurteilung lesbar, Changelog seit letztem Build mit Workflow-/Bedienungs-Auswirkungen, regulatorische Kurz-Hinweise. Rückkehr zum Home von überall per Klick auf Sidebar-Titel.
+
+B. **Trigger-/Cache-Disziplin (Token-Ökonomie)** — Morning Briefing und Makro-Analyse werden nach Erstberechnung lokal gecacht bis zur explizit angeforderten Neuberechnung. Kein Trigger bei Mouse-over, kein Trigger bei versehentlichem Klick, kein Trigger als Nebeneffekt anderer Tab-Aktionen. Neuberechnung nur mit User-Rückfrage. Betrifft insbesondere: Morning-Briefing-Button-Duplikate in Alpha Desk und Scanner (beide entfernen), „Briefing abgeschlossen"-Bereich verliert Button-Charakter (reiner Status mit Datum/Uhrzeit).
+
+C. **Sprache / Beschriftung** — Durchgängige Umbenennung „KI-Analyse" → „KI-basierte Markt-Einschätzung". Keine Modell-Herkunftsnennung (Claude/Anthropic/etc.) im UI, sondern nur an dedizierter Programm-Beschreibungsstelle. „Einfache Sprache" → „Kurz und bündig" (als Standard-Ansicht), Zahlen-Variante als Deep-Dive-Option. „m" → „min" in Zeitfenster-Buttons. Handelsplatz-Bezeichnungen aktualisieren (NYSE/NASDAQ/TR/L&S-Wording prüfen).
+
+D. **Visuelle Konsistenz Button vs. Info** — Elemente, die wie Buttons aussehen, aber keine Funktion haben (Trading-Strategie-Kacheln im Morning Briefing und Scanner), verlieren Button-Optik oder bekommen echte Funktion. Empfehlungen wie „Selektiv vorgehen · Nur höchste Qualität handeln" müssen kontextualisiert werden (gilt allgemein oder für die darüber stehenden Strategien?).
+
+E. **Alpha Desk konsolidieren** — Erste Zeile: kurze textliche Erklärung Zweck des Tabs. Beim Öffnen zunächst nur Master-Shortlist zeigen. Enrichment nur auf explizite User-Aufforderung mit Rückfrage. „KI-basierte Markt-Einschätzung"-Button liefert vielversprechendste Ticker × vielversprechendste Strategie. Strategie-Nerds: separater Weg für favorisierte Strategie mit eigener Listen-Darstellung. Marktzustands-Bezeichnung („Bull-Quiet") muss aus Briefing/Makro herleitbar oder erklärt sein. Refresh-Button rechts entweder erklären oder entfernen.
+
+F. **Options Desk als vollwertiger Modus** — Klick öffnet eigenständigen Ansichts-Modus, der Master-Shortlist verdrängt (statt versteckt darunter). KI-enriched Top-Options-Ticker prominent, KI-Einschätzung-Button liefert Underlying × Options-Strategie. Analog zu Alpha Desk: separater Weg für favorisierte Options-Strategien (Wheel, CSP/CC, Weekly Options) mit eigener Listen-Darstellung.
+
+G. **Scanner-Tab Neuordnung** — Marktstimmungs-Anzeige konsistent zur Alpha-Desk-Anzeige (heute widersprüchlich). Strategie-Button-Leiste entweder funktional oder als Info-Chips markiert. „Aufklappen/Zuklappen"-Buttons über die Tickerkarten. „Scan" vs. „Live" per Mouse-over erklärt. Handelsplatz-Auswahl mit Auto-Sinnvoll-Watchlists (DE → DAX/TecDAX/MDAX, US → S&P500/NASDAQ100), bei fehlender Watchlist als Popup-Empfehlung + Caching. Erklärungs-Tooltips für „KI-Analyse Watchlist Top-Performer" mit EIC-Modus-Verhalten.
+
+H. **„Wolf-im-Schafspelz"-Modus (Investor-friendly)** — Non-Nerd-Ansicht im Admin/User-Bereich umschaltbar, reduziert Feature-Vielfalt auf das für den Anlage-Alltag Notwendige. Ziel: Einschüchterung durch Feature-Dichte abmildern, ohne den Expert-Modus zu verlieren. Erste Konzept-Skizze in Phase 0.5, Umsetzung im Detail möglicherweise erst in Phase-1-Iteration.
+
+**Was Phase 0.5 nicht ist:** Kein Design-System-Rollout (bleibt an v2.0/D2 gekoppelt, SUITE §3.7). Kein Corporate-Redesign. Kein Umbau der Aggregator-Logik. Kein IP-Schutz-Refactor. Reine UX-Reifung auf bestehender Architektur, minimale invasive Änderungen mit maximaler Bedienungs-Wirkung.
+
 ### Phase 1 — Geschlossene Beta (nach Phase 0, ~3–6 Monate)
 *Ziel: Fremdnutzer-Feedback ohne kommerzielles Risiko.*
 
@@ -111,6 +143,7 @@ Selbstentscheidende deutschsprachige Privatanleger mit Broker-Zugang (IBKR/CapTr
 - Öffentlicher Launch mit belegtem Track-Record als zentralem Marketing-Asset.
 - **Vite/React-Migration (v2.0)** ist der natürliche Träger für den Suite-Design-System-Rollout (siehe SUITE.md §3.6/§3.7, Phase D2). UIQ-Corporate-Design, öffentliche Web-Präsenz und Rechtsseiten (Impressum, Datenschutz, Kontakt, FAQ) gehen mit v2.0 live — kein Vorziehen in den v1.x-Monolithen, weil doppelt gebaut.
 - **v2.0-Architektur-Anforderung (Single Source of Truth):** Konfigurations-Listen (Ticker/Sektoren, Strategien, Regime, Ampelfarben, Preset-Maps) werden in eigenen Config-Modulen zentralisiert; alle UI-Komponenten und der Aggregator konsumieren diese als einzige Quelle. Adressiert die im v1.x akkumulierte DRY-Verletzung (Log 06.07.2026). Kein Retrofit in v1.x.
+- **IP-Schutz-Konzept (Server-Function-Split, siehe Log 07.07.2026):** Sensible Rechen­pfade (Scoring-Formeln, Regime-Klassifikator-Schwellen, Fibonacci-Konfluenz-Logik, Setup-Klassifikation) und LLM-Prompt-Kontrakte wandern in Cloudflare Workers als Server-Functions. Frontend erhält nur Ergebnisse, nicht die Algorithmen. Auth-gated Expert-Features über echten Session-Layer statt PIN-in-Client. Adressiert den IP-Preisgabe-Vorbehalt (JS-im-Browser lesbar) ohne kompletten Backend-Umbau. Client bleibt Rendering-Schicht; Split entlang der Vertraulichkeitsgrenze. Aggregator-Repo `ahsub/ko-aggregator` kann parallel von öffentlich auf privat gestellt werden — reversible Einzelentscheidung, unabhängig vom v2.0-Split.
 - Ausbau Strategiefamilien in dieser Reihenfolge: Options-Erweiterung (LEAP/Spreads) → Value/Portfoliodesign (ValueMatrix-Integration) → Devisen.
 - ML-Optimierung erst, wenn Track-Record-Datenbasis ≥ 12 Monate.
 
@@ -210,3 +243,6 @@ Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortges
 | 06.07.2026 | Scanner-UX v244 deployed: Long/Bear-Segmentschalter statt zweier separater Buttons neben Scan-Button (FFF-konform, ein Bear-Button pro Tab-Kontext war Streuner); KI-Analyse-Dropdown erst nach Scan sichtbar und mit sprechendem Label „KI-Analyse der Treffer" statt reinem Icon; help.html BaFin-Sprachhygiene: „Frühausstieg-Regel" → „Frühausstieg-Empfehlung". |
 | 06.07.2026 | **Architektur-Befund vor Präsentation (just-for-the-record):** DRY-Verletzung bei Konfigurations-Listen — dieselben Ticker-/Sektor-/Strategie-Definitionen werden an mehreren Stellen im v1.x-Monolithen redundant gepflegt (FIXED_LISTS, Preset-Maps, Auto-Scan-Zeitplan, Bear-Scanner, Alpha-Desk-Presets, ko-prompts.js, Aggregator-Watchlists). Symptom: Einstellungen-Tab zeigt Auto-Scan-Liste ohne die 4 Supercycle-Sektoren aus v4.7 (GRID_ELECTRIFICATION/PRECIOUS_METALS/AGRICULTURE/WATER). **Entscheidung: Kein Retrofit in v1.x** (Doppelarbeit, hohes Regressionsrisiko, würde UIQ Phase 0 stören) — Single-Source-of-Truth-Refactor wandert als **verbindliche v2.0-Architektur-Anforderung** in Phase 3. Symptom-Ticker im Backlog. |
 | 06.07.2026 | help.html Dark/Light-Theme-Sync bleibt v244b-geparkt (CSS-Variablen-Umbau, kein Präsentations-Blocker); Auto-Scan-Konfig-Liste im Einstellungen-Tab fehlen 4 Supercycle-Sektoren (Symptom der DRY-Verletzung oben, kein separater Fix bis v2.0). |
+| 07.07.2026 | **Externes UX-Review durch tech-affinen Ex-Praxispartner (4 Std., auf Basis der Engineering-Präsentation + Live-Nutzung).** Befund: „Konzept beeindruckend, Bedienbarkeit abschreckend." Detail-Punkte gruppiert in Arbeitspaketen A–H (§4 Phase 0.5). **Phase-0-Blocker identifiziert:** KI-Halluzinations-Datum im Scanner-KI-Aufruf (wechselnde erfundene Daten „19.01.2025" / „06.01.2025" zwischen zwei Aufrufen desselben Tickers) — direkte Widerlegung der Präsentations-Kernaussage zu Halluzinations-Kontrolle. Ursachen-Prüfung offen (Grounding-Kontrakt? Post-Filter?), Priorität höchste, unabhängig von Phase 0.5. |
+| 07.07.2026 | **IP-Schutz-Vorbehalt aus UX-Review-Nachgespräch:** Ex-Praxispartner (Canfield-Hintergrund, Medizin-KI mit serverseitigem Modell-Schutz) hält JS-im-Browser-Architektur für IP-riskant, schlägt „komplettes Redesign mit serverseitigem geschütztem Backend" vor. **Entscheidung: Kein komplettes Redesign** (18–24 Monate Vollzeit, Track-Record-Uhr würde sterben, dieselbe Funktionalität am Ende, Design-Rollout-Kopplung an v2.0 wäre Kollateralschaden). Stattdessen: **Server-Function-Split in v2.0-Migration** als 80/20-Antwort (Phase 3, siehe §4). Aggregator-Repo-Sichtbarkeits-Entscheidung (öffentlich vs. privat) reversibel und unabhängig. Kern-IP liegt ohnehin in wachsendem Track Record + FIN-Archiv + dokumentierten Architektur-Entscheidungen (STRATEGIE/SUITE), nicht im rekonstruierbaren Code. |
+| 08.07.2026 | **Phase 0.5 „UX-Reifung vor Beta" als eigene Phase eingeführt** (§4, zwischen Phase 0 und Phase 1, Zeitfenster ~zweite Julihälfte / Anfang August). Reifekriterium: Fremdnutzer ohne mündliche Erklärung durchläuft Kern-Workflow. Arbeitspakete A–H aus UX-Review destilliert. Warnpflicht-Verortung: bewusst NICHT parallel zu Phase 0 gebaut (Track-Record-Reife hat weiter absolute Priorität), sondern als aufgesetzter Reifeschritt vor Beta-Start. |
