@@ -1,5 +1,5 @@
 
-# UnderlyingIQ — Strategiedokument v1.6
+# UnderlyingIQ — Strategiedokument v1.7
 **Stand: 06.07.2026 | Status: Arbeitsgrundlage | Autor: Dr. Axel Hildebrand mit Claude**
 
 Dieses Dokument ist der Referenzrahmen für alle künftigen Produkt- und Priorisierungsentscheidungen. Jede neue Feature-Idee wird gegen Abschnitt 2 (Leitbild) und Abschnitt 6 (Entscheidungsfilter) geprüft, bevor Code entsteht.
@@ -110,6 +110,7 @@ Selbstentscheidende deutschsprachige Privatanleger mit Broker-Zugang (IBKR/CapTr
 ### Phase 3 — Launch & Ausbau
 - Öffentlicher Launch mit belegtem Track-Record als zentralem Marketing-Asset.
 - **Vite/React-Migration (v2.0)** ist der natürliche Träger für den Suite-Design-System-Rollout (siehe SUITE.md §3.6/§3.7, Phase D2). UIQ-Corporate-Design, öffentliche Web-Präsenz und Rechtsseiten (Impressum, Datenschutz, Kontakt, FAQ) gehen mit v2.0 live — kein Vorziehen in den v1.x-Monolithen, weil doppelt gebaut.
+- **v2.0-Architektur-Anforderung (Single Source of Truth):** Konfigurations-Listen (Ticker/Sektoren, Strategien, Regime, Ampelfarben, Preset-Maps) werden in eigenen Config-Modulen zentralisiert; alle UI-Komponenten und der Aggregator konsumieren diese als einzige Quelle. Adressiert die im v1.x akkumulierte DRY-Verletzung (Log 06.07.2026). Kein Retrofit in v1.x.
 - Ausbau Strategiefamilien in dieser Reihenfolge: Options-Erweiterung (LEAP/Spreads) → Value/Portfoliodesign (ValueMatrix-Integration) → Devisen.
 - ML-Optimierung erst, wenn Track-Record-Datenbasis ≥ 12 Monate.
 
@@ -207,3 +208,5 @@ Dieses Dokument wird bei jeder strategischen Weichenstellung versioniert fortges
 | 05.07.2026 | **UI-Leitprinzip beschlossen: Form follows Function** — oberstes Prinzip jeder UI-Änderung; Tab-Folge orientiert sich am Tages-Workflow (Tagesstart → Markt-Kontext → Arbeit → Verwaltung). Frontend-Reorg v243: DarkPool in Makro integriert (kein eigener Tab), Journal-Tab entfernt (8 Monate unbenutzt, 80/20; Git-History = Archiv), Tab-Container-Strukturschuld behoben. |
 | 06.07.2026 | **Corporate Design & Web-Präsenz-Rollout an v2.0 gekoppelt (SUITE.md §3.7 Phase D2, Q4 2026):** Suite-übergreifender Timeframe verabschiedet (D0 Sammelbecken ab sofort → D1 Konzept ~Ende Juli/August → D2 Rollout mit Vite/React-Migration Q4 2026 → D3 Suite-weit 2027). Bewusste Effizienz-Kopplung: Design-System nicht in v1.x-Monolithen zurückbauen (Doppelarbeit); Warnpflicht bleibt auf UIQ Phase 0 aktiv, Design bleibt bis D2 reine Denk-Kapazität. |
 | 06.07.2026 | Scanner-UX v244 deployed: Long/Bear-Segmentschalter statt zweier separater Buttons neben Scan-Button (FFF-konform, ein Bear-Button pro Tab-Kontext war Streuner); KI-Analyse-Dropdown erst nach Scan sichtbar und mit sprechendem Label „KI-Analyse der Treffer" statt reinem Icon; help.html BaFin-Sprachhygiene: „Frühausstieg-Regel" → „Frühausstieg-Empfehlung". |
+| 06.07.2026 | **Architektur-Befund vor Präsentation (just-for-the-record):** DRY-Verletzung bei Konfigurations-Listen — dieselben Ticker-/Sektor-/Strategie-Definitionen werden an mehreren Stellen im v1.x-Monolithen redundant gepflegt (FIXED_LISTS, Preset-Maps, Auto-Scan-Zeitplan, Bear-Scanner, Alpha-Desk-Presets, ko-prompts.js, Aggregator-Watchlists). Symptom: Einstellungen-Tab zeigt Auto-Scan-Liste ohne die 4 Supercycle-Sektoren aus v4.7 (GRID_ELECTRIFICATION/PRECIOUS_METALS/AGRICULTURE/WATER). **Entscheidung: Kein Retrofit in v1.x** (Doppelarbeit, hohes Regressionsrisiko, würde UIQ Phase 0 stören) — Single-Source-of-Truth-Refactor wandert als **verbindliche v2.0-Architektur-Anforderung** in Phase 3. Symptom-Ticker im Backlog. |
+| 06.07.2026 | help.html Dark/Light-Theme-Sync bleibt v244b-geparkt (CSS-Variablen-Umbau, kein Präsentations-Blocker); Auto-Scan-Konfig-Liste im Einstellungen-Tab fehlen 4 Supercycle-Sektoren (Symptom der DRY-Verletzung oben, kein separater Fix bis v2.0). |
