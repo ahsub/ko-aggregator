@@ -45,9 +45,11 @@ FIN_SCHEMA_VERSION = 1
 SHARDS = 5
 SMART_PICKS_PATH = "data/value_smart_picks.txt"
 ARCHIVE_DIR = "data/fundamentals"
-IWV_CSV_URL = ("https://www.ishares.com/us/products/239714/"
-               "ishares-russell-3000-etf/1467271812596.ajax"
-               "?fileType=csv&fileName=IWV_holdings&dataType=fund")
+# IWV-Quelle: lokale CSV-Datei im Repo (data/iwv_holdings.csv)
+# Hintergrund: iShares-Ajax-URL liefert HTML (JS-gesteuert), nicht direkt CSV.
+# Update: monatlich manuell — Russell 3000 rotiert kaum.
+# Download: https://www.ishares.com/us/products/239714 → Holdings → CSV
+IWV_CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "iwv_holdings.csv")
 _KV_TIMEOUT = 15
 _FETCH_WORKERS = 6
 
@@ -120,15 +122,17 @@ def _clean_iwv_symbol(sym):
 
 
 def fetch_iwv_tickers():
-    """Russell-3000-Proxy via iShares-IWV-Holdings-CSV (frei verfügbar).
-    None bei Fehlschlag (Aufrufer nutzt dann den KV-Cache der Vorwoche)."""
+    """Russell-3000-Proxy via lokale IWV-Holdings-CSV (data/iwv_holdings.csv).
+    Primärquelle: lokale Datei im Repo — zuverlässig, kein HTTP nötig.
+    None bei Fehlschlag (Aufrufer nutzt dann den KV-Cache der Vorwoche).
+    Update: monatlich manuell von ishares.com → Holdings → CSV herunterladen."""
     try:
-        r = requests.get(IWV_CSV_URL, timeout=60,
-                         headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code != 200 or len(r.text) < 10000:
-            log.warning(f"  [FIN] IWV-Fetch: Status {r.status_code}")
+        if not os.path.exists(IWV_CSV_PATH):
+            log.warning("  [FIN] IWV-CSV: Datei nicht gefunden: " + IWV_CSV_PATH)
             return None
-        lines = r.text.splitlines()
+        with open(IWV_CSV_PATH, encoding="utf-8") as f:
+            content = f.read()
+        lines = content.splitlines()
         # Header-Zeile finden (iShares stellt ~9 Metazeilen voran)
         start = next((i for i, l in enumerate(lines)
                       if l.split(",")[0].strip().strip('"') == "Ticker"), None)
@@ -144,6 +148,7 @@ def fetch_iwv_tickers():
             if s:
                 out.append(s)
         out = sorted(set(out))
+        log.info(f"  [FIN] IWV-CSV geladen: {len(out)} Ticker")
         return out if len(out) > 1000 else None   # Plausibilitäts-Gate
     except Exception as e:
         log.warning(f"  [FIN] IWV-Fetch fehlgeschlagen: {e}")
@@ -169,7 +174,7 @@ def build_fin_universe(uiq_universe):
     """IWV ∪ Smart-Picks ∪ UIQ. Liefert (universum, meta).
     IWV-Fallback: KV-Cache fin:universe der Vorwoche."""
     iwv = fetch_iwv_tickers()
-    iwv_source = "live"
+    iwv_source = "local_csv"
     if iwv is None:
         cached = kv_get("fin:universe") or {}
         iwv = cached.get("iwv") or []
