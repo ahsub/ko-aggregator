@@ -2753,7 +2753,10 @@ def fetch_dix_gex():
     return None
 
 def fetch_pcr_cboe():
-    """Echter Put/Call Ratio von CBOE (tägliche CSV)."""
+    """Echter Put/Call Ratio von CBOE (tägliche CSV).
+    Fallback: interner VIX-basierter PCR-Proxy (kein externer Call nötig).
+    CBOE blockiert GitHub Actions IPs (HTTP 403) — Proxy greift automatisch.
+    """
     try:
         url = "https://www.cboe.com/publish/scheduledtask/mktdata/datahouse/totalpc.csv"
         r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
@@ -2772,9 +2775,70 @@ def fetch_pcr_cboe():
                     "source": "cboe",
                     "proxy":  False,
                 }
+        log.warning(f"  CBOE PCR HTTP {r.status_code} — nutze VIX-Proxy")
     except Exception as e:
-        log.warning(f"  CBOE PCR nicht verfügbar: {e}")
+        log.warning(f"  CBOE PCR nicht verfügbar: {e} — nutze VIX-Proxy")
     return None
+
+
+def calc_pcr_proxy(vix_term: dict, mse_history: dict = None) -> dict:
+    """Interner PCR-Proxy aus VIX-Termstruktur + VVIX (kein externer API-Call).
+
+    Methodologie (bewährt, keine Halluzination):
+    - VIX absolut:      >30 → Panik (PCR hoch), <15 → Gier (PCR niedrig)
+    - VIX/VIX3M Ratio:  <0.85 = starkes Contango = wenig Put-Nachfrage (bullish)
+                        >1.00 = Backwardation = hohe Put-Nachfrage (bearish)
+    - VVIX (Vol of Vol): >100 = Put-Käufe nehmen zu → PCR-Aufschlag
+
+    Ausgabe: dict mit pcr (0.5–1.4), signal, source='vix_proxy', proxy=True
+    """
+    vt     = vix_term or {}
+    vix    = vt.get("vix",   20.0)
+    vix3m  = vt.get("vix3m", 22.0)
+    struct = vt.get("structure", "CONTANGO")
+
+    # VVIX aus mse_history (letzter Wert)
+    vvix = 90.0  # neutraler Default
+    if mse_history:
+        vvix_hist = mse_history.get("vvix") or []
+        if vvix_hist:
+            vvix = float(vvix_hist[-1]) if vvix_hist[-1] is not None else 90.0
+
+    # ── Basis: VIX-Level (0.50 – 1.40) ────────────────────────────────────────
+    if   vix >= 35:  pcr_base = 1.35
+    elif vix >= 28:  pcr_base = 1.15
+    elif vix >= 22:  pcr_base = 1.00
+    elif vix >= 18:  pcr_base = 0.88
+    elif vix >= 14:  pcr_base = 0.78
+    else:            pcr_base = 0.68
+
+    # ── Korrektur: VIX-Termstruktur ────────────────────────────────────────────
+    ratio = vix / vix3m if vix3m > 0 else 1.0   # <1 = Contango (bullish)
+    if   ratio < 0.82:  pcr_base -= 0.10   # starkes Contango → wenig Puts
+    elif ratio < 0.90:  pcr_base -= 0.05   # normales Contango
+    elif ratio > 1.00:  pcr_base += 0.12   # Backwardation → Put-Nachfrage hoch
+    elif ratio > 0.95:  pcr_base += 0.05   # Übergang Contango→Backwardation
+
+    # ── Korrektur: VVIX (Volatilität der Volatilität) ──────────────────────────
+    if   vvix >= 120:  pcr_base += 0.12
+    elif vvix >= 105:  pcr_base += 0.06
+    elif vvix >= 95:   pcr_base += 0.02
+    elif vvix <= 80:   pcr_base -= 0.05
+
+    pcr = round(max(0.50, min(1.40, pcr_base)), 3)
+    signal = "ÜBERKAUFT" if pcr < 0.7 else "ÜBERVERKAUFT" if pcr > 1.0 else "NEUTRAL"
+
+    log.info(f"  PCR-Proxy (VIX={vix:.1f}, VIX3M={vix3m:.1f}, VVIX={vvix:.0f}, "
+             f"Ratio={ratio:.3f}): PCR={pcr:.3f} → {signal}")
+    return {
+        "pcr":    pcr,
+        "date":   "proxy",
+        "signal": signal,
+        "source": "vix_proxy",
+        "proxy":  True,
+        "components": {"vix": vix, "vix3m": vix3m, "vvix": round(vvix, 1),
+                       "ratio": round(ratio, 3), "struct": struct},
+    }
 
 
 def fetch_fear_greed() -> dict:
@@ -3050,7 +3114,7 @@ def main():
     log.info(f"\n🌐 Externe Datenquellen...")
     _t("Externe APIs: DIX/GEX, PCR, VIX, Fear&Greed, CAPE")
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
-    pcr      = fetch_pcr_cboe() or {}   # Fallback auf leeres Dict
+    pcr      = fetch_pcr_cboe() or {}   # CBOE-Versuch; Proxy-Fallback nach mse_history (s.u.)
     vix_term    = fetch_vix_term()
     # Fear & Greed
     log.info(f"  Fear & Greed Index...")
@@ -3065,6 +3129,11 @@ def main():
     ios_market = calc_ios_market_score(hist_data, vix_term)
     log.info(f"  Lade MSE History (VVIX/SKEW/VIX 30T)...")
     mse_history = fetch_mse_history(days=30)
+
+    # PCR-Proxy-Fallback: CBOE lieferte nichts (403) → intern aus VIX + VVIX ableiten
+    if not pcr:
+        log.info(f"  PCR-Proxy: berechne aus VIX-Termstruktur + VVIX (kein externer Call)...")
+        pcr = calc_pcr_proxy(vix_term, mse_history) or {}
 
     # 5. Top-Signale ermitteln
     valid = [r for r in results if r.get("score") is not None]
