@@ -3080,6 +3080,84 @@ def fetch_market_snapshot() -> dict:
     }
 
 
+def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = None) -> dict:
+    """Z-Scores + Perzentile für Makro-Parameter aus der MSE-History.
+
+    Abstraktions-Schicht für Deep-Reasoning (Gemini-Empfehlung 09.07.2026):
+    KI bekommt nicht "SKEW: 150" sondern "SKEW: 150 (Z=+1.6, 91. Perzentil, 252T)".
+    Erst der historische Kontext macht aus einer Zahl eine Aussage.
+
+    Berechnung: Z-Score = (aktuell - Mittelwert) / Stdabw über volle History.
+    Perzentil: Midpoint-Methode ((below + equal/2) / n).
+    """
+    import statistics
+
+    def _zscore(series):
+        vals = [v for v in series if v is not None]
+        if len(vals) < 20:
+            return None
+        cur = vals[-1]
+        mean = statistics.mean(vals)
+        stdev = statistics.stdev(vals)
+        return round((cur - mean) / stdev, 2) if stdev > 0 else 0.0
+
+    def _percentile(series):
+        raw = [v for v in series if v is not None]
+        if len(raw) < 20:
+            return None
+        cur = raw[-1]
+        vals = sorted(raw)
+        below = sum(1 for v in vals if v < cur)
+        equal = sum(1 for v in vals if v == cur)
+        return round((below + equal / 2) / len(vals) * 100)
+
+    def _entry(series, label):
+        vals = [v for v in series if v is not None]
+        if len(vals) < 20:
+            return {"label": label, "ok": False, "reason": f"nur {len(vals)} Werte"}
+        return {
+            "label":      label,
+            "current":    vals[-1],
+            "zscore":     _zscore(series),
+            "percentile": _percentile(series),
+            "min":        round(min(vals), 2),
+            "max":        round(max(vals), 2),
+            "mean":       round(statistics.mean(vals), 2),
+            "n_days":     len(vals),
+            "ok":         True,
+        }
+
+    result = {}
+    hist = mse_history or {}
+
+    result["vvix"]     = _entry(hist.get("vvix", []),     "VVIX (Vol of Vol)")
+    result["skew"]     = _entry(hist.get("skew", []),     "CBOE SKEW (Tail-Risk)")
+    result["vix"]      = _entry(hist.get("vix", []),      "VIX Spot")
+    result["vixRatio"] = _entry(hist.get("vixRatio", []), "VIX3M/VIX Ratio (Contango)")
+
+    # Divergenz-Detektor: SKEW hoch + VVIX niedrig = verstecktes Tail-Risk
+    skew_z = result["skew"].get("zscore")
+    vvix_z = result["vvix"].get("zscore")
+    if skew_z is not None and vvix_z is not None:
+        divergence = skew_z - vvix_z
+        result["skew_vvix_divergence"] = {
+            "label":  "SKEW/VVIX Divergenz (Tail-Hedging bei ruhiger Oberfläche)",
+            "value":  round(divergence, 2),
+            "signal": ("WARNUNG: Institutionelle kaufen Tail-Absicherung bei ruhiger Oberfläche"
+                       if divergence > 1.5 else
+                       "erhöht" if divergence > 0.8 else "normal"),
+            "ok":     True,
+        }
+
+    n_days = result.get("vix", {}).get("n_days", 0)
+    log.info(f"  Makro Z-Scores ({n_days}T): "
+             f"VIX Z={result['vix'].get('zscore')} P{result['vix'].get('percentile')} | "
+             f"SKEW Z={result['skew'].get('zscore')} P{result['skew'].get('percentile')} | "
+             f"VVIX Z={result['vvix'].get('zscore')} P{result['vvix'].get('percentile')}")
+
+    return result
+
+
 def fetch_vix_term():
     """VIX Term Structure via Yahoo Finance."""
     try:
@@ -3286,13 +3364,17 @@ def main():
     # IOS Market Score (Club-Integration)
     log.info(f"\n🏛️  IOS Market Score berechnen (Breadth/Rotation/Risk)...")
     ios_market = calc_ios_market_score(hist_data, vix_term)
-    log.info(f"  Lade MSE History (VVIX/SKEW/VIX 30T)...")
-    mse_history = fetch_mse_history(days=30)
+    log.info(f"  Lade MSE History (VVIX/SKEW/VIX 252T für Z-Score-Kontext)...")
+    mse_history = fetch_mse_history(days=252)
 
     # PCR-Proxy-Fallback: CBOE lieferte nichts (403) → intern aus VIX + VVIX ableiten
     if not pcr:
         log.info(f"  PCR-Proxy: berechne aus VIX-Termstruktur + VVIX (kein externer Call)...")
         pcr = calc_pcr_proxy(vix_term, mse_history) or {}
+
+    # ── Makro Z-Scores: Abstraktions-Schicht für Deep-Reasoning ──────────────
+    log.info(f"  Berechne Makro Z-Scores + Perzentile (252T-Kontext)...")
+    macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term)
 
     # 5. Top-Signale ermitteln
     valid = [r for r in results if r.get("score") is not None]
@@ -3580,6 +3662,7 @@ def main():
             "iosMarket":  ios_market,
             "fearGreed":  fear_greed,
             "snapshot":   market_snapshot,   # Single Source of Truth: alle Live-Preise
+            "zscores":    macro_zscores,     # Z-Scores + Perzentile (252T) für Deep-Reasoning
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
