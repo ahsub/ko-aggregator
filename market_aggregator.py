@@ -2994,6 +2994,92 @@ def calc_fg_proxy(vix_term: dict, pcr_data: dict, sector_rs: dict) -> dict:
 
     return {"score": score, "rating": rating, "source": "UIQ Proxy", "proxy": True}
 
+def fetch_market_snapshot() -> dict:
+    """Einheitlicher Markt-Preisschnappschuss für Single Source of Truth.
+
+    Holt via yf.download() (funktioniert von GitHub Actions):
+    - US-Indizes:     SPY, QQQ, IWM
+    - Rohstoffe:      GC=F (Gold), SI=F (Silber), CL=F (Öl WTI), BZ=F (Brent), LI=F (Lithium Proxy → ALB)
+    - Krypto:         BTC-USD, ETH-USD
+    - EU-Indizes:     ^GDAXI (DAX), ^STOXX50E (EuroStoxx50), ^FTSE (FTSE100)
+    - Anleihen/USD:   ^TNX (10J Treasury Yield), DX-Y.NYB (USD Index)
+
+    Output landet in master["market"]["snapshot"] — wird im MB-Prompt als
+    einzige Kursquelle verwendet. Frontend liest aus KV, kein Live-Fetch nötig.
+    """
+    SYMBOLS = {
+        # US Indizes
+        "spy":      ("SPY",        "S&P 500 ETF",         "index_us"),
+        "qqq":      ("QQQ",        "Nasdaq 100 ETF",       "index_us"),
+        "iwm":      ("IWM",        "Russell 2000 ETF",     "index_us"),
+        # EU Indizes
+        "dax":      ("^GDAXI",     "DAX 40",               "index_eu"),
+        "stoxx50":  ("^STOXX50E",  "EuroStoxx 50",         "index_eu"),
+        "ftse":     ("^FTSE",      "FTSE 100",             "index_eu"),
+        # Rohstoffe
+        "gold":     ("GC=F",       "Gold ($/oz)",          "commodity"),
+        "silver":   ("SI=F",       "Silber ($/oz)",        "commodity"),
+        "oil_wti":  ("CL=F",       "Öl WTI ($/bbl)",       "commodity"),
+        "oil_brent":("BZ=F",       "Öl Brent ($/bbl)",     "commodity"),
+        "copper":   ("HG=F",       "Kupfer ($/lb)",        "commodity"),
+        "lithium":  ("ALB",        "Lithium-Proxy (ALB)",  "commodity"),
+        # Krypto
+        "btc":      ("BTC-USD",    "Bitcoin (USD)",        "crypto"),
+        "eth":      ("ETH-USD",    "Ethereum (USD)",       "crypto"),
+        # Anleihen & Währungen
+        "tnx":      ("^TNX",       "US 10J Treasury (%)",  "bond"),
+        "usd_idx":  ("DX-Y.NYB",   "USD Index (DXY)",      "fx"),
+        "eur_usd":  ("EURUSD=X",   "EUR/USD",              "fx"),
+    }
+
+    syms_yf = [v[0] for v in SYMBOLS.values()]
+    snapshot = {}
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    try:
+        log.info(f"  Lade Market Snapshot ({len(syms_yf)} Symbole)…")
+        df = yf.download(syms_yf, period="3d", interval="1d",
+                         auto_adjust=True, progress=False, threads=True)
+
+        close = df["Close"] if "Close" in df.columns else df.xs("Close", axis=1, level=0)
+        latest = close.iloc[-1]
+        prev    = close.iloc[-2] if len(close) >= 2 else close.iloc[-1]
+
+        ok_count = 0
+        for key, (yf_sym, label, category) in SYMBOLS.items():
+            try:
+                price = float(latest[yf_sym])
+                price_prev = float(prev[yf_sym])
+                if price != price:  # NaN check
+                    raise ValueError("NaN")
+                chg_pct = round((price / price_prev - 1) * 100, 2) if price_prev else None
+                snapshot[key] = {
+                    "sym":      yf_sym,
+                    "label":    label,
+                    "category": category,
+                    "price":    round(price, 4),
+                    "chg_pct":  chg_pct,
+                    "ok":       True,
+                }
+                ok_count += 1
+            except Exception:
+                snapshot[key] = {"sym": yf_sym, "label": label,
+                                  "category": category, "ok": False}
+
+        log.info(f"  Market Snapshot: {ok_count}/{len(SYMBOLS)} Symbole geladen")
+
+    except Exception as e:
+        log.warning(f"  Market Snapshot Fehler: {e}")
+
+    return {
+        "data":         snapshot,
+        "generated_at": generated_at,
+        "ok_count":     sum(1 for v in snapshot.values() if v.get("ok")),
+        "total":        len(SYMBOLS),
+        "source":       "yfinance",
+    }
+
+
 def fetch_vix_term():
     """VIX Term Structure via Yahoo Finance."""
     try:
@@ -3186,6 +3272,9 @@ def main():
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
     pcr      = fetch_pcr_cboe() or {}   # CBOE-Versuch; Proxy-Fallback nach mse_history (s.u.)
     vix_term    = fetch_vix_term()
+    # ── Market Snapshot: Single Source of Truth für alle Live-Preise ──────────
+    log.info(f"  Market Snapshot (SPY/QQQ/Gold/Öl/Krypto/EU-Indizes)…")
+    market_snapshot = fetch_market_snapshot()
     # Fear & Greed
     log.info(f"  Fear & Greed Index...")
     fear_greed  = fetch_fear_greed()
@@ -3487,9 +3576,10 @@ def main():
             "dixGex":     dix_gex,
             "pcr":        pcr,
             "vixTerm":    vix_term,
-            "mseHistory": mse_history,   # 30T VVIX/SKEW/VIX fuer Z-Score
-            "iosMarket":  ios_market,    # IOS Market Score v1.0 (Club)
-            "fearGreed":  fear_greed,    # CNN Fear & Greed / UIQ Proxy
+            "mseHistory": mse_history,
+            "iosMarket":  ios_market,
+            "fearGreed":  fear_greed,
+            "snapshot":   market_snapshot,   # Single Source of Truth: alle Live-Preise
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
