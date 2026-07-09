@@ -3281,6 +3281,59 @@ def fetch_fred_macro() -> dict:
         result["net_liquidity"] = {"ok": False, "reason": str(e)[:100]}
         log.warning(f"  FRED Net Liquidity Fehler: {e}")
 
+    # ── 3. Echte Zinskurve: 10J-2J + 10J-3M (Rezessions-Frühwarner) ──────────
+    # Ersetzt fragile Client-Proxy-Kette (^IRX/^FVX via Yahoo, falsch als "2Y"
+    # gelabelt — ^FVX ist tatsächlich 5J, ^IRX ist 3M). FRED liefert echte
+    # Konstant-Laufzeit-Renditen (Constant Maturity), keine Proxy nötig.
+    try:
+        dgs2   = _fred_series("DGS2",   limit=300)   # 2J Treasury Constant Maturity (%)
+        dgs10  = _fred_series("DGS10",  limit=300)   # 10J Treasury Constant Maturity (%)
+        dgs3mo = _fred_series("DGS3MO", limit=300)   # 3M Treasury Constant Maturity (%)
+
+        if dgs2 and dgs10:
+            y10 = dgs10[-1][1]
+            y2  = dgs2[-1][1]
+            spread_10y2y = round(y10 - y2, 3)
+
+            # Historische Spread-Serie für Z-Score (Datum-Match zwischen beiden Serien)
+            dgs2_by_date = dict(dgs2)
+            hist_spread = [(d, round(v10 - dgs2_by_date[d], 3))
+                           for d, v10 in dgs10 if d in dgs2_by_date]
+
+            z_curve, p_curve = _z_and_p(hist_spread) if len(hist_spread) >= 20 else (None, None)
+
+            curve_entry = {
+                "label":        "US Zinskurve 10J-2J (%, FRED Constant Maturity)",
+                "y10":          y10,
+                "y2":           y2,
+                "spread_10y2y": spread_10y2y,
+                "zscore":       z_curve,
+                "percentile":   p_curve,
+                "date":         dgs10[-1][0],
+                "inverted":     spread_10y2y < 0,
+                "signal":       ("INVERTIERT — Rezessionswarnung" if spread_10y2y < 0 else
+                                 "flach (<0.25%)" if spread_10y2y < 0.25 else "normal"),
+                "source":       "fred",
+                "ok":           True,
+            }
+
+            # Zusätzlich: 10J-3M (NY-Fed-Variante, eigenständig legitim, oft robuster)
+            if dgs3mo:
+                y3mo = dgs3mo[-1][1]
+                spread_10y3m = round(y10 - y3mo, 3)
+                curve_entry["y3mo"] = y3mo
+                curve_entry["spread_10y3m"] = spread_10y3m
+                curve_entry["inverted_10y3m"] = spread_10y3m < 0
+
+            result["yield_curve"] = curve_entry
+            log.info(f"  FRED Zinskurve: 10J={y10:.2f}% 2J={y2:.2f}% → Spread {spread_10y2y:+.2f}% "
+                     f"(Z={z_curve}) — {curve_entry['signal']}")
+        else:
+            result["yield_curve"] = {"ok": False, "reason": "DGS2/DGS10 nicht verfügbar"}
+    except Exception as e:
+        result["yield_curve"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED Zinskurve Fehler: {e}")
+
     result["ok"] = any(v.get("ok") for k, v in result.items() if isinstance(v, dict))
     return result
 
