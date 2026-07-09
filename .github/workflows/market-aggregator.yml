@@ -5,11 +5,6 @@ permissions:
 
 on:
   schedule:
-    # v4.4 (03.07.2026): 03:37 statt 04:00 — GitHub-Schedules zur vollen Stunde
-    # verzögern regelmäßig um Stunden (02.07.: 3h23min); unrunde Minute + früherer
-    # Start puffern das ab. Datenreferenz ist IMMER der letzte Handelstag
-    # (get_last_trading_day() via SPY — feiertags-robust), NICHT der Wochentag;
-    # Läufe ohne neuen Handelstag sind harmlos (TR-Layer dedupliziert).
     - cron: '37 03 * * 1-6'
   workflow_dispatch:
 
@@ -37,11 +32,12 @@ jobs:
 
       - name: Run Market Aggregator
         env:
-          CF_ACCOUNT_ID:      ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN:       ${{ secrets.CF_API_TOKEN }}
-          CF_KV_NS_ID:        ${{ secrets.CF_KV_NS_ID }}
-          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
-          PYTHONUNBUFFERED:   "1"
+          CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN:         ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID:          ${{ secrets.CF_KV_NS_ID }}
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          FLASHALPHA_API_KEY:   ${{ secrets.FLASHALPHA_API_KEY }}
+          PYTHONUNBUFFERED:     "1"
         run: |
           python market_aggregator.py
           echo "Exit Code: $?"
