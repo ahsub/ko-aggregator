@@ -3158,6 +3158,170 @@ def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = Non
     return result
 
 
+def fetch_fred_macro() -> dict:
+    """Makro-Parameter via FRED-API (kostenlos, Regierungsquelle, kein IP-Blocking).
+
+    Serien (Gemini-Empfehlung 09.07.2026, verifiziert):
+    - BAMLH0A0HYM2:  ICE BofA US High Yield Spread (%) — Kreditrisiko-Frühwarner
+    - WALCL:         Fed Balance Sheet (Mio USD, wöchentlich)
+    - WTREGEN:       Treasury General Account (Mrd USD, wöchentlich)
+    - RRPONTSYD:     Overnight Reverse Repo (Mrd USD, täglich)
+    → Net Liquidity = WALCL/1000 - (WTREGEN + RRPONTSYD)  [Mrd USD]
+
+    MOVE Index: nicht auf FRED → via yfinance ^MOVE (separater Versuch).
+
+    Z-Scores werden über die letzten 252 Beobachtungen berechnet.
+    """
+    import os, statistics
+
+    fred_key = os.environ.get("FRED_API_KEY", "")
+    result = {"ok": False, "source": "fred"}
+
+    def _fred_series(series_id, limit=300):
+        """Letzte `limit` Beobachtungen einer FRED-Serie, älteste zuerst."""
+        url = (f"https://api.stlouisfed.org/fred/series/observations"
+               f"?series_id={series_id}&api_key={fred_key}&file_type=json"
+               f"&sort_order=desc&limit={limit}")
+        r = requests.get(url, timeout=15)
+        if r.status_code != 200:
+            raise RuntimeError(f"FRED {series_id}: HTTP {r.status_code}")
+        obs = r.json().get("observations", [])
+        vals = []
+        for o in reversed(obs):   # älteste zuerst
+            try:
+                v = float(o["value"])
+                vals.append((o["date"], v))
+            except (ValueError, KeyError):
+                continue          # "." = fehlender Wert bei FRED
+        return vals
+
+    def _z_and_p(vals):
+        """Z-Score + Perzentil des letzten Werts über die Serie."""
+        if len(vals) < 20:
+            return None, None
+        nums = [v for _, v in vals]
+        cur = nums[-1]
+        mean = statistics.mean(nums)
+        stdev = statistics.stdev(nums)
+        z = round((cur - mean) / stdev, 2) if stdev > 0 else 0.0
+        s = sorted(nums)
+        below = sum(1 for v in s if v < cur)
+        equal = sum(1 for v in s if v == cur)
+        p = round((below + equal / 2) / len(s) * 100)
+        return z, p
+
+    if not fred_key:
+        result["reason"] = "FRED_API_KEY nicht gesetzt"
+        log.warning("  FRED: kein API-Key — Makro-Parameter übersprungen")
+        return result
+
+    # ── 1. High Yield Credit Spread ──────────────────────────────────────────
+    try:
+        hy = _fred_series("BAMLH0A0HYM2", limit=300)
+        if hy:
+            z, p = _z_and_p(hy)
+            result["hy_spread"] = {
+                "label":      "ICE BofA US High Yield Spread (%)",
+                "current":    hy[-1][1],
+                "date":       hy[-1][0],
+                "zscore":     z,
+                "percentile": p,
+                "n_obs":      len(hy),
+                "signal":     ("STRESS" if hy[-1][1] > 5.0 else
+                               "erhöht" if hy[-1][1] > 4.0 else "normal"),
+                "ok":         True,
+            }
+            log.info(f"  FRED HY-Spread: {hy[-1][1]:.2f}% (Z={z}, P{p}) — {result['hy_spread']['signal']}")
+    except Exception as e:
+        result["hy_spread"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED HY-Spread Fehler: {e}")
+
+    # ── 2. Net Liquidity = Fed Balance - (TGA + RRP) ─────────────────────────
+    try:
+        walcl = _fred_series("WALCL", limit=120)      # Mio USD, wöchentlich
+        tga   = _fred_series("WTREGEN", limit=120)    # Mrd USD, wöchentlich
+        rrp   = _fred_series("RRPONTSYD", limit=300)  # Mrd USD, täglich
+
+        if walcl and tga and rrp:
+            fed_bs   = walcl[-1][1] / 1000.0   # Mio → Mrd
+            tga_v    = tga[-1][1]
+            rrp_v    = rrp[-1][1]
+            net_liq  = round(fed_bs - tga_v - rrp_v, 1)
+
+            # Historische Netto-Liquidität für Trend (wöchentliche Punkte)
+            hist_nl = []
+            rrp_by_date = dict(rrp)
+            tga_by_date = dict(tga)
+            for date_w, walcl_v in walcl:
+                t = tga_by_date.get(date_w)
+                # RRP: nächstliegender Tageswert
+                r_v = rrp_by_date.get(date_w)
+                if t is not None and r_v is not None:
+                    hist_nl.append((date_w, round(walcl_v / 1000.0 - t - r_v, 1)))
+
+            nl_trend = None
+            if len(hist_nl) >= 5:
+                nl_4w_ago = hist_nl[-5][1]
+                nl_trend = round(net_liq - nl_4w_ago, 1)
+
+            result["net_liquidity"] = {
+                "label":       "US Net Liquidity (Fed BS - TGA - RRP, Mrd USD)",
+                "current":     net_liq,
+                "fed_bs":      round(fed_bs, 1),
+                "tga":         tga_v,
+                "rrp":         rrp_v,
+                "trend_4w":    nl_trend,
+                "date":        walcl[-1][0],
+                "signal":      ("EXPANDIEREND" if nl_trend and nl_trend > 50 else
+                                "SCHRUMPFEND" if nl_trend and nl_trend < -50 else "STABIL"),
+                "ok":          True,
+            }
+            log.info(f"  FRED Net Liquidity: {net_liq:.0f} Mrd (4W-Trend: {nl_trend}) — {result['net_liquidity']['signal']}")
+    except Exception as e:
+        result["net_liquidity"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED Net Liquidity Fehler: {e}")
+
+    result["ok"] = any(v.get("ok") for k, v in result.items() if isinstance(v, dict))
+    return result
+
+
+def fetch_move_index() -> dict:
+    """MOVE Index (Treasury-Volatilität, Renten-VIX) via yfinance ^MOVE.
+    Z-Score über 252 Handelstage."""
+    import statistics
+    try:
+        raw = yf.download("^MOVE", period="15mo", interval="1d",
+                          auto_adjust=True, progress=False)
+        close = raw["Close"].dropna()
+        if hasattr(close, 'squeeze'):
+            close = close.squeeze()
+        vals = [float(v) for v in close.values[-252:]]
+        if len(vals) < 20:
+            return {"ok": False, "reason": f"nur {len(vals)} Werte"}
+        cur = vals[-1]
+        mean = statistics.mean(vals)
+        stdev = statistics.stdev(vals)
+        z = round((cur - mean) / stdev, 2) if stdev > 0 else 0.0
+        s = sorted(vals)
+        below = sum(1 for v in s if v < cur)
+        equal = sum(1 for v in s if v == cur)
+        p = round((below + equal / 2) / len(s) * 100)
+        signal = ("STRESS" if cur > 130 else "erhöht" if cur > 110 else "ruhig")
+        log.info(f"  MOVE Index: {cur:.1f} (Z={z}, P{p}) — {signal}")
+        return {
+            "label":      "MOVE Index (Treasury-Volatilität)",
+            "current":    round(cur, 1),
+            "zscore":     z,
+            "percentile": p,
+            "n_days":     len(vals),
+            "signal":     signal,
+            "ok":         True,
+        }
+    except Exception as e:
+        log.warning(f"  MOVE Index nicht verfügbar: {e}")
+        return {"ok": False, "reason": str(e)[:100]}
+
+
 def fetch_vix_term():
     """VIX Term Structure via Yahoo Finance."""
     try:
@@ -3375,6 +3539,12 @@ def main():
     # ── Makro Z-Scores: Abstraktions-Schicht für Deep-Reasoning ──────────────
     log.info(f"  Berechne Makro Z-Scores + Perzentile (252T-Kontext)...")
     macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term)
+
+    # ── FRED Makro (HY-Spread, Net Liquidity) + MOVE Index ───────────────────
+    log.info(f"  FRED Makro-Parameter (HY-Spread, Net Liquidity)...")
+    fred_macro = fetch_fred_macro()
+    log.info(f"  MOVE Index (Treasury-Vol)...")
+    move_index = fetch_move_index()
 
     # 5. Top-Signale ermitteln
     valid = [r for r in results if r.get("score") is not None]
@@ -3663,6 +3833,8 @@ def main():
             "fearGreed":  fear_greed,
             "snapshot":   market_snapshot,   # Single Source of Truth: alle Live-Preise
             "zscores":    macro_zscores,     # Z-Scores + Perzentile (252T) für Deep-Reasoning
+            "fredMacro":  fred_macro,        # HY-Spread + Net Liquidity (FRED)
+            "moveIndex":  move_index,        # Treasury-Volatilität (Renten-VIX)
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
