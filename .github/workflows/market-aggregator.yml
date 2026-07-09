@@ -37,6 +37,7 @@ jobs:
           CF_KV_NS_ID:          ${{ secrets.CF_KV_NS_ID }}
           ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
           FLASHALPHA_API_KEY:   ${{ secrets.FLASHALPHA_API_KEY }}
+          FRED_API_KEY:         ${{ secrets.FRED_API_KEY }}
           PYTHONUNBUFFERED:     "1"
         run: |
           python market_aggregator.py
