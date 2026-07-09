@@ -3164,7 +3164,7 @@ def fetch_fred_macro() -> dict:
     Serien (Gemini-Empfehlung 09.07.2026, verifiziert):
     - BAMLH0A0HYM2:  ICE BofA US High Yield Spread (%) — Kreditrisiko-Frühwarner
     - WALCL:         Fed Balance Sheet (Mio USD, wöchentlich)
-    - WTREGEN:       Treasury General Account (Mrd USD, wöchentlich)
+    - WTREGEN:       Treasury General Account (Mio USD, wöchentlich)
     - RRPONTSYD:     Overnight Reverse Repo (Mrd USD, täglich)
     → Net Liquidity = WALCL/1000 - (WTREGEN + RRPONTSYD)  [Mrd USD]
 
@@ -3239,12 +3239,12 @@ def fetch_fred_macro() -> dict:
     # ── 2. Net Liquidity = Fed Balance - (TGA + RRP) ─────────────────────────
     try:
         walcl = _fred_series("WALCL", limit=120)      # Mio USD, wöchentlich
-        tga   = _fred_series("WTREGEN", limit=120)    # Mrd USD, wöchentlich
+        tga   = _fred_series("WTREGEN", limit=120)    # Mio USD, wöchentlich
         rrp   = _fred_series("RRPONTSYD", limit=300)  # Mrd USD, täglich
 
         if walcl and tga and rrp:
             fed_bs   = walcl[-1][1] / 1000.0   # Mio → Mrd
-            tga_v    = tga[-1][1]
+            tga_v    = tga[-1][1] / 1000.0     # Mio → Mrd
             rrp_v    = rrp[-1][1]
             net_liq  = round(fed_bs - tga_v - rrp_v, 1)
 
@@ -3257,7 +3257,7 @@ def fetch_fred_macro() -> dict:
                 # RRP: nächstliegender Tageswert
                 r_v = rrp_by_date.get(date_w)
                 if t is not None and r_v is not None:
-                    hist_nl.append((date_w, round(walcl_v / 1000.0 - t - r_v, 1)))
+                    hist_nl.append((date_w, round(walcl_v / 1000.0 - t / 1000.0 - r_v, 1)))
 
             nl_trend = None
             if len(hist_nl) >= 5:
