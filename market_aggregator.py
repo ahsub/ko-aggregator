@@ -2999,7 +2999,7 @@ def fetch_market_snapshot() -> dict:
 
     Holt via yf.download() (funktioniert von GitHub Actions):
     - US-Indizes:     SPY, QQQ, IWM
-    - Rohstoffe:      GC=F (Gold), SI=F (Silber), CL=F (Öl WTI), BZ=F (Brent), LI=F (Lithium Proxy → ALB)
+    - Rohstoffe:      GC=F (Gold), SI=F (Silber), CL=F (Öl WTI), BZ=F (Brent), PA=F (Palladium)
     - Krypto:         BTC-USD, ETH-USD
     - EU-Indizes:     ^GDAXI (DAX), ^STOXX50E (EuroStoxx50), ^FTSE (FTSE100)
     - Anleihen/USD:   ^TNX (10J Treasury Yield), DX-Y.NYB (USD Index)
@@ -3022,7 +3022,7 @@ def fetch_market_snapshot() -> dict:
         "oil_wti":  ("CL=F",       "Öl WTI ($/bbl)",       "commodity"),
         "oil_brent":("BZ=F",       "Öl Brent ($/bbl)",     "commodity"),
         "copper":   ("HG=F",       "Kupfer ($/lb)",        "commodity"),
-        "lithium":  ("ALB",        "Lithium-Proxy (ALB)",  "commodity"),
+        "palladium":("PA=F",       "Palladium ($/oz)",     "commodity"),
         # Krypto
         "btc":      ("BTC-USD",    "Bitcoin (USD)",        "crypto"),
         "eth":      ("ETH-USD",    "Ethereum (USD)",       "crypto"),
