@@ -2725,8 +2725,53 @@ def fetch_batch(tickers, period="1y", max_workers=12):
 
 # ── EXTERNE DATENQUELLEN ──────────────────────────────────────────────────────
 
-def fetch_dix_gex():
-    """Echter DIX/GEX von squeezemetrics (tägliche CSV)."""
+def fetch_dix_gex() -> dict:
+    """GEX via FlashAlpha API (lab.flashalpha.com) für SPY und QQQ.
+    Primär: FlashAlpha /gex/{ticker}/levels → gamma_flip, call_wall, put_wall, net_gex.
+    Fallback: squeezemetrics (historisch, oft 403).
+    DIX: kein öffentlicher Ersatz → interner Proxy aus SPY/QQQ OI-Ratio.
+    """
+    import os
+
+    fa_key = os.environ.get("FLASHALPHA_API_KEY", "")
+    if fa_key:
+        try:
+            results = {}
+            for ticker in ["SPY", "QQQ"]:
+                url = f"https://lab.flashalpha.com/gex/{ticker}/levels"
+                r = requests.get(url, headers={"X-Api-Key": fa_key}, timeout=15)
+                if r.status_code == 200:
+                    data = r.json()
+                    results[ticker] = data
+                    log.info(f"  FlashAlpha GEX {ticker}: flip={data.get('gamma_flip')}, "
+                             f"call_wall={data.get('call_wall')}, put_wall={data.get('put_wall')}")
+                else:
+                    log.warning(f"  FlashAlpha GEX {ticker}: HTTP {r.status_code}")
+
+            if results:
+                spy = results.get("SPY", {})
+                qqq = results.get("QQQ", {})
+                # Net GEX SPY als primärer Wert (in Mrd USD)
+                net_gex_spy = spy.get("net_gex") or spy.get("total_gex") or spy.get("gex")
+                net_gex_qqq = qqq.get("net_gex") or qqq.get("total_gex") or qqq.get("gex")
+                # GEX-Regime: positiv = Dealer long gamma (mean-reversion), negativ = short gamma (momentum)
+                gex_regime = "POSITIVE" if (net_gex_spy or 0) >= 0 else "NEGATIVE"
+                return {
+                    "gex":        round(float(net_gex_spy) / 1e9, 3) if net_gex_spy else None,
+                    "gex_qqq":   round(float(net_gex_qqq) / 1e9, 3) if net_gex_qqq else None,
+                    "gamma_flip": spy.get("gamma_flip"),
+                    "call_wall":  spy.get("call_wall"),
+                    "put_wall":   spy.get("put_wall"),
+                    "gex_regime": gex_regime,
+                    "dix":        None,   # kein öffentlicher Ersatz für DIX
+                    "date":       "live",
+                    "source":     "flashalpha",
+                    "proxy":      False,
+                }
+        except Exception as e:
+            log.warning(f"  FlashAlpha GEX nicht verfügbar: {e}")
+
+    # Fallback: squeezemetrics (oft 403 von GitHub Actions)
     try:
         url = "https://squeezemetrics.com/monitor/static/dix.csv"
         r = requests.get(url, timeout=10, headers={
@@ -2740,7 +2785,7 @@ def fetch_dix_gex():
             row     = dict(zip(headers, last))
             dix_val = float(row.get("dix", 0)) * 100
             gex_val = float(row.get("gex", 0))
-            log.info(f"  DIX: {dix_val:.1f}% | GEX: {gex_val/1e9:.2f} Mrd")
+            log.info(f"  DIX (squeezemetrics): {dix_val:.1f}% | GEX: {gex_val/1e9:.2f} Mrd")
             return {
                 "dix":    round(dix_val, 2),
                 "gex":    round(gex_val / 1e9, 3),
@@ -2751,6 +2796,7 @@ def fetch_dix_gex():
     except Exception as e:
         log.warning(f"  squeezemetrics nicht verfügbar: {e}")
     return None
+
 
 def fetch_pcr_cboe():
     """Echter Put/Call Ratio von CBOE (tägliche CSV).
