@@ -2787,7 +2787,8 @@ def fetch_dix_gex() -> dict:
             elif r.status_code == 402:
                 log.warning(f"  FlashAlpha: 402 — {test_ticker} erfordert höheres Tier")
             elif r.status_code == 429:
-                log.warning(f"  FlashAlpha: 429 Rate Limit — Retry-After: {r.headers.get("Retry-After","?")}s")
+                retry_after = r.headers.get('Retry-After', '?')
+                log.warning(f"  FlashAlpha: 429 Rate Limit — Retry-After: {retry_after}s")
             else:
                 log.warning(f"  FlashAlpha: HTTP {r.status_code} — {r.text[:120]}")
         except Exception as e:
