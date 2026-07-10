@@ -3038,20 +3038,34 @@ def fetch_market_snapshot() -> dict:
 
     try:
         log.info(f"  Lade Market Snapshot ({len(syms_yf)} Symbole)…")
-        df = yf.download(syms_yf, period="3d", interval="1d",
+        df = yf.download(syms_yf, period="5d", interval="1d",
                          auto_adjust=True, progress=False, threads=True)
 
         close = df["Close"] if "Close" in df.columns else df.xs("Close", axis=1, level=0)
-        latest = close.iloc[-1]
-        prev    = close.iloc[-2] if len(close) >= 2 else close.iloc[-1]
+
+        def _last_valid(series):
+            """Letzten NICHT-NaN Wert einer Spalte finden (rückwärts).
+            Nötig weil Yahoo für Aktien/ETFs/Indizes vor US-Marktöffnung oft
+            eine leere 'heute'-Zeile anhängt (NaN), während 24/7-Märkte
+            (Rohstoffe/Krypto/FX) immer frische Werte haben. Ohne diesen Fix
+            fallen alle Equity-Symbole aus, wenn der Aggregator früh läuft
+            (z.B. planmäßiger Cron 03:37 UTC, 8h vor NYSE-Open)."""
+            for i in range(len(series) - 1, -1, -1):
+                v = series.iloc[i]
+                if v == v:  # NaN-Check (NaN != NaN)
+                    return float(v), i
+            return None, None
 
         ok_count = 0
         for key, (yf_sym, label, category) in SYMBOLS.items():
             try:
-                price = float(latest[yf_sym])
-                price_prev = float(prev[yf_sym])
-                if price != price:  # NaN check
-                    raise ValueError("NaN")
+                if yf_sym not in close.columns:
+                    raise KeyError(yf_sym)
+                col = close[yf_sym]
+                price, idx = _last_valid(col)
+                if price is None or idx == 0:
+                    raise ValueError("kein gültiger Wert oder keine Vorperiode")
+                price_prev, _ = _last_valid(col.iloc[:idx])
                 chg_pct = round((price / price_prev - 1) * 100, 2) if price_prev else None
                 snapshot[key] = {
                     "sym":      yf_sym,
