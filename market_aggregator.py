@@ -3190,16 +3190,17 @@ def _finra_get_token(client_id: str, client_secret: str) -> str:
 def fetch_finra_dix() -> dict:
     """Echter DIX (Dark Pool Index) via FINRA Query API — regShoDaily-Dataset.
 
-    Ersetzt die tote SqueezeMetrics-Quelle (HTTP 403) durch die offizielle,
-    dokumentierte FINRA-API-Plattform. Methodik nach SqueezeMetrics-Whitepaper
-    "Short is Long": Short-Volumen relativ zum Gesamtvolumen, aggregiert über
-    einen liquiden ETF-Korb (SPY/QQQ/IWM/DIA) als Marktbreite-Proxy —
-    vereinfacht ggü. voller S&P-500-Gewichtung, aber echte Daten statt Heuristik.
+    v3 (10.07.2026, nach zwei Testläufen): Echte Feldnamen jetzt bekannt
+    (securitiesInformationProcessorSymbolIdentifier, totalParQuantity,
+    shortParQuantity, tradeReportDate, reportingFacilityCode, marketCode).
+    Ein Symbol kann MEHRERE Zeilen haben (je Marktzentrum/TRF) — werden
+    aufsummiert. Kein Datum im ersten Batch (5000 Zeilen) gefunden für unsere
+    4 Ticker → Pagination über mehrere Seiten statt Filter-Payload-Raten
+    (FINRA's compareFilter-Syntax bleibt unklar, GET+Pagination ist dokumentiert
+    und robust).
 
-    v2 (10.07.2026, nach erstem Testlauf): Kein serverseitiges Filter-Payload
-    mehr (Format war falsch geraten, HTTP 400). Stattdessen: einfacher GET ohne
-    Filter, Client-seitige Filterung auf unsere 4 Ticker. Robuster, weil kein
-    Rätselraten über FINRA's compareFilter-Syntax nötig.
+    Methodik nach SqueezeMetrics-Whitepaper "Short is Long": Short-Volumen
+    relativ zum Gesamtvolumen, ETF-Korb (SPY/QQQ/IWM/DIA) als Marktbreite-Proxy.
 
     Benötigt Secrets: FINRA_CLIENT_ID, FINRA_CLIENT_SECRET
     """
@@ -3213,6 +3214,10 @@ def fetch_finra_dix() -> dict:
         return {"ok": False, "reason": "keine Zugangsdaten"}
 
     TICKERS = {"SPY", "QQQ", "IWM", "DIA"}
+    SYM_FIELD = "securitiesInformationProcessorSymbolIdentifier"
+    SHORT_FIELD = "shortParQuantity"
+    TOTAL_FIELD = "totalParQuantity"
+    DATE_FIELD = "tradeReportDate"
 
     try:
         token = _finra_get_token(client_id, client_secret)
@@ -3222,94 +3227,86 @@ def fetch_finra_dix() -> dict:
 
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     data_url = "https://api.finra.org/data/group/otcMarket/name/regShoDaily"
-    meta_url = "https://api.finra.org/metadata/group/otcMarket/name/regShoDaily"
 
-    # Diagnose: Metadata loggen (Feldnamen), nicht kritisch wenn's fehlschlägt
-    try:
-        rm = requests.get(meta_url, headers=headers, timeout=15)
-        if rm.status_code == 200:
-            meta_json = rm.json()
-            field_names = [f.get("name") for f in meta_json.get("fields", meta_json if isinstance(meta_json, list) else [])][:20]
-            log.info(f"  FINRA regShoDaily Felder (Metadata): {field_names}")
-        else:
-            log.info(f"  FINRA Metadata: HTTP {rm.status_code} (nicht kritisch)")
-    except Exception as e:
-        log.info(f"  FINRA Metadata-Abruf fehlgeschlagen (nicht kritisch): {e}")
-
-    total_short = 0.0
-    total_volume = 0.0
-    per_ticker = {}
+    all_rows = []
+    MAX_PAGES = 8
+    PAGE_SIZE = 5000
 
     try:
-        # Einfacher GET ohne Filter — vermeidet Rätselraten über Filter-Syntax.
-        # limit möglichst hoch, Client-seitig auf unsere 4 Ticker filtern.
-        r = requests.get(data_url, headers=headers, params={"limit": 5000}, timeout=30)
-        if r.status_code != 200:
-            log.warning(f"  FINRA regShoDaily: HTTP {r.status_code} — {r.text[:200]}")
-            return {"ok": False, "reason": f"HTTP {r.status_code}: {r.text[:150]}"}
+        for page in range(MAX_PAGES):
+            r = requests.get(data_url, headers=headers,
+                             params={"limit": PAGE_SIZE, "offset": page * PAGE_SIZE},
+                             timeout=30)
+            if r.status_code != 200:
+                log.warning(f"  FINRA regShoDaily Seite {page}: HTTP {r.status_code} — {r.text[:150]}")
+                break
+            rows = r.json()
+            if not isinstance(rows, list) or not rows:
+                break
+            all_rows.extend(rows)
+            total_hdr = r.headers.get("Record-Total")
+            log.info(f"  FINRA Seite {page}: {len(rows)} Zeilen (Record-Total Header: {total_hdr})")
+            if len(rows) < PAGE_SIZE:
+                break  # letzte Seite erreicht
+            # Sobald unsere Ticker in den bisherigen Zeilen auftauchen, reicht's
+            found_syms = {row.get(SYM_FIELD) for row in all_rows}
+            if TICKERS.issubset(found_syms):
+                log.info(f"  FINRA: alle 4 Ticker nach Seite {page} gefunden, breche Pagination ab")
+                break
 
-        rows = r.json()
-        if not isinstance(rows, list) or not rows:
-            log.warning("  FINRA regShoDaily: leere/unerwartete Antwort")
-            return {"ok": False, "reason": "leere Antwort", "raw_sample": str(rows)[:300]}
+        if not all_rows:
+            return {"ok": False, "reason": "keine Zeilen über alle Seiten erhalten"}
 
-        # Erste Zeile loggen — zeigt uns die ECHTEN Feldnamen für nächste Iteration
-        log.info(f"  FINRA regShoDaily: {len(rows)} Zeilen erhalten. Beispiel-Zeile: {rows[0]}")
+        # Neuestes Datum ermitteln (T+1-Meldeverzug — "heute" evtl. noch nicht da)
+        dates_seen = {row.get(DATE_FIELD) for row in all_rows if row.get(DATE_FIELD)}
+        latest_date = max(dates_seen) if dates_seen else None
 
-        # Möglichst tolerant nach Symbol-Feld suchen (Name unbekannt bis wir echte Daten sehen)
-        def _find_symbol(row):
-            for k in ["symbolCode", "symbol", "securitySymbol", "issueSymbolIdentifier",
-                      "securitiesInformationProcessorSymbolIdentifier"]:
-                if k in row:
-                    return row[k]
-            # Fallback: irgendein Feld das nach "symbol" klingt
-            for k, v in row.items():
-                if "symbol" in k.lower() and isinstance(v, str):
-                    return v
-            return None
+        # Pro Ticker über ALLE Marktzentren/TRFs summieren, nur neuestes Datum
+        total_short = 0.0
+        total_volume = 0.0
+        per_ticker = {}
+        matched_syms = set()
 
-        def _find_num(row, candidates):
-            for k in candidates:
-                if k in row and row[k] is not None:
-                    try:
-                        return float(row[k])
-                    except (TypeError, ValueError):
-                        pass
-            return None
-
-        matched = 0
-        for row in rows:
-            sym = _find_symbol(row)
+        for row in all_rows:
+            sym = row.get(SYM_FIELD)
             if sym not in TICKERS:
                 continue
-            short_vol = _find_num(row, ["shortVolume", "shortParValue", "totalShortVolume"])
-            total_vol = _find_num(row, ["totalVolume", "totalParValue", "marketParticipantVolume"])
-            if sym and total_vol:
-                per_ticker[sym] = {"short": short_vol, "total": total_vol,
-                                    "pct": round(short_vol / total_vol * 100, 2) if short_vol else None}
-                total_short += short_vol or 0
-                total_volume += total_vol
-                matched += 1
+            if latest_date and row.get(DATE_FIELD) != latest_date:
+                continue
+            short_v = float(row.get(SHORT_FIELD) or 0)
+            total_v = float(row.get(TOTAL_FIELD) or 0)
+            if total_v <= 0:
+                continue
+            matched_syms.add(sym)
+            entry = per_ticker.setdefault(sym, {"short": 0.0, "total": 0.0})
+            entry["short"] += short_v
+            entry["total"] += total_v
+            total_short += short_v
+            total_volume += total_v
 
-        if matched == 0:
-            log.warning(f"  FINRA DIX: keine unserer Ticker {TICKERS} in {len(rows)} Zeilen gefunden — "
-                        f"evtl. Pagination nötig oder Feldnamen falsch. Beispiel-Keys: {list(rows[0].keys())}")
-            return {"ok": False, "reason": "Ticker nicht in Antwort gefunden",
-                    "sample_keys": list(rows[0].keys()), "n_rows": len(rows)}
+        log.info(f"  FINRA DIX: {len(all_rows)} Zeilen total über {page+1} Seite(n), "
+                 f"neuestes Datum {latest_date}, {len(matched_syms)}/{len(TICKERS)} Ticker gefunden: {sorted(matched_syms)}")
 
-        if total_volume == 0:
-            return {"ok": False, "reason": "keine verwertbaren Datensätze"}
+        if not matched_syms or total_volume == 0:
+            sample = all_rows[0] if all_rows else {}
+            return {"ok": False,
+                    "reason": f"Ticker nicht gefunden (Datum {latest_date}, {len(all_rows)} Zeilen durchsucht)",
+                    "sample_keys": list(sample.keys()), "n_rows": len(all_rows)}
+
+        for sym, v in per_ticker.items():
+            v["pct"] = round(v["short"] / v["total"] * 100, 2) if v["total"] else None
 
         dix_pct = round(total_short / total_volume * 100, 2)
-        log.info(f"  FINRA DIX (echt, ETF-Korb {sorted(TICKERS)}): {dix_pct}% "
-                 f"(Short {total_short:.0f} / Total {total_volume:.0f}, {matched}/{len(TICKERS)} Ticker gefunden)")
+        log.info(f"  FINRA DIX (echt): {dix_pct}% am {latest_date} "
+                 f"(Short {total_short:.0f} / Total {total_volume:.0f})")
 
         return {
             "ok": True,
             "dix": dix_pct,
+            "date": latest_date,
             "perTicker": per_ticker,
-            "basket": sorted(TICKERS),
-            "methodology": "ETF-Korb-Proxy (SPY/QQQ/IWM/DIA), nicht volle S&P-500-Gewichtung",
+            "basket": sorted(matched_syms),
+            "methodology": "ETF-Korb-Proxy (SPY/QQQ/IWM/DIA), Summe über alle Marktzentren/TRFs",
             "source": "finra_regshodaily",
             "proxy": False,
         }
