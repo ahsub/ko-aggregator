@@ -1,6 +1,6 @@
 # GEX-SCHEMA.md — UIQ GEX/Options-Struktur Datenschema
 
-**Version:** v0.3
+**Version:** v0.4
 **Status:** Brainstorming-Ergebnis + Context-Inventur verifiziert, NOCH NICHT implementiert
 **Datum:** 2026-07-10
 **Ablageort:** `ahsub/ko-aggregator/docs/GEX-SCHEMA.md`
@@ -206,12 +206,49 @@ eigene Design-Session vor Implementierung. Unverändert seit v0.2.
 
 ```
 Prio 1: Quiver Quant API (~$20/mo, post-Monetisierung)  → source: quiver_quant
+Prio 1b: IBKR/CapTrader Optionsketten (bereits vorhanden!) → source: ibkr_chain
 Prio 2: PCR als DIX-Proxy + OI-approximiertes GEX       → source: proxy
 Prio 3: Volume-Ratio-Proxy (upVol-downVol)/totalVol     → source: proxy
         (aggregator-seitig in Python, NICHT im Frontend)
 ```
 
 `source`-Feld macht die Vertrauensstufe für MB-Prompt und Frontend transparent.
+
+### Prio 1b — IBKR/CapTrader Optionsketten (neu, 10.07.2026)
+
+Aus Pine-Script-Review entdeckt: Zwei Community-Scripts ("Options Volume Profile",
+"Options Volume [theUltimator5]") bauen echte OCC-Options-Ticker-Symbole
+(z.B. `SPY250421C450000`) und holen darüber **echtes** Volumen/Preis via
+`request.security()` — keine Heuristik. Voraussetzung dort: TradingView-Account
+mit kostenpflichtigem Options-Datenfeed.
+
+**Der eigentlich interessante Punkt:** Axel hat bereits echten Optionsketten-
+Zugriff über **CapTrader/IBKR** für sein eigenes Wheel/CSP-Trading — bezahlt und
+vorhanden, unabhängig von Quiver Quant. Falls die IBKR-API Open-Interest/Volumen
+pro Strike liefert (zu verifizieren — TWS API / Client Portal API haben
+grundsätzlich Optionsketten-Endpunkte), könnte ein serverseitiger POC/VAH/
+Max-Pain-Rechner in Python auf **echten** Daten aufbauen, ohne zusätzliches
+Abo. Potenziell günstigerer Weg als Prio 1.
+
+**Einschränkung:** Vermutlich nur für die Ticker praktikabel, die Axel aktiv
+handelt (SPY/QQQ/Wheel-Kandidaten) — keine marktweite S&P-500-Abdeckung wie
+bei einem dedizierten Datenanbieter. Für UIQs Scan-Zweck (viele Ticker) evtl.
+nicht ausreichend, für einen fokussierten "Options-Radar" (siehe SUITE.md
+Backlog №7/№8, Inverse-Problem-Register) aber potenziell ideal.
+
+**Noch nicht verifiziert:** Ob IBKR/CapTrader-API tatsächlich Open-Interest
+pro Strike liefert (nicht nur Kurs/Volumen), und ob eine automatisierte,
+regelmäßige Abfrage im Rahmen der bestehenden Nutzungsbedingungen liegt.
+
+### Warnung: Fabrizierte Alternative gefunden und verworfen
+
+Ein drittes Script ("Options Max Pain Calculator [BackQuant]") sieht seriös aus,
+ist aber komplett synthetisch: `estimate_oi_simple()` modelliert Open Interest
+über eine erfundene Distanz-Zerfallsformel (`base_factor = 1/(1+distance_pct*8)`),
+alle Basis-Parameter (Volumen, Put/Call-Ratio, IV) sind Rate-Inputs ohne echte
+Datenquelle. Gleiche Kategorie wie die am 10.07. bereits zurückgestufte
+DIX/GEX-Volumen-Heuristik in `ko-darkpool.js` — **nicht** als Datenquelle
+verwenden, auch nicht als Inspiration für eine "bessere" Heuristik.
 
 **Ergänzung v0.3:** Diese Kaskade betrifft ausschließlich das eigentliche
 GEX/Options-Struktur-Schema (§3). Der PCR-Proxy in `context.pcr` (§3b) ist
@@ -252,3 +289,4 @@ bereits produktiv in Aggregator v4.9 (`calc_pcr_proxy()`, VIX/VVIX-basiert)
 | v0.1 | 2026-07-10 | Erster Entwurf (7 Expiry-Scheiben, 7 Context-Felder) |
 | v0.2 | 2026-07-10 | Eindampfung: 3 Expiry-Scheiben, 4 Context-Felder, pinForce nur in verdict, Verdict-Generierung deterministisch festgelegt |
 | v0.3 | 2026-07-10 | Context-Inventur (§7.1) gegen Aggregator v4.9 verifiziert und abgeschlossen; `context{}` um 9 Felder erweitert (Z-Scores, SKEW/VVIX-Divergenz, FRED-Makro, echte Zinskurve) statt Parallelstruktur; `pcrSource`-Feld als Pflichtfeld ergänzt (Proxy-Transparenz); Querverweise zu parallel abgeschlossener ko-indicators.json-Bereinigung und ko-darkpool.js-Heuristik-Entscheidung ergänzt |
+| v0.4 | 2026-07-10 | §6 Datenquellen-Kaskade um Prio 1b ergänzt: IBKR/CapTrader-Optionsketten als potenziell günstigere Alternative zu Quiver Quant (aus Pine-Script-Review entdeckt, noch unverifiziert ob Open-Interest-Daten verfügbar). Warnung zu einem dritten, komplett fabrizierten "Max Pain"-Script ergänzt (gleiche Kategorie wie die bereits zurückgestufte DIX/GEX-Heuristik). |
