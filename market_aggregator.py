@@ -3172,32 +3172,112 @@ def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = Non
     return result
 
 
-def test_finra_reachability() -> dict:
-    """EINMALIGER TEST (10.07.2026) — prüft ob regsho.finra.org von GitHub Actions
-    aus erreichbar ist. Hintergrund: CBOE blockiert GitHub-Actions-IPs (HTTP 403),
-    Frage ist ob FINRA das genauso handhabt. Ergebnis nur fürs Log, NICHT in
-    master_market_data.json aufgenommen — reiner Recherche-Test.
-    Quelle: jensolson/Dark-Pool-Buying (GitHub, aktiv gepflegt) nutzt exakt diese
-    URLs für eine echte FINRA-basierte DIX-Berechnung (kein Heuristik-Proxy).
+def _finra_get_token(client_id: str, client_secret: str) -> str:
+    """OAuth2 Client-Credentials-Flow für die FINRA API Platform.
+    Token ist laut FINRA-Doku ca. 12h gültig (expires_in in Sekunden).
+    Sollte pro Aggregator-Lauf einmal geholt werden (kein Caching zwischen
+    Läufen nötig — ein Run dauert Sekunden, nicht Stunden).
     """
-    import datetime
-    today = datetime.date.today()
-    date_str = today.strftime("%Y%m%d")
-    results = {}
-    for name, url in [
-        ("FNSQ (Nasdaq TRF)", f"http://regsho.finra.org/FNSQshvol{date_str}.txt"),
-        ("FNYX (NYSE TRF)",   f"http://regsho.finra.org/FNYXshvol{date_str}.txt"),
-    ]:
-        try:
-            r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            preview = r.text[:200].replace("\n", " | ") if r.status_code == 200 else ""
-            results[name] = {"status": r.status_code, "bytes": len(r.content), "preview": preview}
-            log.info(f"  FINRA-Test {name}: HTTP {r.status_code} | {len(r.content)} Bytes")
-            if preview:
-                log.info(f"    Vorschau: {preview[:150]}")
-        except Exception as e:
-            results[name] = {"status": None, "error": str(e)[:150]}
-            log.warning(f"  FINRA-Test {name}: Fehler — {e}")
+    import base64 as b64
+    auth_str = b64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    url = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
+    r = requests.post(url, headers={"Authorization": f"Basic {auth_str}"}, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    return data["access_token"]
+
+
+def fetch_finra_dix() -> dict:
+    """Echter DIX (Dark Pool Index) via FINRA Query API — regShoDaily-Dataset.
+
+    Ersetzt die tote SqueezeMetrics-Quelle (HTTP 403) durch die offizielle,
+    dokumentierte FINRA-API-Plattform (Nachfolger der alten .txt-Dateien unter
+    regsho.finra.org, die inzwischen auf ein interaktives Web-Grid umgestellt
+    wurden). Methodik nach SqueezeMetrics-Whitepaper "Short is Long":
+    dollar-gewichtetes Short-Volumen relativ zum Gesamtvolumen, aggregiert über
+    einen liquiden ETF-Korb (SPY/QQQ/IWM/DIA) als Marktbreite-Proxy — vereinfacht
+    gegenüber der vollen S&P-500-Konstituenten-Gewichtung von SqueezeMetrics,
+    aber echte Daten statt Heuristik.
+
+    Benötigt Secrets: FINRA_CLIENT_ID, FINRA_CLIENT_SECRET
+    (Individual-User-Account, Public-Credential-Typ, kostenlos laut FINRA-Doku)
+    """
+    import os
+
+    client_id = os.environ.get("FINRA_CLIENT_ID", "")
+    client_secret = os.environ.get("FINRA_CLIENT_SECRET", "")
+
+    if not client_id or not client_secret:
+        log.warning("  FINRA DIX: FINRA_CLIENT_ID/SECRET nicht gesetzt — übersprungen")
+        return {"ok": False, "reason": "keine Zugangsdaten"}
+
+    # Liquider ETF-Korb als Marktbreite-Proxy (statt volle S&P-500-Gewichtung)
+    TICKERS = ["SPY", "QQQ", "IWM", "DIA"]
+
+    try:
+        token = _finra_get_token(client_id, client_secret)
+    except Exception as e:
+        log.warning(f"  FINRA OAuth2-Token-Fehler: {e}")
+        return {"ok": False, "reason": f"Token-Fehler: {str(e)[:150]}"}
+
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    url = "https://api.finra.org/data/group/otcMarket/name/regShoDaily"
+
+    total_short = 0.0
+    total_volume = 0.0
+    per_ticker = {}
+
+    try:
+        # POST mit Filter auf unsere 4 Ticker (spart Payload ggü. Vollabfrage)
+        payload = {
+            "limit": 10,
+            "compareFilters": [
+                {"fieldName": "securitiesInformationProcessorSymbolIdentifier",
+                 "fieldValue": TICKERS, "compareType": "EQUAL"}
+            ],
+        }
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+        if r.status_code != 200:
+            log.warning(f"  FINRA regShoDaily: HTTP {r.status_code} — {r.text[:200]}")
+            return {"ok": False, "reason": f"HTTP {r.status_code}: {r.text[:150]}"}
+
+        rows = r.json()
+        if not isinstance(rows, list) or not rows:
+            log.warning("  FINRA regShoDaily: leere/unerwartete Antwort")
+            return {"ok": False, "reason": "leere Antwort", "raw_sample": str(rows)[:300]}
+
+        # Feldnamen sind vom exakten Schema abhängig — robust mit .get() + Fallback-Keys
+        for row in rows:
+            sym = row.get("securitiesInformationProcessorSymbolIdentifier") or row.get("symbolCode") or row.get("symbol")
+            short_vol = float(row.get("shortParValue") or row.get("shortVolume") or 0)
+            total_vol = float(row.get("totalParValue") or row.get("totalVolume") or 0)
+            if sym and total_vol:
+                per_ticker[sym] = {"short": short_vol, "total": total_vol,
+                                    "pct": round(short_vol / total_vol * 100, 2)}
+                total_short += short_vol
+                total_volume += total_vol
+
+        if total_volume == 0:
+            return {"ok": False, "reason": "keine verwertbaren Datensätze",
+                    "raw_sample": str(rows[:2])[:500]}
+
+        dix_pct = round(total_short / total_volume * 100, 2)
+        log.info(f"  FINRA DIX (echt, ETF-Korb {TICKERS}): {dix_pct}% "
+                 f"(Short {total_short:.0f} / Total {total_volume:.0f})")
+
+        return {
+            "ok": True,
+            "dix": dix_pct,
+            "perTicker": per_ticker,
+            "basket": TICKERS,
+            "methodology": "ETF-Korb-Proxy (SPY/QQQ/IWM/DIA), nicht volle S&P-500-Gewichtung",
+            "source": "finra_regshodaily",
+            "proxy": False,
+        }
+
+    except Exception as e:
+        log.warning(f"  FINRA regShoDaily Fehler: {e}")
+        return {"ok": False, "reason": str(e)[:200]}
     return results
 
 
@@ -3636,12 +3716,21 @@ def main():
     log.info(f"  Berechne Makro Z-Scores + Perzentile (252T-Kontext)...")
     macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term)
 
-    # ── FRED Makro (HY-Spread, Net Liquidity) + MOVE Index ───────────────────
-    log.info(f"  FINRA-Erreichbarkeitstest (einmalig, 10.07.2026 — DIX-Recherche)...")
+    # ── FINRA DIX (echt, statt SqueezeMetrics/Heuristik) ─────────────────────
+    log.info(f"  FINRA DIX (regShoDaily, ETF-Korb)...")
     try:
-        test_finra_reachability()
+        finra_dix = fetch_finra_dix()
     except Exception as _e:
-        log.warning(f"  FINRA-Test fehlgeschlagen: {_e}")
+        log.warning(f"  FINRA DIX fehlgeschlagen: {_e}")
+        finra_dix = {"ok": False, "reason": str(_e)[:200]}
+
+    if finra_dix.get("ok"):
+        dix_gex["dix"] = finra_dix["dix"]
+        dix_gex["dixSource"] = "finra_regshodaily"
+        dix_gex["dixMethodology"] = finra_dix.get("methodology")
+        dix_gex["dixPerTicker"] = finra_dix.get("perTicker")
+    else:
+        dix_gex["dixUnavailableReason"] = finra_dix.get("reason")
 
     log.info(f"  FRED Makro-Parameter (HY-Spread, Net Liquidity)...")
     fred_macro = fetch_fred_macro()
