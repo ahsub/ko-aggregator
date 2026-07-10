@@ -3172,6 +3172,35 @@ def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = Non
     return result
 
 
+def test_finra_reachability() -> dict:
+    """EINMALIGER TEST (10.07.2026) — prüft ob regsho.finra.org von GitHub Actions
+    aus erreichbar ist. Hintergrund: CBOE blockiert GitHub-Actions-IPs (HTTP 403),
+    Frage ist ob FINRA das genauso handhabt. Ergebnis nur fürs Log, NICHT in
+    master_market_data.json aufgenommen — reiner Recherche-Test.
+    Quelle: jensolson/Dark-Pool-Buying (GitHub, aktiv gepflegt) nutzt exakt diese
+    URLs für eine echte FINRA-basierte DIX-Berechnung (kein Heuristik-Proxy).
+    """
+    import datetime
+    today = datetime.date.today()
+    date_str = today.strftime("%Y%m%d")
+    results = {}
+    for name, url in [
+        ("FNSQ (Nasdaq TRF)", f"http://regsho.finra.org/FNSQshvol{date_str}.txt"),
+        ("FNYX (NYSE TRF)",   f"http://regsho.finra.org/FNYXshvol{date_str}.txt"),
+    ]:
+        try:
+            r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            preview = r.text[:200].replace("\n", " | ") if r.status_code == 200 else ""
+            results[name] = {"status": r.status_code, "bytes": len(r.content), "preview": preview}
+            log.info(f"  FINRA-Test {name}: HTTP {r.status_code} | {len(r.content)} Bytes")
+            if preview:
+                log.info(f"    Vorschau: {preview[:150]}")
+        except Exception as e:
+            results[name] = {"status": None, "error": str(e)[:150]}
+            log.warning(f"  FINRA-Test {name}: Fehler — {e}")
+    return results
+
+
 def fetch_fred_macro() -> dict:
     """Makro-Parameter via FRED-API (kostenlos, Regierungsquelle, kein IP-Blocking).
 
@@ -3608,6 +3637,12 @@ def main():
     macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term)
 
     # ── FRED Makro (HY-Spread, Net Liquidity) + MOVE Index ───────────────────
+    log.info(f"  FINRA-Erreichbarkeitstest (einmalig, 10.07.2026 — DIX-Recherche)...")
+    try:
+        test_finra_reachability()
+    except Exception as _e:
+        log.warning(f"  FINRA-Test fehlgeschlagen: {_e}")
+
     log.info(f"  FRED Makro-Parameter (HY-Spread, Net Liquidity)...")
     fred_macro = fetch_fred_macro()
     log.info(f"  MOVE Index (Treasury-Vol)...")
