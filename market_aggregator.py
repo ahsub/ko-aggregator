@@ -3769,6 +3769,12 @@ def main():
         dix_gex["dixPerTicker"] = finra_dix.get("perTicker")
     else:
         dix_gex["dixUnavailableReason"] = finra_dix.get("reason")
+        if "sample_keys" in finra_dix:
+            dix_gex["dixDebugSampleKeys"] = finra_dix["sample_keys"]
+        if "n_rows" in finra_dix:
+            dix_gex["dixDebugNRows"] = finra_dix["n_rows"]
+        if "raw_sample" in finra_dix:
+            dix_gex["dixDebugRawSample"] = finra_dix["raw_sample"]
 
     log.info(f"  FRED Makro-Parameter (HY-Spread, Net Liquidity)...")
     fred_macro = fetch_fred_macro()
