@@ -38,6 +38,8 @@ jobs:
           ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
           FLASHALPHA_API_KEY:   ${{ secrets.FLASHALPHA_API_KEY }}
           FRED_API_KEY:         ${{ secrets.FRED_API_KEY }}
+          FINRA_CLIENT_ID:      ${{ secrets.FINRA_CLIENT_ID }}
+          FINRA_CLIENT_SECRET:  ${{ secrets.FINRA_CLIENT_SECRET }}
           PYTHONUNBUFFERED:     "1"
         run: |
           python market_aggregator.py
