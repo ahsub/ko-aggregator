@@ -3266,36 +3266,57 @@ def resolve_company_name_to_ticker(name: str) -> dict:
     das per Browser-fetch() an CORS-Beschränkungen gebunden ist). Gleiche
     Filterlogik wie das Frontend-Pendant (searchTickerByName in index.html):
     nur EQUITY-Quotes, keine Indizes/Forex, keine ISIN-artigen Symbole.
+
+    Fallback (11.07.2026, nach Praxis-Test): Aktienklassen-Zusätze ("Class A",
+    "Class B", "Class C") verwirren Yahoo's Fuzzy-Suche teils (z.B. "Palantir
+    Technologies Inc. Class A" fand keinen Treffer, "Palantir Technologies
+    Inc." allein schon). Bei Fehlschlag wird automatisch ohne diesen Zusatz
+    erneut gesucht, bevor endgültig aufgegeben wird.
     """
-    try:
-        r = requests.get(
-            "https://query1.finance.yahoo.com/v1/finance/search",
-            params={"q": name, "lang": "en", "region": "US", "quotesCount": 5, "newsCount": 0},
-            timeout=10, headers={"User-Agent": "Mozilla/5.0"},
-        )
-        if r.status_code != 200:
-            return {"ok": False, "reason": f"HTTP {r.status_code}"}
-        quotes = r.json().get("quotes", [])
-        filtered = []
-        for q in quotes:
-            if q.get("quoteType") != "EQUITY":
-                continue
-            sym = q.get("symbol", "")
-            if not sym or "^" in sym or "=" in sym:
-                continue
-            # ISIN-Filter: 12 Zeichen, beginnt mit 2 Buchstaben
-            if len(sym) == 12 and sym[:2].isalpha() and sym[2:].isalnum():
-                continue
-            if len(sym.replace(".", "").replace("-", "")) > 7:
-                continue
-            filtered.append(q)
-        if not filtered:
-            return {"ok": False, "reason": "kein Treffer"}
-        best = filtered[0]
-        return {"ok": True, "ticker": best.get("symbol"),
-                "name": best.get("shortname") or best.get("longname")}
-    except Exception as e:
-        return {"ok": False, "reason": str(e)[:150]}
+    def _search_once(query):
+        try:
+            r = requests.get(
+                "https://query1.finance.yahoo.com/v1/finance/search",
+                params={"q": query, "lang": "en", "region": "US", "quotesCount": 5, "newsCount": 0},
+                timeout=10, headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if r.status_code != 200:
+                return {"ok": False, "reason": f"HTTP {r.status_code}"}
+            quotes = r.json().get("quotes", [])
+            filtered = []
+            for q in quotes:
+                if q.get("quoteType") != "EQUITY":
+                    continue
+                sym = q.get("symbol", "")
+                if not sym or "^" in sym or "=" in sym:
+                    continue
+                if len(sym) == 12 and sym[:2].isalpha() and sym[2:].isalnum():
+                    continue
+                if len(sym.replace(".", "").replace("-", "")) > 7:
+                    continue
+                filtered.append(q)
+            if not filtered:
+                return {"ok": False, "reason": "kein Treffer"}
+            best = filtered[0]
+            return {"ok": True, "ticker": best.get("symbol"),
+                    "name": best.get("shortname") or best.get("longname")}
+        except Exception as e:
+            return {"ok": False, "reason": str(e)[:150]}
+
+    result = _search_once(name)
+    if result.get("ok"):
+        return result
+
+    # Fallback: Aktienklassen-Zusätze entfernen und erneut versuchen
+    import re as _re
+    simplified = _re.sub(r"\s+Class\s+[A-Z]$", "", name).strip()
+    if simplified != name:
+        fallback = _search_once(simplified)
+        if fallback.get("ok"):
+            fallback["reason"] = f"Fallback ohne Klassen-Zusatz (Original: '{name}')"
+            return fallback
+
+    return result
 
 
 def parse_ssga_holdings_xlsx(filepath: str, top_n: int = 15) -> list:
