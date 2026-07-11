@@ -169,6 +169,15 @@ except Exception:
     pass
 
 import socket
+
+# Pattern/Entry-Engine (10.07.2026, Pine-Script-Review) — echte VCP/Pocket-Pivot/
+# Darvas-Mustererkennung + Entry-Timing. Datei liegt im selben Repo (Root-Ebene).
+try:
+    from ios_pattern_entry_engine import score_pattern_setup, score_entry_timing
+    _PATTERN_ENGINE_AVAILABLE = True
+except ImportError as _e:
+    logging.getLogger(__name__).warning(f"ios_pattern_entry_engine nicht ladbar: {_e}")
+    _PATTERN_ENGINE_AVAILABLE = False
 socket.setdefaulttimeout(30)  # 30s: genug für 2y-Downloads, aber keine ewigen Hänger
 
 logging.basicConfig(
@@ -2660,6 +2669,37 @@ def process_ticker(ticker, hist_df):
             obv_tr, overh, p_bull2bear, rsiv
         )
 
+        # ── Pattern/Entry-Engine (10.07.2026, Pine-Script-Review) ────────────
+        # VCP/Pocket-Pivot/Darvas-Mustererkennung + Entry-Timing. Braucht volle
+        # Serien (nicht nur Punktwerte) — zusätzliche EMA/SMA-Berechnungen sind
+        # billig (O(n) auf ~500 Bars), lohnt sich ggü. dem Analysewert.
+        pattern_entry = None
+        if _PATTERN_ENGINE_AVAILABLE:
+            try:
+                ema9_series   = ema(closes, 9)
+                ema21_series  = ema(closes, 21)
+                sma50_series  = sma(closes, 50)
+                sma150_series = sma(closes, 150)
+                sma200_series = sma(closes, 200)
+                # score_entry_timing() nutzt RSI nur als Punktwert (kein Zeitreihen-
+                # Vergleich intern) — gepolsterte Liste reicht, kein neuer RSI-Serien-
+                # Rechner nötig.
+                rsi_padded = [None] * (len(closes) - 1) + [rsiv]
+
+                pattern_result = score_pattern_setup(
+                    closes, highs, lows, volumes,
+                    ema21_series, sma50_series, sma150_series, sma200_series,
+                )
+                entry_result = score_entry_timing(
+                    closes, highs, lows, volumes,
+                    ema9_series, ema21_series, sma50_series, sma150_series, sma200_series,
+                    rsi_padded,
+                )
+                pattern_entry = {"pattern": pattern_result, "entry": entry_result}
+            except Exception as _pe_err:
+                pattern_entry = {"pattern": {"ok": False, "reason": str(_pe_err)[:200]},
+                                  "entry":   {"ok": False, "reason": str(_pe_err)[:200]}}
+
         result = {
             "sym":           ticker,
             "price":         price,
@@ -2667,6 +2707,7 @@ def process_ticker(ticker, hist_df):
             "ema200":        round(ema200v, 4) if ema200v else None,
             "sma150":        round(sma150v, 4) if sma150v else None,
             "ema200SlopeUp": ema200_slope_up,
+            "patternEntry":  pattern_entry,
             "atr":           atrv,
             "rsi":           rsiv,
             "macdHist":      macd_hist,
