@@ -1168,12 +1168,21 @@ def score_long_minervini(r: dict) -> int:
     """
     Minervini SEPA: Stage 2 Uptrend + VCP (Volatility Contraction) + Volumen-Ausbruch.
     Gemini-Refactoring v2: HVP-Integration (niedrige Vola = VCP-Ideal), strikterer Dist200.
+    Pareto-Erweiterung v3 (11.07.2026, Pine-Script-Review-Nachgang): SMA150 in Trend-Kette
+    ergänzt (echte 50>150>200-Prüfung statt nur 50>200), 200er-Steigung (~1 Monat) geprüft,
+    52-Wochen-Tief-Abstand (klassisches Minervini-Kriterium: ≥30% über Tief) ergänzt.
+    Echtes RS-Rating (Perzentil-Ranking ggü. Scan-Universum) BEWUSST NICHT enthalten —
+    eigener, hoch priorisierter Backlog-Punkt (SUITE.md #14), da strukturell aufwendiger
+    (Batch-Ranking über alle ~678 Scan-Ticker nötig, nicht nur Per-Ticker-Berechnung).
     """
     s = 0
     price    = r.get("price", 0)
     ema50    = r.get("ema50")
     ema200   = r.get("ema200")
+    sma150   = r.get("sma150")
+    ema200_slope_up = r.get("ema200SlopeUp")
     pct_high = r.get("pctFromHigh52")
+    low52    = r.get("low52")
     dist200  = r.get("dist200")
     vol_ratio= r.get("volRatio", 1) or 1
     obv      = r.get("obvTrend", 0) or 0
@@ -1182,16 +1191,30 @@ def score_long_minervini(r: dict) -> int:
     rsi      = r.get("rsi")
     hvp      = r.get("hvp")
 
-    # Gate 1: Stage 2 Uptrend — Pflicht
+    # Gate 1: Stage 2 Uptrend — Pflicht (jetzt mit echter 50>150>200-Kette wenn verfügbar)
     if not ema50 or not ema200: return 0
     if price < ema50 or price < ema200 or ema50 < ema200: return 0
-    s += 25
+    if sma150 is not None:
+        if price < sma150 or ema50 < sma150 or sma150 < ema200: return 0
+        s += 25
+    else:
+        s += 18  # Fallback ohne 150er (zu wenig Historie) — etwas weniger Vertrauen
+
+    # Gate 1b: 200-Tage-MA seit ~1 Monat steigend (Minervini-Kriterium 3 — Steigung, nicht Snapshot)
+    if ema200_slope_up is True:    s += 8
+    elif ema200_slope_up is False: s -= 10  # flache/fallende 200er = kein echter Stage-2-Trend
 
     # Gate 2: Naehe zum 52W-Hoch
     if pct_high is not None:
         if pct_high >= -5:    s += 20
         elif pct_high >= -10: s += 12
         elif pct_high >= -15: s += 6
+
+    # Gate 2b: Abstand vom 52W-Tief (Minervini-Kriterium 6: ≥30% über Tief)
+    if low52 and price:
+        pct_from_low52 = (price / low52 - 1) * 100
+        if pct_from_low52 >= 30:  s += 10
+        elif pct_from_low52 < 15: s -= 10  # zu nah am Tief — vermutlich noch Stage 1
 
     # Gate 3: Abstand EMA200 — Gemini: Obergrenze von 50 auf 40 gesenkt
     if dist200 is not None:
@@ -2596,7 +2619,14 @@ def process_ticker(ticker, hist_df):
 
         price   = round(closes[-1], 4)
         ema50v  = ema(closes, 50)[-1]
-        ema200v = ema(closes, 200)[-1] if len(closes) >= 200 else None
+        ema200_series = ema(closes, 200) if len(closes) >= 200 else []
+        ema200v = ema200_series[-1] if ema200_series else None
+        sma150v = sma(closes, 150)[-1] if len(closes) >= 150 else None
+        # Minervini-Kriterium: 200-Tage-MA seit ≥1 Monat (≈20 Handelstage) steigend
+        # (Pareto-Ergänzung 11.07.2026 — vorher nur Snapshot-Vergleich, keine Steigung)
+        ema200_slope_up = None
+        if len(ema200_series) >= 21:
+            ema200_slope_up = ema200_series[-1] > ema200_series[-21]
         atrv    = calc_atr(highs, lows, closes)
         rsiv    = calc_rsi(closes)
         macd_val, macd_sig, macd_hist = calc_macd(closes)
@@ -2635,6 +2665,8 @@ def process_ticker(ticker, hist_df):
             "price":         price,
             "ema50":         round(ema50v, 4) if ema50v else None,
             "ema200":        round(ema200v, 4) if ema200v else None,
+            "sma150":        round(sma150v, 4) if sma150v else None,
+            "ema200SlopeUp": ema200_slope_up,
             "atr":           atrv,
             "rsi":           rsiv,
             "macdHist":      macd_hist,
