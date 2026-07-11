@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install yfinance requests numpy pandas
+          pip install yfinance requests numpy pandas openpyxl
 
       - name: Clear yfinance cache
         run: rm -rf ~/.cache/py-yfinance/ || true
