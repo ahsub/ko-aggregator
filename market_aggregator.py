@@ -3260,6 +3260,96 @@ def _finra_get_token(client_id: str, client_secret: str) -> str:
     return data["access_token"]
 
 
+def resolve_company_name_to_ticker(name: str) -> dict:
+    """Löst einen Firmennamen zu einem US-Ticker via Yahoo Finance Search auf.
+    Serverseitig via requests — kein CORS-Proxy nötig (anders als im Frontend,
+    das per Browser-fetch() an CORS-Beschränkungen gebunden ist). Gleiche
+    Filterlogik wie das Frontend-Pendant (searchTickerByName in index.html):
+    nur EQUITY-Quotes, keine Indizes/Forex, keine ISIN-artigen Symbole.
+    """
+    try:
+        r = requests.get(
+            "https://query1.finance.yahoo.com/v1/finance/search",
+            params={"q": name, "lang": "en", "region": "US", "quotesCount": 5, "newsCount": 0},
+            timeout=10, headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if r.status_code != 200:
+            return {"ok": False, "reason": f"HTTP {r.status_code}"}
+        quotes = r.json().get("quotes", [])
+        filtered = []
+        for q in quotes:
+            if q.get("quoteType") != "EQUITY":
+                continue
+            sym = q.get("symbol", "")
+            if not sym or "^" in sym or "=" in sym:
+                continue
+            # ISIN-Filter: 12 Zeichen, beginnt mit 2 Buchstaben
+            if len(sym) == 12 and sym[:2].isalpha() and sym[2:].isalnum():
+                continue
+            if len(sym.replace(".", "").replace("-", "")) > 7:
+                continue
+            filtered.append(q)
+        if not filtered:
+            return {"ok": False, "reason": "kein Treffer"}
+        best = filtered[0]
+        return {"ok": True, "ticker": best.get("symbol"),
+                "name": best.get("shortname") or best.get("longname")}
+    except Exception as e:
+        return {"ok": False, "reason": str(e)[:150]}
+
+
+def parse_ssga_holdings_xlsx(filepath: str, top_n: int = 15) -> list:
+    """Parst eine SSGA/State-Street-Holdings-XLSX (Standardformat aller SPDR-
+    Sektor-ETFs) und gibt die Top-N-Positionen nach Gewicht zurück.
+    Format verifiziert 11.07.2026 gegen echte XLK-Holdings-Datei (EMEA/UCITS-
+    Wrapper ZPDT GY — nahezu identische Konstituenten zum US-XLK, Gewichtung
+    kann wegen UCITS-Diversifikationsregeln leicht abweichen)."""
+    import pandas as pd
+    df = pd.read_excel(filepath, sheet_name=0, header=5)
+    df["Percent of Fund"] = pd.to_numeric(df["Percent of Fund"], errors="coerce")
+    df = df[df["Security Name"].notna() & df["Percent of Fund"].notna()]
+    df = df.sort_values("Percent of Fund", ascending=False).head(top_n)
+    out = []
+    for _, row in df.iterrows():
+        out.append({
+            "name": str(row["Security Name"]).strip(),
+            "weight": round(float(row["Percent of Fund"]), 2),
+            "sector": row.get("Sector Classification"),
+        })
+    return out
+
+
+def build_sector_holdings(etf_ticker: str, xlsx_path: str, top_n: int = 15) -> dict:
+    """Kombiniert Holdings-Parsing + Ticker-Auflösung für einen Sektor-ETF.
+    Rückgabe direkt für den Aggregator-Output (market.sectorHoldings.{ETF})."""
+    try:
+        holdings = parse_ssga_holdings_xlsx(xlsx_path, top_n=top_n)
+    except Exception as e:
+        return {"ok": False, "reason": f"Parsing-Fehler: {str(e)[:150]}"}
+
+    resolved = []
+    unresolved = 0
+    for h in holdings:
+        r = resolve_company_name_to_ticker(h["name"])
+        if r.get("ok"):
+            resolved.append({"ticker": r["ticker"], "name": h["name"],
+                              "weight": h["weight"], "sector": h["sector"]})
+        else:
+            unresolved += 1
+            resolved.append({"ticker": None, "name": h["name"],
+                              "weight": h["weight"], "sector": h["sector"],
+                              "resolveError": r.get("reason")})
+
+    return {
+        "ok": True,
+        "etf": etf_ticker,
+        "holdings": resolved,
+        "resolvedCount": len(resolved) - unresolved,
+        "totalCount": len(resolved),
+        "source": "ssga_ucits_proxy" if etf_ticker in ("XLK",) else "ssga",
+    }
+
+
 def fetch_finra_dix() -> dict:
     """Echter DIX (Dark Pool Index) via FINRA Query API — regShoDaily-Dataset.
 
@@ -3846,6 +3936,23 @@ def main():
         if "raw_sample" in finra_dix:
             dix_gex["dixDebugRawSample"] = finra_dix["raw_sample"]
 
+    log.info(f"  Sektor-Holdings (Proof-of-Concept, XLK)...")
+    sector_holdings = {}
+    try:
+        import os as _os
+        _xlk_path = "data/holdings_XLK.xlsx"
+        if _os.path.exists(_xlk_path):
+            xlk_holdings = build_sector_holdings("XLK", _xlk_path, top_n=15)
+            if xlk_holdings.get("ok"):
+                sector_holdings["XLK"] = xlk_holdings
+                log.info(f"  Sektor-Holdings XLK: {xlk_holdings['resolvedCount']}/{xlk_holdings['totalCount']} Ticker aufgelöst")
+            else:
+                log.warning(f"  Sektor-Holdings XLK fehlgeschlagen: {xlk_holdings.get('reason')}")
+        else:
+            log.info(f"  Sektor-Holdings: {_xlk_path} nicht gefunden — übersprungen (Proof-of-Concept, nur XLK vorbereitet)")
+    except Exception as _sh_err:
+        log.warning(f"  Sektor-Holdings-Aufbau fehlgeschlagen: {_sh_err}")
+
     log.info(f"  FRED Makro-Parameter (HY-Spread, Net Liquidity)...")
     fred_macro = fetch_fred_macro()
     log.info(f"  MOVE Index (Treasury-Vol)...")
@@ -4140,6 +4247,7 @@ def main():
             "zscores":    macro_zscores,     # Z-Scores + Perzentile (252T) für Deep-Reasoning
             "fredMacro":  fred_macro,        # HY-Spread + Net Liquidity (FRED)
             "moveIndex":  move_index,        # Treasury-Volatilität (Renten-VIX)
+            "sectorHoldings": sector_holdings, # ETF-Holdings-Klickthrough (Proof-of-Concept, nur XLK, 11.07.2026)
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
