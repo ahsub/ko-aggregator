@@ -27,6 +27,14 @@ SCORING-PHILOSOPHIE:
   Kein absoluter Score=100 durch Summe — stattdessen Perzentil-Normalisierung
   nach Stufe-1-Pass: jeder Ticker bekommt seinen Rang im eigenen Universum.
   Zielgröße Top-Shortlist: 50 Titel (analog Options-Watchlist).
+
+UIQ-UNIVERSUM-ERWEITERUNG (automatisch, samstags):
+  Neue Value-Kandidaten aus dem Russell3000-Scan, die noch nicht im UIQ-Universum
+  sind, werden automatisch in den KV-Key 'approved_extra_tickers' geschrieben.
+  Bedingungen: finalScore >= VAL_UIQ_PROMOTE_THRESHOLD, nicht bereits im UIQ-Scan,
+  ValRank >= 85 (Top-15% der Fundamental-Qualität).
+  Beim nächsten Mo-Nachtlauf werden sie von fetch_approved_extra_tickers() gelesen
+  und sind dann vollständig im Scan-Universum mit RS-Rating, IV, Technischen Daten.
 """
 
 import os
@@ -34,14 +42,18 @@ import json
 import gzip
 import glob
 import logging
+import requests
 from datetime import datetime, timezone
 
 log = logging.getLogger("aggregator")
 
-VAL_VERSION      = "1.2"
-FUNDAMENTALS_DIR = "data/fundamentals"
-VAL_TOP_N        = 50      # Shortlist-Größe
-VAL_MIN_MCAP     = 300_000_000   # $300M Market Cap Mindestgröße
+VAL_VERSION             = "1.3"
+FUNDAMENTALS_DIR        = "data/fundamentals"
+VAL_TOP_N               = 50      # Shortlist-Größe
+VAL_MIN_MCAP            = 300_000_000   # $300M Market Cap Mindestgröße
+VAL_UIQ_PROMOTE_THRESH  = 85     # finalScore-Schwelle für UIQ-Universum-Aufnahme
+VAL_UIQ_PROMOTE_VAL_MIN = 85     # valRank-Mindest (Top-15% Fundamentalqualität)
+VAL_UIQ_PROMOTE_MAX     = 20     # max. neue Ticker pro Samstags-Lauf
 
 
 # ── Hilfsfunktionen ────────────────────────────────────────────────────────────
@@ -405,6 +417,118 @@ def _momentum_score(sym: str, agg_map: dict) -> dict:
     }
 
 
+# ── UIQ-Universum-Erweiterung ─────────────────────────────────────────────────
+
+def _kv_creds():
+    """KV-Credentials aus Umgebungsvariablen (analog fin_layer)."""
+    a = os.environ.get("CF_ACCOUNT_ID")
+    t = os.environ.get("CF_API_TOKEN")
+    n = os.environ.get("CF_KV_NS_ID")
+    return (a, t, n) if all([a, t, n]) else None
+
+
+def _promote_to_uiq_universe(shortlist: list, uiq_syms: set) -> dict:
+    """
+    Identifiziert Value-Top-Kandidaten die noch nicht im UIQ-Scan-Universum sind
+    und schreibt sie in den KV-Key 'approved_extra_tickers'.
+
+    Auswahlkriterien (konservativ — Qualität vor Quantität):
+      - inUiqUniverse == False  (noch nicht im Scan)
+      - finalScore >= VAL_UIQ_PROMOTE_THRESH  (starke Gesamt-Bewertung)
+      - valRank >= VAL_UIQ_PROMOTE_VAL_MIN    (Top-15% Fundamental-Qualität)
+      - rsRating != None                       (RS-Enrichment hat funktioniert)
+      - Max. VAL_UIQ_PROMOTE_MAX Ticker pro Lauf (verhindert Universum-Inflation)
+
+    Bestehende approved_extra_tickers werden gelesen, neue Ticker werden
+    hinzugefügt (keine Duplikate, kein Überschreiben bestehender Einträge).
+
+    Rückgabe: {'promoted': [...], 'total_in_kv': N, 'skipped': N}
+    """
+    creds = _kv_creds()
+    if not creds:
+        return {'ok': False, 'reason': 'no_kv_credentials', 'promoted': []}
+
+    account_id, api_token, ns_id = creds
+    kv_url    = (f"https://api.cloudflare.com/client/v4/accounts/{account_id}"
+                 f"/storage/kv/namespaces/{ns_id}/values/approved_extra_tickers")
+    headers   = {"Authorization": f"Bearer {api_token}",
+                 "Content-Type": "application/json"}
+
+    # Kandidaten filtern
+    candidates = [
+        t for t in shortlist
+        if not t.get('inUiqUniverse', True)
+        and t.get('finalScore', 0)  >= VAL_UIQ_PROMOTE_THRESH
+        and t.get('valRank', 0)     >= VAL_UIQ_PROMOTE_VAL_MIN
+        and t.get('rsRating') is not None   # RS-Enrichment muss geklappt haben
+    ][:VAL_UIQ_PROMOTE_MAX]
+
+    if not candidates:
+        log.info("  [VAL-Promote] Keine neuen Kandidaten für UIQ-Universum-Erweiterung")
+        return {'ok': True, 'promoted': [], 'total_in_kv': 0, 'skipped': 0}
+
+    # Bestehende KV-Einträge lesen (Merge, kein Überschreiben)
+    existing = []
+    existing_syms = set()
+    try:
+        r = requests.get(kv_url, headers={"Authorization": f"Bearer {api_token}"},
+                         timeout=15)
+        if r.status_code == 200:
+            existing = r.json() if isinstance(r.json(), list) else []
+            existing_syms = {e.get('sym') for e in existing if isinstance(e, dict)}
+    except Exception as _e:
+        log.warning(f"  [VAL-Promote] KV-Lesen fehlgeschlagen: {_e} — fahre fort")
+
+    # Neue Einträge aufbauen
+    promoted = []
+    skipped  = 0
+    for t in candidates:
+        sym = t['sym']
+        if sym in existing_syms:
+            skipped += 1
+            continue
+        entry = {
+            'sym':        sym,
+            'source':     'val_mod_auto',          # Herkunft klar kennzeichnen
+            'addedDate':  datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+            'valRank':    t.get('valRank'),
+            'finalScore': t.get('finalScore'),
+            'rsRating':   t.get('rsRating'),
+            'sector':     t.get('sector', ''),
+            'pe':         t.get('pe'),
+            'grossMargin': t.get('grossMargin'),
+            'reason':     (f"VAL-MOD Top-Kandidat: Score={t.get('finalScore')} "
+                           f"ValRank={t.get('valRank')} RS={t.get('rsRating')} "
+                           f"PE={t.get('pe')} GM={t.get('grossMargin')}%"),
+        }
+        existing.append(entry)
+        promoted.append(sym)
+
+    if not promoted:
+        log.info(f"  [VAL-Promote] Alle {len(candidates)} Kandidaten bereits in KV")
+        return {'ok': True, 'promoted': [], 'total_in_kv': len(existing), 'skipped': skipped}
+
+    # In KV schreiben
+    try:
+        r = requests.put(kv_url, headers=headers,
+                         data=json.dumps(existing), timeout=15)
+        if r.status_code in (200, 201):
+            log.info(f"  [VAL-Promote] ✅ {len(promoted)} neue Ticker ins UIQ-Universum: "
+                     f"{', '.join(promoted)}")
+            return {
+                'ok':         True,
+                'promoted':   promoted,
+                'total_in_kv': len(existing),
+                'skipped':    skipped,
+            }
+        else:
+            log.warning(f"  [VAL-Promote] KV-Schreiben fehlgeschlagen: HTTP {r.status_code}")
+            return {'ok': False, 'reason': f'kv_write_{r.status_code}', 'promoted': []}
+    except Exception as _e:
+        log.warning(f"  [VAL-Promote] KV-Schreiben Exception: {_e}")
+        return {'ok': False, 'reason': str(_e), 'promoted': []}
+
+
 # ── Haupt-Einstiegspunkt ───────────────────────────────────────────────────────
 
 def run(results: list) -> dict:
@@ -576,6 +700,20 @@ def run(results: list) -> dict:
         top3 = [f"{t['sym']}({t['finalScore']})" for t in shortlist[:3]]
         log.info(f"  [VAL] Top-3: {', '.join(top3)}")
 
+    # ── UIQ-Universum-Erweiterung (samstags, nach FIN-Archiv-Merge) ──────────
+    # Samstag = Wochentag 5. Nur dann promoten um Universum-Inflation zu vermeiden.
+    # Täglich würden immer dieselben Kandidaten erneut geprüft (KV-Read schützt
+    # vor Duplikaten, aber der Log wäre noisig). Samstag ist nach dem Merge, wenn
+    # die Fundamentaldaten frisch sind.
+    promote_status = {'ok': False, 'reason': 'not_saturday', 'promoted': []}
+    from datetime import datetime, timezone
+    if datetime.now(timezone.utc).weekday() == 5:   # 5 = Samstag
+        uiq_syms = {r['sym'] for r in results}
+        promote_status = _promote_to_uiq_universe(shortlist, uiq_syms)
+        log.info(f"  [VAL-Promote] Status: {promote_status}")
+    else:
+        log.info(f"  [VAL-Promote] Nicht Samstag — Universum-Erweiterung übersprungen")
+
     return {
         'ok':           True,
         'version':      VAL_VERSION,
@@ -585,6 +723,7 @@ def run(results: list) -> dict:
         'scored':       len(final),
         'shortlist':    shortlist,
         'wheelCount':   wheel_count,
+        'promote':      promote_status,
     }
 
 
