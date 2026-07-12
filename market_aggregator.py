@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.2"
+AGGREGATOR_VERSION = "5.3"
 
 # yfinance für Marktdaten
 try:
@@ -4500,20 +4500,9 @@ def main():
         log.warning(f"  [IV] IV-Archiv übersprungen (nicht kritisch): {_ive}")
         master["ivArchive"] = {"ok": False, "reason": f"exception: {_ive}"}
 
-    payload_size = len(json.dumps(master)) / 1024
-    log.info(f"\n📊 Master-JSON: {payload_size:.0f} KB | {len(results)} Ticker")
-    log.info(f"   Top40 Long: {len(top40_long)} | Mean Reversion: {len(mean_reversion)}")
-
-    # 7. Lokales Backup
-    with open("master_market_data.json", "w", encoding="utf-8") as f:
-        json.dump(master, f, ensure_ascii=False, separators=(",", ":"))
-    log.info(f"   💾 Lokal gespeichert: master_market_data.json")
-
-    # 8. Cloudflare KV Upload
-    log.info(f"\n☁️  Cloudflare KV Upload...")
     # ── VAL-MOD VALUE-SCANNER (v5.2, Carlin/Graham 3-Stufen-Sieve — SUITE.md VAL-MOD) ───
     # Liest FIN-Archiv + Aggregator-results → Value-Shortlist Top-50 + Wheel-Kandidaten.
-    # Fehlerisoliert — bricht den Hauptlauf niemals.
+    # Muss VOR lokalem Backup + KV-Push stehen (sonst fehlt valueScanner im Artifact).
     try:
         import val_layer
         val_status = val_layer.run(results=results)
@@ -4533,6 +4522,17 @@ def main():
         log.warning(f"  [VAL] Value-Scanner übersprungen (nicht kritisch): {_ve}")
         master["valueScanner"] = {"ok": False, "reason": f"exception: {_ve}", "shortlist": []}
 
+    payload_size = len(json.dumps(master)) / 1024
+    log.info(f"\n📊 Master-JSON: {payload_size:.0f} KB | {len(results)} Ticker")
+    log.info(f"   Top40 Long: {len(top40_long)} | Mean Reversion: {len(mean_reversion)}")
+
+    # 7. Lokales Backup
+    with open("master_market_data.json", "w", encoding="utf-8") as f:
+        json.dump(master, f, ensure_ascii=False, separators=(",", ":"))
+    log.info(f"   💾 Lokal gespeichert: master_market_data.json")
+
+    # 8. Cloudflare KV Upload
+    log.info(f"\n☁️  Cloudflare KV Upload...")
     push_to_cloudflare_kv(master, key="master_market_data")
 
     # Separater KV-Key für schnellen Options-Desk Zugriff
