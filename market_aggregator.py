@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.5"
+AGGREGATOR_VERSION = "5.6"
 
 # yfinance für Marktdaten
 try:
@@ -4515,6 +4515,7 @@ def main():
             "scored":     val_status.get("scored"),
             "wheelCount": val_status.get("wheelCount"),
             "shortlist":  val_status.get("shortlist", []),
+            "promote":    val_status.get("promote", {}),
         }
         log.info(f"  [VAL] Value-Scanner: {val_status.get('stufe1Pass')} S1-Pass, "
                  f"Top-50 Shortlist, {val_status.get('wheelCount')} Wheel-Kandidaten")
