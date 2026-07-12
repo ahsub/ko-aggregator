@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "4.7"
+AGGREGATOR_VERSION = "5.0"
 
 # yfinance für Marktdaten
 try:
@@ -1180,9 +1180,9 @@ def score_long_minervini(r: dict) -> int:
     Pareto-Erweiterung v3 (11.07.2026, Pine-Script-Review-Nachgang): SMA150 in Trend-Kette
     ergänzt (echte 50>150>200-Prüfung statt nur 50>200), 200er-Steigung (~1 Monat) geprüft,
     52-Wochen-Tief-Abstand (klassisches Minervini-Kriterium: ≥30% über Tief) ergänzt.
-    Echtes RS-Rating (Perzentil-Ranking ggü. Scan-Universum) BEWUSST NICHT enthalten —
-    eigener, hoch priorisierter Backlog-Punkt (SUITE.md #14), da strukturell aufwendiger
-    (Batch-Ranking über alle ~678 Scan-Ticker nötig, nicht nur Per-Ticker-Berechnung).
+    Echtes RS-Rating (Stufe 1: perfRsRaw in process_ticker, Stufe 2: Perzentil-Ranking
+    in main() nach Ticker-Schleife) eingebaut als Gate 6 (v5.0, 12.07.2026, SUITE.md #14).
+    rsRating 0-99: >=85 SEPA-Ideal (+25), >=70 IBD-Minimum (+15), >=50 Median (+5), <50 (-10).
     """
     s = 0
     price    = r.get("price", 0)
@@ -1239,9 +1239,18 @@ def score_long_minervini(r: dict) -> int:
     # Gate 5: Momentum
     if macd_h is not None and macd_h > 0: s += 10
 
-    # Gate 6: Markov
-    if p_b2b > 0.25:   s -= 15
-    elif p_b2b < 0.08: s += 5
+    # Gate 6: RS-Rating (Hauptkriterium, ersetzt bisherigen Markov-Proxy hier)
+    # rsRating ist ein Universum-Perzentil (0-99), wird von main() Stufe 2 befuellt.
+    # In score_long_minervini() wird es direkt aus dem r-Dict gelesen.
+    rs_rating = r.get("rsRating")
+    if rs_rating is not None:
+        if rs_rating >= 85:   s += 25   # SEPA-Idealzone: Top-15% des Universums
+        elif rs_rating >= 70: s += 15   # IBD-Mindestschwelle (klassisch: RS >= 70)
+        elif rs_rating >= 50: s +=  5   # Median-Bereich: schwaches positives Signal
+        else:                 s -= 10   # schwaecherer als Haelfte des Universums
+    # Gate 6b: Markov (bleibt als Makro-Kontext-Signal, aber reduziert gewichtet)
+    if p_b2b > 0.25:   s -= 10   # war -15, jetzt -10 (RS-Rating traegt Hauptlast)
+    elif p_b2b < 0.08: s +=  5
 
     # Gate 7: HVP + VCP (Gemini-Fix: Gate 25→40 — verhindert Verpassen von Ausbruchstagen)
     if hvp is not None:
@@ -2745,6 +2754,34 @@ def process_ticker(ticker, hist_df):
         # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
         result.update(calc_fibonacci_levels(result))
 
+        # ── RS-Rating Stufe 1: Rohwert (Stufe 2 = Perzentil-Ranking in main()) ─────────────
+        # IBD-Annaeherung: gewichtete 12M-Performance, Quartals-Scheiben.
+        # Formel: 0.4x3M + 0.2x6M + 0.2x9M + 0.2x12M  (aktuelles Quartal 2x gewichtet)
+        perf_3m = perf_6m = perf_9m = perf_12m = None
+        if len(closes) >= 63:
+            perf_3m  = (closes[-1] / closes[-63]  - 1) * 100
+        if len(closes) >= 126:
+            perf_6m  = (closes[-1] / closes[-126] - 1) * 100
+        if len(closes) >= 189:
+            perf_9m  = (closes[-1] / closes[-189] - 1) * 100
+        if len(closes) >= 252:
+            perf_12m = (closes[-1] / closes[-252] - 1) * 100
+        # Rohwert nur wenn mindestens 6M-Daten vorhanden (sonst Ranking verzerrt)
+        perf_rs_raw = None
+        if perf_6m is not None:
+            weights = [(0.4, perf_3m), (0.2, perf_6m), (0.2, perf_9m), (0.2, perf_12m)]
+            wsum = wdiv = 0.0
+            for w, v in weights:
+                if v is not None:
+                    wsum += w * v
+                    wdiv += w
+            perf_rs_raw = round(wsum / wdiv, 4) if wdiv > 0 else None
+        result["perfRsRaw"]  = perf_rs_raw
+        result["perf3m"]     = round(perf_3m,  2) if perf_3m  is not None else None
+        result["perf6m"]     = round(perf_6m,  2) if perf_6m  is not None else None
+        result["perf12m"]    = round(perf_12m, 2) if perf_12m is not None else None
+        result["rsRating"]   = None   # wird in main() Stufe 2 befuellt
+
         return result
     except Exception as e:
         return {"sym": ticker, "error": str(e)}
@@ -3894,6 +3931,25 @@ def main():
             errors.append(result)
         else:
             results.append(result)
+
+    # ── RS-Rating Stufe 2: Perzentil-Ranking über das gesamte Scan-Universum ──────────
+    # Wird genau EINMAL nach Abschluss der Ticker-Schleife berechnet.
+    # Nur Ticker mit gültigem perfRsRaw nehmen am Ranking teil (>=6M-Daten).
+    # rsRating 0-99 (Perzentil): 99 = stärkster Titel, 50 = Median.
+    _rs_eligible = [(r, r["perfRsRaw"]) for r in results if r.get("perfRsRaw") is not None]
+    if len(_rs_eligible) >= 2:
+        _rs_sorted_vals = sorted(v for _, v in _rs_eligible)
+        _n = len(_rs_sorted_vals)
+        for r, raw in _rs_eligible:
+            # bisect: Anzahl Werte strikt kleiner als raw = Rang (0-basiert)
+            import bisect as _bisect
+            rank = _bisect.bisect_left(_rs_sorted_vals, raw)
+            r["rsRating"] = round(rank / (_n - 1) * 99) if _n > 1 else 50
+        log.info(f"   [RS-Rating] {len(_rs_eligible)}/{len(results)} Ticker gerankt — "
+                 f"Median-Raw: {round(_rs_sorted_vals[_n//2],2)}")
+    else:
+        log.warning(f"   [RS-Rating] Zu wenige Ticker mit perfRsRaw ({len(_rs_eligible)}) — übersprungen")
+    # ── Ende RS-Rating Stufe 2 ────────────────────────────────────────────────────────────
 
     _t(f"NACH fetch_batch — {len(results)} OK / {len(errors)} Fehler")
     log.info(f"   ✅ Erfolgreich: {len(results)} | ❌ Fehler: {len(errors)}")
