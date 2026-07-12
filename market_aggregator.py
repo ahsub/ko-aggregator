@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.1"
+AGGREGATOR_VERSION = "5.2"
 
 # yfinance für Marktdaten
 try:
@@ -4511,6 +4511,28 @@ def main():
 
     # 8. Cloudflare KV Upload
     log.info(f"\n☁️  Cloudflare KV Upload...")
+    # ── VAL-MOD VALUE-SCANNER (v5.2, Carlin/Graham 3-Stufen-Sieve — SUITE.md VAL-MOD) ───
+    # Liest FIN-Archiv + Aggregator-results → Value-Shortlist Top-50 + Wheel-Kandidaten.
+    # Fehlerisoliert — bricht den Hauptlauf niemals.
+    try:
+        import val_layer
+        val_status = val_layer.run(results=results)
+        master["valueScanner"] = {
+            "ok":         val_status.get("ok"),
+            "version":    val_status.get("version"),
+            "finWeek":    val_status.get("finWeek"),
+            "universe":   val_status.get("universe"),
+            "stufe1Pass": val_status.get("stufe1Pass"),
+            "scored":     val_status.get("scored"),
+            "wheelCount": val_status.get("wheelCount"),
+            "shortlist":  val_status.get("shortlist", []),
+        }
+        log.info(f"  [VAL] Value-Scanner: {val_status.get('stufe1Pass')} S1-Pass, "
+                 f"Top-50 Shortlist, {val_status.get('wheelCount')} Wheel-Kandidaten")
+    except Exception as _ve:
+        log.warning(f"  [VAL] Value-Scanner übersprungen (nicht kritisch): {_ve}")
+        master["valueScanner"] = {"ok": False, "reason": f"exception: {_ve}", "shortlist": []}
+
     push_to_cloudflare_kv(master, key="master_market_data")
 
     # Separater KV-Key für schnellen Options-Desk Zugriff
