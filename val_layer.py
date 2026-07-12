@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 
 log = logging.getLogger("aggregator")
 
-VAL_VERSION      = "1.1"
+VAL_VERSION      = "1.2"
 FUNDAMENTALS_DIR = "data/fundamentals"
 VAL_TOP_N        = 50      # Shortlist-Größe
 VAL_MIN_MCAP     = 300_000_000   # $300M Market Cap Mindestgröße
@@ -234,6 +234,108 @@ def _score_from_raw(raw: dict) -> float:
     return s
 
 
+def _enrich_rs_yfinance(syms: list) -> dict:
+    """
+    Lädt Kursdaten für Russell3000-only Titel (nicht im UIQ-Scan) via yfinance
+    und berechnet RS-Rating analog zum Aggregator-Verfahren:
+    - Gewichtete 12M-Performance (IBD-Annäherung: 0.4×3M + 0.2×6M + 0.2×9M + 0.2×12M)
+    - Rang im eigenen Mini-Universum (die enrichten Titel untereinander)
+    - EMA200-Lage als Trendindikator
+
+    Beschränkt auf max. 100 Ticker um Laufzeit zu begrenzen (~30s extra).
+    Gibt {sym: {rsRating, perf3m, perf6m, perf12m, price, aboveEma200}} zurück.
+    """
+    import bisect as _bisect
+    try:
+        import yfinance as yf
+    except ImportError:
+        log.warning("  [VAL-Enrich] yfinance nicht verfügbar")
+        return {}
+
+    syms = syms[:100]   # Hard-Cap: max 100 Ticker pro Lauf
+    log.info(f"  [VAL-Enrich] Lade {len(syms)} Ticker via yfinance batch...")
+
+    try:
+        # Batch-Download: 1 Jahr Tagesdaten
+        raw = yf.download(
+            syms, period="1y", interval="1d",
+            auto_adjust=True, progress=False, threads=True
+        )
+        close_df = raw["Close"] if "Close" in raw else raw
+    except Exception as e:
+        log.warning(f"  [VAL-Enrich] yfinance batch fehlgeschlagen: {e}")
+        return {}
+
+    # RS-Rohwerte berechnen
+    raw_scores = {}
+    results_data = {}
+
+    for sym in syms:
+        try:
+            if sym not in close_df.columns:
+                continue
+            closes = list(close_df[sym].dropna())
+            if len(closes) < 63:   # mind. 3 Monate
+                continue
+
+            price = closes[-1]
+
+            # Periodische Performance
+            p3m  = (closes[-1] / closes[-63]  - 1) * 100 if len(closes) >= 63  else None
+            p6m  = (closes[-1] / closes[-126] - 1) * 100 if len(closes) >= 126 else None
+            p9m  = (closes[-1] / closes[-189] - 1) * 100 if len(closes) >= 189 else None
+            p12m = (closes[-1] / closes[-252] - 1) * 100 if len(closes) >= 252 else None
+
+            # Gewichteter Rohwert (wie Aggregator)
+            if p6m is None:
+                continue
+            weights = [(0.4, p3m), (0.2, p6m), (0.2, p9m), (0.2, p12m)]
+            wsum = wdiv = 0.0
+            for w, v in weights:
+                if v is not None:
+                    wsum += w * v
+                    wdiv += w
+            rs_raw = wsum / wdiv if wdiv > 0 else None
+
+            # EMA200
+            if len(closes) >= 200:
+                k = 2 / 201
+                ema200 = sum(closes[:200]) / 200
+                for c in closes[200:]:
+                    ema200 = c * k + ema200 * (1 - k)
+                above_ema200 = price > ema200
+            else:
+                above_ema200 = None
+
+            raw_scores[sym]  = rs_raw
+            results_data[sym] = {
+                'price':       round(price, 2),
+                'perf3m':      round(p3m,  2) if p3m  is not None else None,
+                'perf6m':      round(p6m,  2) if p6m  is not None else None,
+                'perf12m':     round(p12m, 2) if p12m is not None else None,
+                'aboveEma200': above_ema200,
+                'rsRaw':       round(rs_raw, 4) if rs_raw is not None else None,
+            }
+        except Exception as _e:
+            log.debug(f"  [VAL-Enrich] {sym}: {_e}")
+            continue
+
+    # Perzentil-Ranking im Mini-Universum der enrichten Titel
+    if len(raw_scores) >= 2:
+        sorted_vals = sorted(raw_scores.values())
+        n = len(sorted_vals)
+        for sym, raw_val in raw_scores.items():
+            rank = _bisect.bisect_left(sorted_vals, raw_val)
+            rs_rating = round(rank / (n - 1) * 99) if n > 1 else 50
+            results_data[sym]['rsRating'] = rs_rating
+    elif raw_scores:
+        sym = next(iter(raw_scores))
+        results_data[sym]['rsRating'] = 50
+
+    log.info(f"  [VAL-Enrich] {len(results_data)}/{len(syms)} Ticker enriched")
+    return results_data
+
+
 def _percentile_rank(value: float, sorted_vals: list) -> int:
     """Perzentil-Rang 0-99 (bisect, wie RS-Rating)."""
     import bisect
@@ -246,38 +348,60 @@ def _percentile_rank(value: float, sorted_vals: list) -> int:
 
 def _momentum_score(sym: str, agg_map: dict) -> dict:
     """
-    RS-Rating + Trendbestätigung aus dem Aggregator-Ergebnis.
+    RS-Rating + Trendbestätigung + vollständige UIQ-Felder aus dem Aggregator.
     agg_map: {sym: result_dict} aus market_aggregator.results[]
+    Für Russell3000-only Ticker (nicht im UIQ-Universum): rs=None, Fallback-Bonus=0.
     """
     r = agg_map.get(sym, {})
-    rs    = r.get('rsRating')     # 0-99, Universum-Perzentil
+    rs    = r.get('rsRating')
     price = r.get('price')
     ema200= r.get('ema200')
     regime= r.get('regime', '')
 
     # Momentum-Bonus (0-30 Punkte)
     m = 0
-    above_ema200 = (price and ema200 and price > ema200)
+    above_ema200 = bool(price and ema200 and price > ema200)
 
     if rs is not None:
         if   rs >= 70: m += 20
         elif rs >= 50: m += 12
         elif rs >= 30: m +=  4
-        else:          m -=  8   # Kurs schwächer als 70% des Universums
+        else:          m -=  8
 
     if above_ema200:
-        m += 10   # Kurs über EMA200 = Trend dreht / intakt
+        m += 10
 
-    if 'BULL' in regime.upper():
-        m += 5
-    elif 'BEAR' in regime.upper():
-        m -= 5
+    if 'BULL' in regime.upper():   m += 5
+    elif 'BEAR' in regime.upper(): m -= 5
 
     return {
-        'momentumBonus': m,
-        'rsRating':      rs,
-        'aboveEma200':   above_ema200,
-        'regime':        regime,
+        'momentumBonus':  m,
+        'rsRating':       rs,
+        'aboveEma200':    above_ema200,
+        'regime':         regime,
+        # ── Vollständige UIQ-Felder (nur wenn Ticker im Scan-Universum) ──
+        'rsi':            r.get('rsi'),
+        'hvp':            r.get('hvp'),
+        'ivAtm':          r.get('ivAtm'),
+        'ivRank':         r.get('ivRank'),
+        'ivPercentile':   r.get('ivPercentile'),
+        'ivArchiveDays':  r.get('ivArchiveDays'),
+        'atr':            r.get('atr'),
+        'dist200':        r.get('dist200'),
+        'pctFromHigh52':  r.get('pctFromHigh52'),
+        'ema200SlopeUp':  r.get('ema200SlopeUp'),
+        'overheat':       r.get('overheat'),
+        'squeezeRisk':    r.get('squeezeRisk'),
+        'sMinervini':     r.get('sMinervini'),
+        'scoreCsp':       r.get('scoreCsp'),        # aus Options-WL wenn vorhanden
+        'scoreCc':        r.get('scoreCc'),
+        'grade':          r.get('grade'),
+        'perf3m':         r.get('perf3m'),
+        'perf6m':         r.get('perf6m'),
+        'perf12m':        r.get('perf12m'),
+        'macdHist':       r.get('macdHist'),
+        'bbPos':          r.get('bbPos'),
+        'inUiqUniverse':  bool(r),                  # True wenn im UIQ-Scan
     }
 
 
@@ -342,36 +466,101 @@ def run(results: list) -> dict:
         # Wheel-Synergie: IV-Rank aus Aggregator wenn vorhanden
         agg_r = agg_map.get(sym, {})
 
+        # Wheel-Synergie: IV-Rank oder HVP als Proxy
+        iv_signal = mom.get('ivRank') or mom.get('hvp') or 0
+        wheel = (
+            mom['rsRating'] is not None and mom['rsRating'] >= 50
+            and mom['aboveEma200']
+            and iv_signal >= 30
+        )
+
         final.append({
             'sym':          sym,
             'finalScore':   final_score,
             'valRank':      val_rank,
             'valPts':       round(pts, 1),
-            # Stufe-2-Dimensionen
-            'pe':           round(raw['pe'], 1)          if raw['pe']          is not None else None,
-            'pb':           round(raw['pb'], 2)          if raw['pb']          is not None else None,
-            'roicProxy':    round(raw['roic_proxy']*100, 1) if raw['roic_proxy'] is not None else None,
-            'revGrowth':    round(raw['rev_growth']*100, 1) if raw['rev_growth'] is not None else None,
-            'fcfYield':     round(raw['fcf_yield']*100, 2)  if raw['fcf_yield']  is not None else None,
+            # Stufe-2-Dimensionen (Fundamental)
+            'pe':           round(raw['pe'], 1)               if raw['pe']           is not None else None,
+            'pb':           round(raw['pb'], 2)               if raw['pb']           is not None else None,
+            'roicProxy':    round(raw['roic_proxy']*100, 1)   if raw['roic_proxy']   is not None else None,
+            'revGrowth':    round(raw['rev_growth']*100, 1)   if raw['rev_growth']   is not None else None,
+            'fcfYield':     round(raw['fcf_yield']*100, 2)    if raw['fcf_yield']    is not None else None,
             'grossMargin':  round(raw['gross_margin']*100, 1) if raw['gross_margin'] is not None else None,
-            # Stufe-3-Momentum
+            # Stufe-3-Momentum (aus UIQ-Scan wenn verfügbar)
             'rsRating':     mom['rsRating'],
             'aboveEma200':  mom['aboveEma200'],
             'regime':       mom['regime'],
             'momentumBonus': mom['momentumBonus'],
+            'inUiqUniverse': mom['inUiqUniverse'],
+            # UIQ-Technische Felder (nur wenn im Scan-Universum, sonst None)
+            'rsi':          mom.get('rsi'),
+            'hvp':          mom.get('hvp'),
+            'ivAtm':        mom.get('ivAtm'),
+            'ivRank':       mom.get('ivRank'),
+            'ivPercentile': mom.get('ivPercentile'),
+            'ivArchiveDays': mom.get('ivArchiveDays'),
+            'atr':          mom.get('atr'),
+            'dist200':      mom.get('dist200'),
+            'pctFromHigh52': mom.get('pctFromHigh52'),
+            'ema200SlopeUp': mom.get('ema200SlopeUp'),
+            'overheat':     mom.get('overheat'),
+            'squeezeRisk':  mom.get('squeezeRisk'),
+            'sMinervini':   mom.get('sMinervini'),
+            'grade':        mom.get('grade'),
+            'perf3m':       mom.get('perf3m'),
+            'perf6m':       mom.get('perf6m'),
+            'perf12m':      mom.get('perf12m'),
+            'macdHist':     mom.get('macdHist'),
+            'bbPos':        mom.get('bbPos'),
             # Kontext
             'sector':       t.get('sector', ''),
+            'industry':     t.get('industry', ''),
             'marketCap':    t.get('marketCap'),
-            'price':        agg_r.get('price'),
-            # Wheel-Synergie-Vorbereitung (Carlin: Value-Kandidat → CSP prüfen)
-            'ivRank':       agg_r.get('ivRank'),
-            'hvp':          agg_r.get('hvp'),
-            'wheelCandidate': (
-                mom['rsRating'] is not None and mom['rsRating'] >= 50
-                and mom['aboveEma200']
-                and (agg_r.get('ivRank') or agg_r.get('hvp') or 0) >= 30
-            ),
+            'price':        agg_r.get('price') or t.get('regularMarketPrice'),
+            # Wheel-Synergie (Carlin: Value-Kandidat → CSP prüfen)
+            'ivSignal':     iv_signal,
+            'wheelCandidate': wheel,
         })
+
+    # ── RS-Enrichment für Russell3000-only Titel (nicht im UIQ-Universum) ──────
+    # Für die Top-N*2 Kandidaten ohne rsRating: Kursdaten via yfinance nachladen
+    # und RS-Rating berechnen (Vergleich mit SPY, 3M-Performance).
+    # Beschränkt auf Top-Kandidaten (Rohscore-Ranking) um API-Calls zu minimieren.
+    final.sort(key=lambda x: -x['valPts'])   # vorläufige Sortierung nach Val-Rohpunkten
+    no_rs_syms = [e['sym'] for e in final[:VAL_TOP_N*2] if e.get('rsRating') is None]
+
+    if no_rs_syms:
+        log.info(f"  [VAL] RS-Enrichment: {len(no_rs_syms)} Russell3000-only Ticker nachladen...")
+        enriched_rs = _enrich_rs_yfinance(no_rs_syms)
+        # Ergebnisse in final[] einschreiben
+        enrich_map = {sym: rd for sym, rd in enriched_rs.items()}
+        for e in final:
+            if e['sym'] in enrich_map:
+                rd = enrich_map[e['sym']]
+                e['rsRating']    = rd.get('rsRating')
+                e['perf3m']      = rd.get('perf3m')
+                e['perf6m']      = rd.get('perf6m')
+                e['perf12m']     = rd.get('perf12m')
+                e['price']       = e['price'] or rd.get('price')
+                e['aboveEma200'] = rd.get('aboveEma200', False)
+                e['inUiqUniverse'] = False   # bleibt False — nur RS-Enrichment
+                # Momentum-Bonus neu berechnen mit frischem RS-Rating
+                rs = rd.get('rsRating')
+                m  = e.get('momentumBonus', 0)
+                if rs is not None:
+                    if   rs >= 70: m = max(m, 12)
+                    elif rs >= 50: m = max(m, 6)
+                    elif rs <  30: m = min(m, -4)
+                if rd.get('aboveEma200'): m += 5
+                e['momentumBonus'] = m
+                # finalScore aktualisieren
+                mom_norm = round(m / 30 * 15)
+                e['finalScore'] = max(0, min(99, e['valRank'] + mom_norm))
+                # Wheel-Kandidat neu prüfen
+                iv_signal = e.get('ivSignal', 0)
+                e['wheelCandidate'] = (rs is not None and rs >= 50
+                                       and e['aboveEma200'] and iv_signal >= 30)
+        log.info(f"  [VAL] RS-Enrichment: {len(enriched_rs)} erfolgreich")
 
     final.sort(key=lambda x: -x['finalScore'])
     shortlist = final[:VAL_TOP_N]
