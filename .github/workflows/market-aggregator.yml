@@ -60,6 +60,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           [ -f backups/tr_backup_latest.json ] && git add backups/tr_backup_latest.json || true
           [ -d data/fundamentals ] && git add data/fundamentals || true
+          [ -d data/iv_history ] && git add data/iv_history || true
           git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup/FIN-Archiv $(date -u +%F)" && git push)
 
       - name: Upload artifact
