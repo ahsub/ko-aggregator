@@ -1121,7 +1121,263 @@ def calc_markov(closes, lookback=60, stride=1):
     regime      = labels[-1]
     bull_pct    = round(labels.count('bull') / len(labels) * 100)
 
-    return regime, p_bull2bear, bull_pct
+    # Markov v4: Warnstufe 1-3 (aus PINE-Script-Review 12.07.2026)
+    # Bull-Stickiness: P(Bull→Bull) = bb / from_bull_total
+    # Warn-Gap: Abstand zur Schwelle (60%) bestimmt Eskalationsstufe
+    warn_level = 0
+    if regime == 'bull' and bull_count > 0:
+        bb = sum(1 for i in range(len(labels)-1)
+                 if labels[i] == 'bull' and labels[i+1] == 'bull')
+        bull_sticky = round(bb / bull_count * 100)
+        warn_threshold = 60
+        if bull_sticky < warn_threshold:
+            warn_gap = warn_threshold - bull_sticky
+            if   warn_gap > 15: warn_level = 3  # Kritisch
+            elif warn_gap > 8:  warn_level = 2  # Mittel
+            else:               warn_level = 1  # Leicht
+    elif regime == 'bear' and bear_count > 0:
+        # Bear-Stickiness: P(Bear→Bear) = cc / from_bear_total
+        bear_to_bear = sum(1 for i in range(len(labels)-1)
+                           if labels[i] == 'bear' and labels[i+1] == 'bear')
+        bear_sticky = round(bear_to_bear / bear_count * 100)
+        bear_threshold = 55
+        if bear_sticky > bear_threshold:
+            bear_gap = bear_sticky - bear_threshold
+            if   bear_gap > 15: warn_level = 3
+            elif bear_gap > 8:  warn_level = 2
+            else:               warn_level = 1
+
+    return regime, p_bull2bear, bull_pct, warn_level
+
+def calc_ksi(closes, highs, lows, volumes, atr_len=14, vol_ema_len=20, sig_len=9):
+    """Kinetic Slippage Index (HPotter v1.01).
+    Misst Preis-Effizienz relativ zum Volumen:
+      KSI = (TrueRange²) / (Volume × EMA(Volume, 20)) × 1_000_000
+    Hoch: Kurs steigt auf niedrigem Volumen → leerer Markt, Umkehr möglich
+    Nahe 0: Volumen bewegt Kurs kaum → Orderdichte, Akkumulation/Distribution
+    Returns: (ksi, ksi_signal, ksi_spike_bool)
+    """
+    n = len(closes)
+    if n < max(atr_len, vol_ema_len, sig_len) + 5 or len(highs) < n or len(lows) < n or len(volumes) < n:
+        return None, None, None
+    try:
+        import math
+        # True Range
+        tr_list = []
+        for i in range(1, n):
+            hl   = highs[i] - lows[i]
+            hpc  = abs(highs[i] - closes[i-1])
+            lpc  = abs(lows[i]  - closes[i-1])
+            tr_list.append(max(hl, hpc, lpc))
+        if len(tr_list) < vol_ema_len + sig_len:
+            return None, None, None
+        # EMA Volumen (vol_ema_len)
+        def _ema_list(arr, span):
+            k = 2.0 / (span + 1)
+            out = [arr[0]]
+            for v in arr[1:]:
+                out.append(v * k + out[-1] * (1 - k))
+            return out
+        vols = volumes[1:]  # aligned mit tr_list
+        ema_vol = _ema_list(vols, vol_ema_len)
+        # KSI-Rohwert
+        ksi_raw = []
+        for i in range(len(tr_list)):
+            v   = vols[i]
+            ev  = ema_vol[i]
+            raw = (tr_list[i] ** 2 / (v * ev)) * 1_000_000 if (v > 0 and ev > 0) else 0.0
+            ksi_raw.append(raw)
+        # KSI-Signal (EMA sig_len)
+        ksi_sig = _ema_list(ksi_raw, sig_len)
+        ksi_now  = round(ksi_raw[-1], 4)
+        sig_now  = round(ksi_sig[-1], 4)
+        # Spike: KSI kreuzt über Signal (letzter Bar)
+        spike = bool(ksi_raw[-1] > ksi_sig[-1] and ksi_raw[-2] <= ksi_sig[-2])
+        return ksi_now, sig_now, spike
+    except Exception:
+        return None, None, None
+
+
+def calc_yang_zhang_sigma(closes, highs, lows, opens, lookback=20):
+    """Yang-Zhang (2000) Volatilitätsschätzer — drift-invariant.
+    σ² = σ²_overnight + k·σ²_co + (1-k)·σ²_RS
+    Identisch mit ST-EP06 Normierung (12.07.2026).
+    """
+    import math
+    n = len(closes)
+    if n < lookback + 2 or len(highs) < n or len(lows) < n or len(opens) < n:
+        return None
+    try:
+        MIN_SIGMA = 1e-10
+        # Serien für lookback-Fenster
+        or_vals, co_vals, rs_vals = [], [], []
+        for i in range(n - lookback, n):
+            if i < 1: continue
+            lnOR = math.log(opens[i] / closes[i-1])
+            lnCO = math.log(closes[i] / opens[i])
+            lnHO = math.log(highs[i] / opens[i])
+            lnHC = math.log(highs[i] / closes[i])
+            lnLO = math.log(lows[i]  / opens[i])
+            lnLC = math.log(lows[i]  / closes[i])
+            or_vals.append(lnOR); co_vals.append(lnCO)
+            rs_vals.append(lnHO * lnHC + lnLO * lnLC)
+        if len(or_vals) < 5: return None
+        def _var(arr):
+            m = sum(arr) / len(arr)
+            return sum((x - m)**2 for x in arr) / (len(arr) - 1)
+        sq_or = _var(or_vals)
+        sq_co = _var(co_vals)
+        sq_rs = sum(rs_vals) / len(rs_vals)
+        k  = 0.34 / (1.34 + (lookback + 1.0) / max(lookback - 1.0, 1.0))
+        sq = sq_or + k * sq_co + (1 - k) * sq_rs
+        return max(math.sqrt(max(sq, 0.0)), MIN_SIGMA)
+    except Exception:
+        return None
+
+
+def calc_ics_trend(closes, highs, lows, opens, period=19, groups=5, thresh=0.5, sigma_len=20):
+    """ST-EP06 Isotropic Trend Lines — 6-Skalen-Konsens (12.07.2026).
+    Normiert log(Preis) mit Yang-Zhang σ → ICS-Winkel vergleichbar über alle Märkte.
+    Block-Pipeline: highest/lowest → Geo-Mean → monotone Sequenz → Kanal-Fitting.
+    Returns dict mit icsDirection, icsAngle, icsConsensus, icsChUpper,
+    icsChLower, icsBoState, icsChannelPos
+    """
+    import math
+    n = len(closes)
+    MIN_SIGMA = 1e-10
+    PI = math.pi
+    SCALES = [3, 7, 13, 19, 29, 47]
+
+    # Yang-Zhang σ
+    opens_use = opens if opens is not None and len(opens) == n else closes
+    sigma = calc_yang_zhang_sigma(closes, highs, lows, opens_use, sigma_len)
+    if sigma is None or sigma < MIN_SIGMA:
+        return {}
+
+    def ics_line(p1, x1, p2, x2, target_x):
+        """Log-lineare Extrapolation in ICS."""
+        if x1 == x2 or p1 <= 0 or p2 <= 0:
+            return p1
+        y1 = math.log(p1) / sigma
+        y2 = math.log(p2) / sigma
+        yt = y1 + (y2 - y1) * (target_x - x1) / (x2 - x1)
+        return math.exp(yt * sigma)
+
+    def ics_angle(p1, x1, p2, x2):
+        if x1 == x2 or p1 <= 0 or p2 <= 0:
+            return 0.0
+        y1 = math.log(p1) / sigma
+        y2 = math.log(p2) / sigma
+        return math.atan((y2 - y1) / (x2 - x1)) * 180.0 / PI
+
+    def analyze_scale(per):
+        needed = groups * per + 2
+        if n < needed:
+            return None
+        gm, bhi, blo, bcx = [], [], [], []
+        for i in range(groups):
+            offset = i * per
+            window_h = highs[-(offset+1):-(offset+per+1):-1]
+            window_l = lows[-(offset+1):-(offset+per+1):-1]
+            if not window_h or not window_l:
+                return None
+            hi = max(window_h); lo = min(window_l)
+            if hi <= 0 or lo <= 0: return None
+            gm.append(math.exp((math.log(hi) + math.log(lo)) / 2))
+            bhi.append(hi); blo.append(lo)
+            bcx.append(n - offset - per // 2)
+
+        if len(gm) < 2: return None
+        # Richtung: längste monotone Sequenz
+        pd_ = 1 if gm[0] > gm[1] else -1
+        seg = 1
+        for i in range(1, groups - 1):
+            if i + 1 >= len(gm): break
+            d = 1 if gm[i] > gm[i+1] else -1
+            if d == pd_: seg += 1
+            else: break
+
+        # ICS-Winkel
+        angle = 0.0
+        if seg < len(gm):
+            angle = ics_angle(gm[seg], bcx[seg], gm[0], bcx[0])
+        direction = 0 if abs(angle) <= thresh else pd_
+
+        # Kanal-Fitting: 4 Extrema über trendenden Segment
+        fHH = fLH = fHL = fLL = None
+        xHH = xLH = xHL = xLL = 0
+        for i in range(seg + 1):
+            h, l, x = bhi[i], blo[i], bcx[i]
+            if fHH is None or h > fHH: fHH = h; xHH = x
+            if fLH is None or h < fLH: fLH = h; xLH = x
+            if fHL is None or l > fHL: fHL = l; xHL = x
+            if fLL is None or l < fLL: fLL = l; xLL = x
+
+        now = n  # aktueller Bar-Index (relativ)
+        ch_up = ch_lo = None
+        if direction == 1:
+            ch_up = ics_line(fLH, xLH, fHH, xHH, now)
+            ch_lo = ics_line(fLL, xLL, fHL, xHL, now)
+        elif direction == -1:
+            ch_up = ics_line(fHH, xHH, fLH, xLH, now)
+            ch_lo = ics_line(fHL, xHL, fLL, xLL, now)
+        else:
+            ch_up = fHH; ch_lo = fLL
+
+        return {'dir': direction, 'angle': angle, 'ch_up': ch_up, 'ch_lo': ch_lo}
+
+    # 6 Skalen parallel
+    results_scales = []
+    primary = None
+    for sc in SCALES:
+        r = analyze_scale(sc)
+        results_scales.append(r)
+        if sc == 19:
+            primary = r  # primäre Skala
+
+    if primary is None:
+        return {}
+
+    # Konsens-Zählung
+    c_up = sum(1 for r in results_scales if r and r['dir'] == 1)
+    c_dn = sum(1 for r in results_scales if r and r['dir'] == -1)
+    c_rng = sum(1 for r in results_scales if r and r['dir'] == 0)
+    consensus = max(c_up, c_dn, c_rng)
+
+    # Kurs-Position im Kanal (0-100%)
+    ch_up = primary.get('ch_up')
+    ch_lo = primary.get('ch_lo')
+    price = closes[-1]
+    channel_pos = None
+    if ch_up and ch_lo and ch_up > ch_lo and price > 0 and sigma > MIN_SIGMA:
+        try:
+            y     = math.log(price) / sigma
+            y_lo  = math.log(ch_lo) / sigma
+            y_hi  = math.log(ch_up) / sigma
+            pos   = (y - y_lo) / (y_hi - y_lo)
+            channel_pos = round(max(0.0, min(1.0, pos)) * 100, 1)
+        except Exception:
+            pass
+
+    # Breakout-Zustand (vereinfacht: INSIDE/BO_UP/BO_DN)
+    bo_state = 'INSIDE'
+    if ch_up and ch_lo:
+        if price > ch_up: bo_state = 'BO_UP'
+        elif price < ch_lo: bo_state = 'BO_DN'
+
+    return {
+        'icsDirection':  primary.get('dir'),        # -1/0/1
+        'icsAngle':      round(primary.get('angle', 0.0), 2),  # Grad
+        'icsConsensus':  consensus,                 # Wie viele der 6 Skalen einig
+        'icsConsensusBull': c_up,                   # Bullische Skalen
+        'icsConsensusBear': c_dn,
+        'icsChUpper':    round(ch_up, 4) if ch_up else None,
+        'icsChLower':    round(ch_lo, 4) if ch_lo else None,
+        'icsBoState':    bo_state,                  # INSIDE/BO_UP/BO_DN
+        'icsChannelPos': channel_pos,               # 0-100% (0=Boden, 100=Decke)
+        'icsSigma':      round(sigma, 6),           # Yang-Zhang σ
+    }
+
 
 def calc_composite_score(close, ema50, ema200, macd_hist, obv_trend, overheat, p_bull2bear, rsi):
     """Composite Score 0-100 → Note A+ bis F."""
@@ -2651,7 +2907,14 @@ def process_ticker(ticker, hist_df):
         obv_tr  = calc_obv_trend(closes, volumes)
         bbpos   = calc_bb(closes)
         overh   = calc_overheat(closes, highs, lows, ema200v, atrv)
-        regime, p_bull2bear, bull_pct = calc_markov(closes)
+        regime, p_bull2bear, bull_pct, warn_level = calc_markov(closes)
+
+        # ── KSI: Kinetic Slippage Index (HPotter, 12.07.2026) ────────────────
+        ksi_val, ksi_sig_val, ksi_spike = calc_ksi(closes, highs, lows, volumes)
+
+        # ── ICS Trend (ST-EP06, 12.07.2026) ──────────────────────────────────
+        opens_col = get_col(hist_df, "Open")
+        _ics = calc_ics_trend(closes, highs, lows, opens_col)
 
         # 52-Wochen High/Low
         w52_closes = closes[-252:] if len(closes) >= 252 else closes
@@ -2728,6 +2991,20 @@ def process_ticker(ticker, hist_df):
             "regime":        regime,
             "pBull2Bear":    p_bull2bear,
             "bullPct":       bull_pct,
+            "warnLevel":    warn_level,       # Markov v4: 0=OK, 1=Leicht, 2=Mittel, 3=Kritisch
+            "ksi":          ksi_val,          # Kinetic Slippage Index (Effizienz-Indikator)
+            "ksiSignal":    ksi_sig_val,      # KSI Signal-Linie (EMA9)
+            "ksiSpike":     ksi_spike,        # KSI > Signal (Kreuzung nach oben)
+            # ── ICS Trend (ST-EP06) ─────────────────────────────────────────
+            "icsDirection":  _ics.get("icsDirection"),    # -1=Bear 0=Flat 1=Bull
+            "icsAngle":      _ics.get("icsAngle"),        # ICS-Winkel in Grad
+            "icsConsensus":  _ics.get("icsConsensus"),    # 0-6 Skalen einig
+            "icsConsBull":   _ics.get("icsConsensusBull"),
+            "icsConsBear":   _ics.get("icsConsensusBear"),
+            "icsChUpper":    _ics.get("icsChUpper"),      # Obere Kanalline
+            "icsChLower":    _ics.get("icsChLower"),      # Untere Kanalline
+            "icsBoState":    _ics.get("icsBoState"),      # INSIDE/BO_UP/BO_DN
+            "icsChannelPos": _ics.get("icsChannelPos"),  # 0-100% Position im Kanal
             "bullSignals":   bull_signals,
             "score":         comp_score,
             "grade":         grade,
