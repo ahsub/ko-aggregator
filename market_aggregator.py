@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.0"
+AGGREGATOR_VERSION = "5.1"
 
 # yfinance für Marktdaten
 try:
@@ -4485,6 +4485,20 @@ def main():
     except Exception as _fe:
         log.warning(f"  [FIN] FIN-Archiv übersprungen (nicht kritisch): {_fe}")
         master["finArchive"] = {"ok": False, "reason": f"exception: {_fe}"}
+
+    # ── IV-ARCHIV (v5.1, Options-Modul Phase 0 — SUITE.md #15) ─────────────────
+    # ATM-IV täglich archivieren → IV-Rank/Percentile sobald ≥30 Tage vorhanden.
+    # Fehlerisoliert wie fin_layer — bricht den Hauptlauf niemals.
+    try:
+        import iv_layer
+        iv_status = iv_layer.run(results=results)
+        master["ivArchive"] = iv_status
+        log.info(f"  [IV] ivArchive: {iv_status.get('fetched')} Ticker fetched, "
+                 f"{iv_status.get('ranked')} gerankt, "
+                 f"{iv_status.get('archiveDays')} Archiv-Tage")
+    except Exception as _ive:
+        log.warning(f"  [IV] IV-Archiv übersprungen (nicht kritisch): {_ive}")
+        master["ivArchive"] = {"ok": False, "reason": f"exception: {_ive}"}
 
     payload_size = len(json.dumps(master)) / 1024
     log.info(f"\n📊 Master-JSON: {payload_size:.0f} KB | {len(results)} Ticker")
