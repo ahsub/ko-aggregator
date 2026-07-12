@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 
 log = logging.getLogger("aggregator")
 
-VAL_VERSION      = "1.0"
+VAL_VERSION      = "1.1"
 FUNDAMENTALS_DIR = "data/fundamentals"
 VAL_TOP_N        = 50      # Shortlist-Größe
 VAL_MIN_MCAP     = 300_000_000   # $300M Market Cap Mindestgröße
@@ -83,10 +83,19 @@ def _stufe1_pass(sym: str, t: dict) -> tuple[bool, str]:
     gm  = _f(t, 'grossMargins')
     de  = _f(t, 'debtToEquity')
     fcf = _f(t, 'freeCashflow')
+    pb  = _f(t, 'priceToBook')
+
+    # Nur US-Ticker: kein Punkt im Symbol (VOD.L, BHP.AX etc.)
+    if '.' in sym:
+        return False, 'non_us_ticker'
 
     # Mindest-Marktkapitalisierung
     if mc is None or mc < VAL_MIN_MCAP:
         return False, 'mcap_too_small'
+
+    # P/B-Plausibilitäts-Cap: > 50 = Datenfehler (ADR-Buchwert-Umrechnung etc.)
+    if pb is not None and pb > 50:
+        return False, 'pb_data_error'
 
     # Positive Bruttomarge (kein strukturelles Verlustgeschäft)
     if gm is None or gm <= 0:
@@ -203,14 +212,16 @@ def _score_from_raw(raw: dict) -> float:
         elif rg > 0.05:  s += 12
         elif rg > 0:     s +=  6
         elif rg > -0.05: s +=  0
-        else:            s -= 10   # schrumpfend
+        elif rg > -0.15: s -= 10   # leicht schrumpfend
+        else:            s -= 18   # strukturell schrumpfend (Carlin: Value Trap Risiko)
 
-    # D5 — FCF Yield: Cashflow-Qualität
+    # D5 — FCF Yield: Cashflow-Qualität (Cap bei 50%: Einmal-Spikes nicht übergewichten)
     if fy is not None:
-        if   fy > 0.10:  s += 25
-        elif fy > 0.05:  s += 18
-        elif fy > 0.02:  s += 10
-        elif fy > 0:     s +=  4
+        fy_capped = min(fy, 0.50)
+        if   fy_capped > 0.10:  s += 25
+        elif fy_capped > 0.05:  s += 18
+        elif fy_capped > 0.02:  s += 10
+        elif fy_capped > 0:     s +=  4
 
     # D6 — Gross Margin: Moat-Indikator
     if gm is not None:
