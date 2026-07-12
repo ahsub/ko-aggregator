@@ -1189,10 +1189,25 @@ def calc_ksi(closes, highs, lows, volumes, atr_len=14, vol_ema_len=20, sig_len=9
             ksi_raw.append(raw)
         # KSI-Signal (EMA sig_len)
         ksi_sig = _ema_list(ksi_raw, sig_len)
-        ksi_now  = round(ksi_raw[-1], 4)
-        sig_now  = round(ksi_sig[-1], 4)
-        # Spike: KSI kreuzt über Signal (letzter Bar)
-        spike = bool(ksi_raw[-1] > ksi_sig[-1] and ksi_raw[-2] <= ksi_sig[-2])
+        # Bug-Fix (12.07.2026): letzter Bar kann Volume=0 haben (Wochenende/ETF-Pause)
+        # → KSI-Raw = 0.0. Stattdessen letzten non-zero Bar verwenden (max 5 zurück).
+        ksi_last = sig_last = 0.0
+        for _back in range(1, min(6, len(ksi_raw)+1)):
+            if ksi_raw[-_back] > 0:
+                ksi_last = ksi_raw[-_back]
+                sig_last = ksi_sig[-_back]
+                break
+        ksi_now  = round(ksi_last, 4)
+        sig_now  = round(sig_last, 4)
+        # Spike: KSI > Signal in letztem non-zero Fenster
+        spike = False
+        if len(ksi_raw) >= 2:
+            # Suche letzten Übergang ksi <= sig → ksi > sig
+            for _b in range(1, min(6, len(ksi_raw))):
+                if ksi_raw[-_b] > 0 and ksi_raw[-_b] > ksi_sig[-_b]:
+                    if _b + 1 < len(ksi_raw) and ksi_raw[-(_b+1)] <= ksi_sig[-(_b+1)]:
+                        spike = True
+                    break
         return ksi_now, sig_now, spike
     except Exception:
         return None, None, None
@@ -2916,6 +2931,39 @@ def process_ticker(ticker, hist_df):
         opens_col = get_col(hist_df, "Open")
         _ics = calc_ics_trend(closes, highs, lows, opens_col)
 
+        # ── Stop Loss Clustering — Daily-Extrakt (Kioseff, 12.07.2026) ───────
+        # Vereinfachtes Modell 1: letzten 5 Swing-Hochs/-Tiefs als Stop-Cluster
+        # Kaufstops liegen unterhalb von Swing-Tiefs (SL-Short-Positionen)
+        # Verkaufstops liegen oberhalb von Swing-Hochs (SL-Long-Positionen)
+        _buy_stop_pct = _sell_stop_pct = None
+        try:
+            _atr_v = atrv if atrv else 0.01 * price
+            if len(highs) >= 20 and len(lows) >= 20:
+                # Letzte 5 Swing-Hochs: lokale Maxima (höher als Nachbarn)
+                _swing_hi = []
+                for _si in range(2, len(highs) - 2):
+                    if (highs[_si] > highs[_si-1] and highs[_si] > highs[_si-2] and
+                        highs[_si] > highs[_si+1] and highs[_si] > highs[_si+2]):
+                        _swing_hi.append(highs[_si] + _atr_v * 0.25)
+                # Letzte 5 Swing-Tiefs
+                _swing_lo = []
+                for _si in range(2, len(lows) - 2):
+                    if (lows[_si] < lows[_si-1] and lows[_si] < lows[_si-2] and
+                        lows[_si] < lows[_si+1] and lows[_si] < lows[_si+2]):
+                        _swing_lo.append(lows[_si] - _atr_v * 0.25)
+                # Nächster Verkaufsstopp ÜBER dem Kurs
+                _above = [h for h in _swing_hi if h > price]
+                if _above:
+                    _nearest_sell = min(_above)
+                    _sell_stop_pct = round((_nearest_sell / price - 1) * 100, 2)
+                # Nächster Kaufstopp UNTER dem Kurs
+                _below = [l for l in _swing_lo if l < price]
+                if _below:
+                    _nearest_buy = max(_below)
+                    _buy_stop_pct = round((_nearest_buy / price - 1) * 100, 2)
+        except Exception:
+            pass
+
         # 52-Wochen High/Low
         w52_closes = closes[-252:] if len(closes) >= 252 else closes
         high52 = round(max(w52_closes), 4)
@@ -3005,6 +3053,9 @@ def process_ticker(ticker, hist_df):
             "icsChLower":    _ics.get("icsChLower"),      # Untere Kanalline
             "icsBoState":    _ics.get("icsBoState"),      # INSIDE/BO_UP/BO_DN
             "icsChannelPos": _ics.get("icsChannelPos"),  # 0-100% Position im Kanal
+            # ── Stop Loss Clustering (Daily-Extrakt) ──────────────────────────
+            "nearestSellStopPct": _sell_stop_pct,  # % bis nächster Verkaufsstopp (positiv)
+            "nearestBuyStopPct":  _buy_stop_pct,   # % bis nächster Kaufstopp (negativ)
             "bullSignals":   bull_signals,
             "score":         comp_score,
             "grade":         grade,
@@ -3058,6 +3109,17 @@ def process_ticker(ticker, hist_df):
         result["perf6m"]     = round(perf_6m,  2) if perf_6m  is not None else None
         result["perf12m"]    = round(perf_12m, 2) if perf_12m is not None else None
         result["rsRating"]   = None   # wird in main() Stufe 2 befuellt
+
+        # ── Rohdaten-Cache für Sprint B Layer (reg_vp + cluster) ─────────────
+        # Werden nach Layer-Aufruf via .pop() entfernt — nicht in KV geschrieben.
+        result["_closes"]    = closes
+        result["_highs"]     = highs
+        result["_lows"]      = lows
+        result["_volumes"]   = volumes
+        result["_closes_cl"] = closes
+        result["_highs_cl"]  = highs
+        result["_lows_cl"]   = lows
+        result["_volumes_cl"] = volumes
 
         return result
     except Exception as e:
@@ -4780,6 +4842,31 @@ def main():
     # ── VAL-MOD VALUE-SCANNER (v5.2, Carlin/Graham 3-Stufen-Sieve — SUITE.md VAL-MOD) ───
     # Liest FIN-Archiv + Aggregator-results → Value-Shortlist Top-50 + Wheel-Kandidaten.
     # Muss VOR lokalem Backup + KV-Push stehen (sonst fehlt valueScanner im Artifact).
+    # ── REG_VP LAYER (Sprint B, 12.07.2026) ─────────────────────────────────────
+    try:
+        import reg_vp_layer
+        rvp_status = reg_vp_layer.run(results=results)
+        log.info(f"  [REG_VP] {rvp_status.get('enriched')} Ticker enrichiert")
+    except Exception as _rvpe:
+        log.warning(f"  [REG_VP] übersprungen: {_rvpe}")
+        # Felder auf None setzen damit KV-Schema konsistent bleibt
+        for _r in results:
+            for _k in ["zScore","pocLevel","distToPocPct","regTrend",
+                       "regBaseline","chanHigh3sd","chanLow3sd"]:
+                _r.setdefault(_k, None)
+
+    # ── CLUSTER_VP LAYER (Sprint B, 12.07.2026) ──────────────────────────────
+    try:
+        import cluster_layer
+        cl_status = cluster_layer.run(results=results)
+        log.info(f"  [CLUSTER_VP] {cl_status.get('enriched')} Ticker enrichiert")
+    except Exception as _cle:
+        log.warning(f"  [CLUSTER_VP] übersprungen: {_cle}")
+        for _r in results:
+            for _k in ["nearestClusterPocDist","dominantClusterVol",
+                       "clusterDelta","priceAboveDominant","nearestClusterPoc"]:
+                _r.setdefault(_k, None)
+
     try:
         import val_layer
         val_status = val_layer.run(results=results)
