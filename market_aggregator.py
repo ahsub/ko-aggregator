@@ -1159,7 +1159,7 @@ def calc_ksi(closes, highs, lows, volumes, atr_len=14, vol_ema_len=20, sig_len=9
     """
     n = len(closes)
     if n < max(atr_len, vol_ema_len, sig_len) + 5 or len(highs) < n or len(lows) < n or len(volumes) < n:
-        return None, None, None
+        return None, None, None, None
     try:
         import math
         # True Range
@@ -1189,28 +1189,31 @@ def calc_ksi(closes, highs, lows, volumes, atr_len=14, vol_ema_len=20, sig_len=9
             ksi_raw.append(raw)
         # KSI-Signal (EMA sig_len)
         ksi_sig = _ema_list(ksi_raw, sig_len)
-        # Bug-Fix (12.07.2026): letzter Bar kann Volume=0 haben (Wochenende/ETF-Pause)
-        # → KSI-Raw = 0.0. Stattdessen letzten non-zero Bar verwenden (max 5 zurück).
+        # Bug-Fix v2 (12.07.2026, Run #94-Diagnose): Rundungsproblem, nicht Volumen-Lücke.
+        # Bei liquiden Large Caps: raw ≈ 1e-8 → round(x,4) = 0.0.
+        # Fix: 10 Dezimalstellen + ksiRatio als dimensionslose Vergleichsgröße.
+        # Letzten non-zero Bar verwenden (max 5 zurück, für Volumen-Lücken).
         ksi_last = sig_last = 0.0
+        _last_idx = None
         for _back in range(1, min(6, len(ksi_raw)+1)):
             if ksi_raw[-_back] > 0:
-                ksi_last = ksi_raw[-_back]
-                sig_last = ksi_sig[-_back]
+                ksi_last  = ksi_raw[-_back]
+                sig_last  = ksi_sig[-_back]
+                _last_idx = len(ksi_raw) - _back
                 break
-        ksi_now  = round(ksi_last, 4)
-        sig_now  = round(sig_last, 4)
-        # Spike: KSI > Signal in letztem non-zero Fenster
+        ksi_now  = round(ksi_last, 10)
+        sig_now  = round(sig_last, 10)
+        # ksiRatio: KSI / Signal — dimensionslos, über alle Ticker vergleichbar
+        # > 1.0 = KSI über Signal (Ineffizienz steigt), < 1.0 = darunter
+        ksi_ratio = round(ksi_last / sig_last, 3) if sig_last > 0 else None
+        # Spike: strikte Kreuzung am letzten non-zero Bar (kein Fenster-Scan)
         spike = False
-        if len(ksi_raw) >= 2:
-            # Suche letzten Übergang ksi <= sig → ksi > sig
-            for _b in range(1, min(6, len(ksi_raw))):
-                if ksi_raw[-_b] > 0 and ksi_raw[-_b] > ksi_sig[-_b]:
-                    if _b + 1 < len(ksi_raw) and ksi_raw[-(_b+1)] <= ksi_sig[-(_b+1)]:
-                        spike = True
-                    break
-        return ksi_now, sig_now, spike
+        if _last_idx is not None and _last_idx >= 1:
+            spike = bool(ksi_raw[_last_idx] > ksi_sig[_last_idx] and
+                         ksi_raw[_last_idx - 1] <= ksi_sig[_last_idx - 1])
+        return ksi_now, sig_now, spike, ksi_ratio
     except Exception:
-        return None, None, None
+        return None, None, None, None
 
 
 def calc_yang_zhang_sigma(closes, highs, lows, opens, lookback=20):
@@ -2925,7 +2928,7 @@ def process_ticker(ticker, hist_df):
         regime, p_bull2bear, bull_pct, warn_level = calc_markov(closes)
 
         # ── KSI: Kinetic Slippage Index (HPotter, 12.07.2026) ────────────────
-        ksi_val, ksi_sig_val, ksi_spike = calc_ksi(closes, highs, lows, volumes)
+        ksi_val, ksi_sig_val, ksi_spike, ksi_ratio = calc_ksi(closes, highs, lows, volumes)
 
         # ── ICS Trend (ST-EP06, 12.07.2026) ──────────────────────────────────
         opens_col = get_col(hist_df, "Open")
@@ -3042,7 +3045,8 @@ def process_ticker(ticker, hist_df):
             "warnLevel":    warn_level,       # Markov v4: 0=OK, 1=Leicht, 2=Mittel, 3=Kritisch
             "ksi":          ksi_val,          # Kinetic Slippage Index (Effizienz-Indikator)
             "ksiSignal":    ksi_sig_val,      # KSI Signal-Linie (EMA9)
-            "ksiSpike":     ksi_spike,        # KSI > Signal (Kreuzung nach oben)
+            "ksiSpike":     ksi_spike,        # KSI > Signal (strikte Kreuzung, letzter non-zero Bar)
+            "ksiRatio":     ksi_ratio,        # KSI/Signal — dimensionslos, tickerübergreifend vergleichbar
             # ── ICS Trend (ST-EP06) ─────────────────────────────────────────
             "icsDirection":  _ics.get("icsDirection"),    # -1=Bear 0=Flat 1=Bull
             "icsAngle":      _ics.get("icsAngle"),        # ICS-Winkel in Grad
