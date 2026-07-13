@@ -1,0 +1,19 @@
+name = "ko-watchdog"
+main = "ko-watchdog.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cron: 04:15 UTC Mo–Sa (38 Minuten nach GHA-Cron 03:37 UTC)
+# Puffer: GHA braucht ~15-20 Min → bei 03:37 Start fertig ~03:55 → 04:15 sicher
+[triggers]
+crons = ["15 04 * * 1-6"]
+
+# KV Namespace Binding
+[[kv_namespaces]]
+binding = "KV"
+id = "86c05f66e32346b99e720d861fedd1de"
+
+# Secrets (via `wrangler secret put` oder CF Dashboard):
+#   GH_WATCHDOG_PAT  — GitHub PAT (scope: repo)
+#   GH_REPO          — optional, default: "ahsub/ko-aggregator"
+#   GH_WORKFLOW      — optional, default: "market-aggregator.yml"
