@@ -5082,12 +5082,19 @@ def main():
     # 9. Daily Market Snapshot - serverseitiges Briefing fuer Beta-Tester
     log.info(f"\n[SNAPSHOT] Daily Market Snapshot generieren...")
     try:
+        import datetime as _dt
         _snap_result = generate_daily_snapshot(master)
-        push_to_cloudflare_kv(_snap_result, key="daily_market_snapshot")
+        # Lauf-Zeitpunkt bestimmen: vor 12:00 UTC = Morgen-Lauf, danach = NYSE-Lauf
+        _lauf_hour = _dt.datetime.utcnow().hour
+        _snap_key = "daily_market_snapshot" if _lauf_hour < 12 else "daily_market_snapshot_us"
+        push_to_cloudflare_kv(_snap_result, key=_snap_key)
+        # Morgen-Lauf: immer auch daily_market_snapshot schreiben (Basis-Key)
+        if _lauf_hour >= 12:
+            push_to_cloudflare_kv(_snap_result, key="daily_market_snapshot")
         _snap_ok = _snap_result.get("ok")
         _snap_status = "OK" if _snap_ok else _snap_result.get("reason", "?")
-        log.info(f"   [SNAPSHOT] {_snap_status} - daily_market_snapshot KV-Key aktualisiert")
-        master["dailySnapshot"] = {"ok": _snap_ok, "reason": _snap_result.get("reason")}
+        log.info(f"   [SNAPSHOT] {_snap_status} - {_snap_key} aktualisiert (Lauf-Stunde UTC: {_lauf_hour})")
+        master["dailySnapshot"] = {"ok": _snap_ok, "reason": _snap_result.get("reason"), "key": _snap_key}
     except Exception as _se:
         log.warning(f"  [SNAPSHOT] fehlerisoliert uebersprungen: {_se}")
         master["dailySnapshot"] = {"ok": False, "reason": f"exception: {_se}"}
