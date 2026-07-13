@@ -2356,6 +2356,10 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         s_mr_long   = score_long_mean_reversion(r)
         s_breakdown = score_short_breakdown(r)
         s_fading    = score_short_fading(r)
+        s_csp       = score_options_csp(r)
+        s_cc        = score_options_covered_call(r)
+        # KO-Long: Momentum-Setup (Minervini-Basis) + KO-handelbare Preisspanne
+        s_ko_long   = s_minervini if (r.get("price") or 0) <= 500 else int(s_minervini * 0.7)
 
         # IOS Foundation v1.2 — NEU (30.06.2026, Batch-2-Punkt aus Übergabeprotokoll):
         # vorher liefen IOS-Score und Minervini-Score komplett unabhängig
@@ -2413,6 +2417,9 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "sMrLong":       s_mr_long,
             "sBreakdown":    s_breakdown,
             "sFading":       s_fading,
+            "sCsp":          s_csp,
+            "sCc":           s_cc,
+            "sKoLong":       s_ko_long,
             "bestLong":      best_long,
             "bestShort":     best_short,
             "shortDir":      short_dir,
@@ -2460,6 +2467,9 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "long_mr":        top20("sMrLong",    30),
         "short_breakdown":top20("sBreakdown", 35),
         "short_fading":   top20("sFading",    35),
+        "ko_long":        top20("sKoLong",    50),
+        "options_csp":    top20("sCsp",       50),
+        "options_cc":     top20("sCc",        30),
     }
 
     # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS v2 (Gemini-Review Fix C+F) ──
@@ -2579,7 +2589,8 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     log.info(f"  Leaderboards: Minervini={len(leaderboards['long_minervini'])} | "
              f"Swing={len(leaderboards['long_swing'])} | MR={len(leaderboards['long_mr'])} | "
-             f"Breakdown={len(leaderboards['short_breakdown'])} | Fading={len(leaderboards['short_fading'])}")
+             f"Breakdown={len(leaderboards['short_breakdown'])} | Fading={len(leaderboards['short_fading'])} | "
+             f"KO-Long={len(leaderboards['ko_long'])} | CSP={len(leaderboards['options_csp'])} | CC={len(leaderboards['options_cc'])}")
 
     # Strategie-Scores in die originalen results schreiben (fuer Ticker-Export)
     scored_map = {x["sym"]: x for x in scored}
