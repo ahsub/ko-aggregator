@@ -128,7 +128,7 @@ async function dispatchGHA(env, reason) {
       "Content-Type":  "application/json",
       "User-Agent":    "ko-watchdog/1.0"
     },
-    body: JSON.stringify({ ref: "main", inputs: { reason } })
+    body: JSON.stringify({ ref: "main" })
   });
 
   if (resp.status === 204) {
