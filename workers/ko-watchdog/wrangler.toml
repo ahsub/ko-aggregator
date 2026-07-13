@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 # Cron: 04:15 UTC Mo–Sa (38 Minuten nach GHA-Cron 03:37 UTC)
 # Puffer: GHA braucht ~15-20 Min → bei 03:37 Start fertig ~03:55 → 04:15 sicher
 [triggers]
-crons = ["15 04 * * 1-6"]
+crons = ["15 04 * * 1-6", "45 13 * * 1-5"]
 
 # KV Namespace Binding
 [[kv_namespaces]]
