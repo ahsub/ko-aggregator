@@ -4211,6 +4211,156 @@ def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
             time.sleep(2)
     return False
 
+
+# -- DAILY MARKET SNAPSHOT (v1.0, 13.07.2026) ----------------------------------
+# Serverseitiges Morning Briefing - laeuft im Aggregator (GHA, Owner-Kosten).
+# Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
+# Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
+
+def generate_daily_snapshot(master):
+    """Generiert das Morning Briefing serverseitig via Anthropic API.
+
+    Input:  master (vollstaendiger Aggregator-Output nach main())
+    Output: daily_market_snapshot-Dict fuer KV-Push
+    Fehler: fehlerisoliert - Exception bricht main() nie ab.
+    """
+    import urllib.request as _ur
+    import json as _j
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        log.warning("  [SNAPSHOT] ANTHROPIC_API_KEY fehlt - uebersprungen")
+        return {"ok": False, "reason": "no_api_key"}
+
+    market    = master.get("market", {})
+    snap      = market.get("snapshot", {})
+    fg        = market.get("fearGreed", {})
+    meta      = master.get("meta", {})
+    regime    = meta.get("regimeUsed", "-")
+    pcr       = market.get("pcr", {})
+    shortlist = master.get("masterShortlist", [])[:10]
+    snap_ts   = meta.get("generated", "-")
+    ltd       = meta.get("last_trading_day", "-")
+
+    def _fmt(val, decimals=2, suffix=""):
+        if val is None:
+            return "n/v"
+        try:
+            return f"{round(float(val), decimals)}{suffix}"
+        except Exception:
+            return str(val)
+
+    mlines = [
+        f"SNAPSHOT-ZEITPUNKT: {snap_ts} UTC (Aggregator-Lauf, serverseitig)",
+        f"LETZTER HANDELSTAG: {ltd}",
+        "DATENBINDUNG: Ausschliesslich diese Messwerte - kein Trainingswissen.",
+        "",
+        "--- REGIME & TREND ---",
+        f"Markt-Regime (Markov): {regime}",
+    ]
+    for key, label in [("spy", "SPY"), ("qqq", "QQQ"), ("iwm", "IWM")]:
+        s = snap.get(key, {})
+        if s.get("ok"):
+            mlines.append(f"{label}: {_fmt(s.get('price'))} USD ({_fmt(s.get('chg_pct'), 2, '%')})")
+
+    mlines += ["", "--- VOLATILITAET & SENTIMENT ---"]
+    vix_s = snap.get("vix", {})
+    if vix_s.get("ok"):
+        mlines.append(f"VIX: {_fmt(vix_s.get('price'))}")
+    vix3m_s = snap.get("vix3m", {})
+    if vix3m_s.get("ok"):
+        mlines.append(f"VIX3M: {_fmt(vix3m_s.get('price'))}")
+    if pcr:
+        mlines.append(
+            f"Put/Call-Ratio: {_fmt(pcr.get('pcr_equity'))} (Equity) "
+            f"/ {_fmt(pcr.get('pcr_index'))} (Index)"
+        )
+    if fg:
+        mlines.append(f"Fear & Greed: {fg.get('score', '-')}/100 ({fg.get('rating', '-')})")
+
+    mlines += ["", "--- MAKRO ---"]
+    fred = market.get("fredMacro", {})
+    if fred:
+        mlines.append(f"HY-Spread: {_fmt(fred.get('hy_spread'))} %")
+        mlines.append(f"Net Liquidity (Fed): {_fmt(fred.get('net_liquidity'), 0)} Mrd USD")
+
+    mlines += ["", "--- ROHSTOFFE & FX ---"]
+    for key, label in [("gold", "Gold"), ("oil_wti", "Oel WTI"), ("btc", "Bitcoin")]:
+        s = snap.get(key, {})
+        if s.get("ok"):
+            mlines.append(f"{label}: {_fmt(s.get('price'))} ({_fmt(s.get('chg_pct'), 2, '%')})")
+
+    zscores   = market.get("zscores", {})
+    sektor_rs = zscores.get("sector_rs", {})
+    if sektor_rs:
+        sorted_rs = sorted(sektor_rs.items(), key=lambda x: x[1] if x[1] else 0, reverse=True)
+        top3  = ", ".join(f"{k}:+{v:.2f}" for k, v in sorted_rs[:3]  if v and v > 0)
+        flop3 = ", ".join(f"{k}:{v:.2f}"  for k, v in sorted_rs[-3:] if v and v < 0)
+        if top3:  mlines.append(f"Sektor RS Top:  {top3}")
+        if flop3: mlines.append(f"Sektor RS Flop: {flop3}")
+
+    if shortlist:
+        mlines += ["", "--- TOP-10 SHORTLIST ---"]
+        for t in shortlist:
+            mlines.append(
+                f"{t.get('sym', '?')}: Score {t.get('score', '?')}/100,"
+                f" Strategie {t.get('strategy', '?')}"
+            )
+
+    messwerte = "\n".join(mlines)
+
+    prompt = (
+        "Du bist UIQ Market Analyst. Erstelle das Morning Briefing fuer heute.\n\n"
+        "PFLICHTREGELN:\n"
+        "- Ausschliesslich die unten stehenden Messwerte verwenden - KEIN Trainingswissen.\n"
+        "- Keine Kurse, Zahlen oder Prozente erfinden. Fehlende Werte: n/v schreiben.\n"
+        "- Ampeln (gruen/gelb/rot/leer) NUR aus Messwerten ableiten, nie schaetzen.\n"
+        "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
+        "STRUKTUR (immer diese Reihenfolge):\n"
+        "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
+        "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, Fear&Greed.\n"
+        "3. MAKRO-KONDENSAT (2 Saetze): HY-Spread + Net Liquidity.\n"
+        "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert):\n"
+        "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
+        "5. TOP-KANDIDATEN (max 5 Ticker, 1 Zeile: Ticker - Strategie - Kernaussage)\n\n"
+        + messwerte
+    )
+
+    try:
+        body = _j.dumps({
+            "model":      "claude-sonnet-4-6",
+            "max_tokens": 1200,
+            "messages":   [{"role": "user", "content": prompt}]
+        }).encode()
+        req2 = _ur.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "Content-Type":      "application/json",
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST"
+        )
+        with _ur.urlopen(req2, timeout=30) as resp:
+            rd = _j.loads(resp.read().decode())
+            briefing_text = rd.get("content", [{}])[0].get("text", "")
+
+        log.info(f"  [SNAPSHOT] Morning Briefing generiert ({len(briefing_text)} Zeichen)")
+        return {
+            "ok":               True,
+            "generated":        snap_ts,
+            "last_trading_day": ltd,
+            "regime":           regime,
+            "briefing":         briefing_text,
+            "messwerte_lines":  len(mlines),
+            "model":            "claude-sonnet-4-6",
+        }
+    except Exception as e:
+        log.warning(f"  [SNAPSHOT] API-Fehler: {e}")
+        return {"ok": False, "reason": f"api_error: {e}"}
+
+
 # ── HAUPTPROGRAMM ─────────────────────────────────────────────────────────────
 
 def main():
@@ -4918,6 +5068,19 @@ def main():
         }
     }
     push_to_cloudflare_kv(options_kv, key="options_watchlist")
+    # 9. Daily Market Snapshot - serverseitiges Briefing fuer Beta-Tester
+    log.info(f"\n[SNAPSHOT] Daily Market Snapshot generieren...")
+    try:
+        _snap_result = generate_daily_snapshot(master)
+        push_to_cloudflare_kv(_snap_result, key="daily_market_snapshot")
+        _snap_ok = _snap_result.get("ok")
+        _snap_status = "OK" if _snap_ok else _snap_result.get("reason", "?")
+        log.info(f"   [SNAPSHOT] {_snap_status} - daily_market_snapshot KV-Key aktualisiert")
+        master["dailySnapshot"] = {"ok": _snap_ok, "reason": _snap_result.get("reason")}
+    except Exception as _se:
+        log.warning(f"  [SNAPSHOT] fehlerisoliert uebersprungen: {_se}")
+        master["dailySnapshot"] = {"ok": False, "reason": f"exception: {_se}"}
+
     log.info(f"   ✅ options_watchlist KV-Key aktualisiert ({len(options_watchlist)} Ticker)")
 
     log.info(f"\n{'='*60}")
