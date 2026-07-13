@@ -5,7 +5,8 @@ permissions:
 
 on:
   schedule:
-    - cron: '37 03 * * 1-6'
+    - cron: '37 03 * * 1-6'   # Lauf 1: 03:37 UTC = 05:37 MEZ (vor Xetra-Öffnung 09:00)
+    - cron: '30 13 * * 1-5'   # Lauf 2: 13:30 UTC = 15:30 MEZ (vor NYSE-Öffnung 15:30)
   workflow_dispatch:
 
 jobs:
