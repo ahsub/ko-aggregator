@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.8.3"
+AGGREGATOR_VERSION = "5.9.0"
 
 # yfinance für Marktdaten
 try:
@@ -882,6 +882,103 @@ def calc_overheat(closes, highs, lows, ema200_val, atr_val):
     return min(100, score)
 
 
+def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
+             swing_window=5, min_contractions=2, lookback=90):
+    """VCP (Volatility Contraction Pattern, Minervini) — Sprint 1: reine Preis-Struktur.
+    Volumen-Bestätigung bewusst NICHT enthalten (vorgemerkt als Sprint 2,
+    SUITE.md Backlog #18 — Entscheidung Axel 14.07.2026: erst Preis-Struktur
+    validieren, Volumen erst mit Praxis-Erfahrung draufsetzen).
+
+    Methodik:
+    1. Swing-Hochs/-Tiefs über ein gleitendes Fenster (swing_window) im
+       Lookback-Bereich identifizieren (lokale Extrempunkte).
+    2. Contractions = aufeinanderfolgende Hoch->Tief-Bewegungen, als
+       prozentuale Korrektur berechnet.
+    3. Toleranz-Regel (Axel-Entscheidung 14.07.2026): NICHT streng monoton
+       (nicht "jede Contraction < vorherige"), sondern "letzte Contraction <
+       Durchschnitt der vorherigen Contractions" — robuster gegen
+       Datenrauschen, vermeidet False Negatives bei real leicht
+       unregelmäßigen Mustern.
+    4. Trend-Kontext-Gate: Preis über EMA150 (falls vorhanden) — VCP ist nur
+       im intakten Aufwärtstrend relevant (Minervini Trend Template, partiell;
+       volle Trend-Template-Prüfung liegt bereits anderswo im Aggregator vor).
+
+    Returns: dict mit vcpDetected, vcpContractions, vcpLastPct,
+             vcpAvgPrevPct, vcpTightening — oder None bei zu wenig Daten.
+    """
+    n = len(closes)
+    if n < lookback or len(highs) < n or len(lows) < n:
+        return None
+
+    window_highs = highs[-lookback:]
+    window_lows  = lows[-lookback:]
+    wn = len(window_highs)
+
+    # ── Swing-Hochs/-Tiefs: lokale Extrempunkte über swing_window ────────
+    swing_points = []  # [(index, 'high'|'low', preis), ...]
+    for i in range(swing_window, wn - swing_window):
+        seg_h = window_highs[i-swing_window:i+swing_window+1]
+        seg_l = window_lows[i-swing_window:i+swing_window+1]
+        if window_highs[i] == max(seg_h):
+            swing_points.append((i, 'high', window_highs[i]))
+        elif window_lows[i] == min(seg_l):
+            swing_points.append((i, 'low', window_lows[i]))
+
+    if len(swing_points) < min_contractions * 2:
+        return {"vcpDetected": False, "vcpContractions": 0, "vcpLastPct": None,
+                "vcpAvgPrevPct": None, "vcpTightening": False}
+
+    # Alternierende Hoch/Tief-Folge erzwingen (bei Gleichstand: höheren Wert behalten)
+    seq = []
+    for pt in swing_points:
+        if seq and seq[-1][1] == pt[1]:
+            # gleiche Art zweimal hintereinander -> den extremeren behalten
+            if pt[1] == 'high' and pt[2] > seq[-1][2]:
+                seq[-1] = pt
+            elif pt[1] == 'low' and pt[2] < seq[-1][2]:
+                seq[-1] = pt
+            continue
+        seq.append(pt)
+
+    # ── Contractions extrahieren: Hoch -> darauffolgendes Tief ───────────
+    contractions = []
+    for i in range(len(seq) - 1):
+        if seq[i][1] == 'high' and seq[i+1][1] == 'low':
+            high_val = seq[i][2]
+            low_val  = seq[i+1][2]
+            if high_val > 0:
+                pct = round((high_val - low_val) / high_val * 100, 2)
+                contractions.append(pct)
+
+    num_contractions = len(contractions)
+    if num_contractions < min_contractions:
+        return {"vcpDetected": False, "vcpContractions": num_contractions,
+                "vcpLastPct": contractions[-1] if contractions else None,
+                "vcpAvgPrevPct": None, "vcpTightening": False}
+
+    last_pct  = contractions[-1]
+    prev_pcts = contractions[:-1]
+    avg_prev  = round(sum(prev_pcts) / len(prev_pcts), 2) if prev_pcts else None
+
+    tightening = (avg_prev is not None and last_pct < avg_prev)
+
+    # Trend-Kontext-Gate: Preis über EMA150 (falls vorhanden)
+    price = closes[-1]
+    trend_ok = True
+    if ema150 is not None:
+        trend_ok = price > ema150
+
+    vcp_detected = bool(tightening and trend_ok and num_contractions >= min_contractions)
+
+    return {
+        "vcpDetected":     vcp_detected,
+        "vcpContractions": num_contractions,
+        "vcpLastPct":      last_pct,
+        "vcpAvgPrevPct":   avg_prev,
+        "vcpTightening":   tightening,
+    }
+
+
 def calc_hv_percentile(closes, window=30, lookback=252):
     """
     Berechnet Historical Volatility Percentile (HVP).
@@ -1000,6 +1097,28 @@ def score_options_csp(r: dict) -> int:
         s += min(int((r.get("f_score", 0) or 0) * 0.20), 15)
 
     return max(0, min(100, s))
+
+
+def score_vcp(r: dict) -> int:
+    """VCP-Score 0-100 (Sprint 1, Preis-Struktur — Volumen als Sprint 2 vorgemerkt,
+    SUITE.md Backlog #18). Basis-Score bei erkanntem Muster, Bonus für Anzahl
+    der Contractions (mehr Evidenz) und für Enge der letzten Contraction
+    (stärker gecoiled = näher am Breakout).
+    """
+    if not r.get("vcpDetected"):
+        return 0
+    contractions = r.get("vcpContractions") or 0
+    last_pct     = r.get("vcpLastPct")
+
+    s = 40  # Basis: Muster erkannt + Trend-Gate bestanden
+    # Bonus: mehr Contractions = mehr Bestätigung (Cap bei +30, ab 5 Contractions voll)
+    s += min(30, max(0, contractions - 2) * 10)
+    # Bonus: enge letzte Contraction = staerker gecoiled (Cap bei +30)
+    if last_pct is not None:
+        if   last_pct <= 5:  s += 30
+        elif last_pct <= 8:  s += 20
+        elif last_pct <= 12: s += 10
+    return min(100, s)
 
 
 def score_options_covered_call(r: dict) -> int:
@@ -2358,6 +2477,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         s_fading    = score_short_fading(r)
         s_csp       = score_options_csp(r)
         s_cc        = score_options_covered_call(r)
+        s_vcp       = score_vcp(r)
         # KO-Long: Momentum-Setup (Minervini-Basis) + KO-handelbare Preisspanne
         s_ko_long   = s_minervini if (r.get("price") or 0) <= 500 else int(s_minervini * 0.7)
 
@@ -2419,6 +2539,9 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "sFading":       s_fading,
             "sCsp":          s_csp,
             "sCc":           s_cc,
+            "sVcp":          s_vcp,
+            "vcpContractions": r.get("vcpContractions"),
+            "vcpLastPct":      r.get("vcpLastPct"),
             "sKoLong":       s_ko_long,
             "bestLong":      best_long,
             "bestShort":     best_short,
@@ -2431,10 +2554,11 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
-    def top20(key, min_score=35):
+    def top20(key, min_score=35, extra_fields=None):
         return [
-            {"sym": x["sym"], "score": x[key], "price": x["price"],
-             "grade": x["grade"], "rsi": x["rsi"], "atr": x["atr"]}
+            {**{"sym": x["sym"], "score": x[key], "price": x["price"],
+                "grade": x["grade"], "rsi": x["rsi"], "atr": x["atr"]},
+             **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
             for x in sorted(scored, key=lambda x: x[key], reverse=True)
             if x[key] >= min_score
         ][:20]
@@ -2460,6 +2584,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         r["shortDir"]      = s.get("shortDir")
         r["squeezeRisk"]   = s.get("squeezeRisk")   # 0-100, >=70 = Fading-Gate zu
         r["koShortLev"]    = s.get("koShortLev")    # Empfohlener Hebel (3-8) oder None
+        r["sVcp"]          = s.get("sVcp", 0)
 
     leaderboards = {
         "long_minervini": top20("sMinervini", 40),
@@ -2470,6 +2595,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "ko_long":        top20("sKoLong",    50),
         "options_csp":    top20("sCsp",       50),
         "options_cc":     top20("sCc",        30),
+        "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct"]),
     }
 
     # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS v2 (Gemini-Review Fix C+F) ──
@@ -2590,7 +2716,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     log.info(f"  Leaderboards: Minervini={len(leaderboards['long_minervini'])} | "
              f"Swing={len(leaderboards['long_swing'])} | MR={len(leaderboards['long_mr'])} | "
              f"Breakdown={len(leaderboards['short_breakdown'])} | Fading={len(leaderboards['short_fading'])} | "
-             f"KO-Long={len(leaderboards['ko_long'])} | CSP={len(leaderboards['options_csp'])} | CC={len(leaderboards['options_cc'])}")
+             f"KO-Long={len(leaderboards['ko_long'])} | CSP={len(leaderboards['options_csp'])} | CC={len(leaderboards['options_cc'])} | VCP={len(leaderboards['vcp_setups'])}")
 
     # Strategie-Scores in die originalen results schreiben (fuer Ticker-Export)
     scored_map = {x["sym"]: x for x in scored}
@@ -2936,6 +3062,9 @@ def process_ticker(ticker, hist_df):
         obv_tr  = calc_obv_trend(closes, volumes)
         bbpos   = calc_bb(closes)
         overh   = calc_overheat(closes, highs, lows, ema200v, atrv)
+        # ── VCP Detection (Sprint 1, Preis-Struktur, 14.07.2026) ─────────────
+        ema150v_for_vcp = sma150v  # sma150 als Trend-Proxy verwendet (bereits berechnet)
+        vcp = calc_vcp(closes, highs, lows, ema150=ema150v_for_vcp)
         regime, p_bull2bear, bull_pct, warn_level = calc_markov(closes)
 
         # ── KSI: Kinetic Slippage Index (HPotter, 12.07.2026) ────────────────
@@ -3041,6 +3170,10 @@ def process_ticker(ticker, hist_df):
             "ema200":        round(ema200v, 4) if ema200v else None,
             "sma150":        round(sma150v, 4) if sma150v else None,
             "ema200SlopeUp": ema200_slope_up,
+            "vcpDetected":     vcp["vcpDetected"] if vcp else False,
+            "vcpContractions": vcp["vcpContractions"] if vcp else 0,
+            "vcpLastPct":      vcp["vcpLastPct"] if vcp else None,
+            "vcpAvgPrevPct":   vcp["vcpAvgPrevPct"] if vcp else None,
             "patternEntry":  pattern_entry,
             "atr":           atrv,
             "rsi":           rsiv,
