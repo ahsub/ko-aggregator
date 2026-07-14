@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.8.1"
+AGGREGATOR_VERSION = "5.8.2"
 
 # yfinance für Marktdaten
 try:
@@ -4228,12 +4228,279 @@ def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
 # Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
 # Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
 
+# ══════════════════════════════════════════════════════════════════════════
+# MARKET CONTEXT MODULE (MCM) — Python-Port (14.07.2026)
+# ══════════════════════════════════════════════════════════════════════════
+# Portiert aus dem Frontend (ko-modules JS), damit generate_daily_snapshot()
+# denselben market_context + dieselben Strategie-Gates nutzt wie der Client
+# (axel-scanner v322/v323, ko-modules@b70ca70). Grund: Der Cache-First-Pfad
+# im Frontend liest DIESES serverseitige Briefing — der MCM-Umbau im JS
+# betrifft nur den seltenen Fallback-Pfad ohne KV-Cache-Hit. Ohne diesen
+# Python-Port wäre der ganze MCM-Sprint für den Regelfall wirkungslos.
+#
+# VERSIONS-LOCK (kein automatischer Sync, manueller Abgleich nötig):
+#   Diese Tabellen sind eine 1:1-Portierung von:
+#   - ko-modules/ko-market-state.js v2.1 (STRATEGY-Regime-Tabellen,
+#     CONTEXT_DOWNGRADE_RULES) — Commit b70ca70
+#   - ko-modules/ko-indicators.json v2.1.0 (signalRules, Calendar-Faktoren)
+#   Bei Änderungen an einer Seite MUSS die andere manuell nachgezogen werden.
+#   Kein gemeinsames Build-Artefakt vorhanden (JS/Python-Sprachgrenze).
+
+# ── signalRules: Schwellwerte -> 'ok'|'caution'|'risk' (1:1 aus ko-indicators.json) ──
+_MCM_SIGNAL_RULES = {
+    "vix":               [{"signal": "risk", "gte": 35}, {"signal": "caution", "gte": 25}, {"signal": "ok"}],
+    "vvix":              [{"signal": "risk", "gte": 1.5}, {"signal": "caution", "gte": 0.8}, {"signal": "ok"}],
+    "skew":              [{"signal": "caution", "gte": 80}, {"signal": "ok"}],
+    "pcr":               [{"signal": "caution", "gte": 1.2}, {"signal": "caution", "lte": 0.7}, {"signal": "ok"}],
+    "fear_greed":        [{"signal": "caution", "lte": 20}, {"signal": "caution", "gte": 80}, {"signal": "ok"}],
+    "intermarket_score": [{"signal": "risk", "gte": 60}, {"signal": "caution", "gte": 40}, {"signal": "ok"}],
+    "bull_indicator":    [{"signal": "caution", "lte": 35}, {"signal": "ok"}],
+    "treasury_stress":   [{"signal": "risk", "gte": 60}, {"signal": "caution", "gte": 35}, {"signal": "ok"}],
+    "ndx_breadth":       [{"signal": "risk", "lte": 35}, {"signal": "caution", "lte": 50}, {"signal": "ok"}],
+}
+
+# ── Calendar-Faktoren (identische Fenster-/Karenz-Parameter wie ko-indicators.json) ──
+_MCM_CALENDAR_FACTORS = {
+    "fed_window": {"event_type": "FOMC", "buffer_minutes": 15, "signal": "caution"},
+    "nfp_window": {"event_type": "NFP",  "buffer_minutes": 10, "signal": "caution"},
+    "cpi_window": {"event_type": "CPI",  "buffer_minutes": 10, "signal": "caution"},
+}
+
+# ── Regime-Basis-Gates (1:1 aus ko-market-state.js getStrategyGates(), gekürzt auf
+#    Farbe+active — Notes/Labels bleiben Frontend-Domäne, Server braucht nur Ampel) ──
+_MCM_REGIME_GATES = {
+    "BULL_QUIET": {
+        "action": "Trendfolge + CSP voll freigegeben",
+        "strategies": {
+            "momentum": "green", "breakout": "green", "swing": "green", "ko": "green",
+            "csp_wheel": "green", "atmna": "green", "weekly_income": "green", "cc": "green",
+            "value": "amber", "dividend": "amber", "meanrev": "red", "fading_short": "red",
+        },
+    },
+    "BULL_FRAGILE": {
+        "action": "Trendfolge mit engen Stops, CSP drosseln",
+        "strategies": {
+            "momentum": "amber", "swing": "amber", "csp_wheel": "amber", "weekly_income": "amber",
+            "cc": "amber", "atmna": "amber", "value": "amber", "dividend": "green",
+            "breakout": "red", "ko": "red", "meanrev": "red", "fading_short": "red",
+        },
+    },
+    "STRESS_UNSTABLE": {
+        "action": "Positionen absichern · Fading-Short prüfen · Defensive CSPs selektiv",
+        "strategies": {
+            "fading_short": "green", "meanrev": "amber", "csp_wheel": "amber", "value": "amber",
+            "cc": "amber", "dividend": "amber", "momentum": "red", "swing": "red",
+            "breakout": "red", "ko": "red", "atmna": "red", "weekly_income": "red",
+        },
+    },
+    "POST_PANIC_REVERSION": {
+        "action": "Mean Reversion & Income Priorität 1 · Vol-Crush nutzen · Value-Einstiege prüfen",
+        "strategies": {
+            "meanrev": "green", "csp_wheel": "green", "atmna": "green", "weekly_income": "green",
+            "cc": "green", "value": "green", "dividend": "amber", "fading_short": "amber",
+            "momentum": "red", "swing": "red", "breakout": "red", "ko": "red",
+        },
+    },
+    "NEUTRAL": {
+        "action": "Selektiv vorgehen · Nur höchste Qualität · Kein Leverage",
+        "strategies": {
+            "momentum": "amber", "swing": "amber", "csp_wheel": "amber", "weekly_income": "amber",
+            "cc": "amber", "dividend": "amber", "value": "amber", "atmna": "amber",
+            "breakout": "red", "ko": "red", "meanrev": "amber", "fading_short": "red",
+        },
+    },
+}
+
+# ── CONTEXT_DOWNGRADE_RULES (1:1 aus ko-market-state.js) ──
+_MCM_DOWNGRADE_RULES = [
+    ("treasury_stress",   ["ko", "momentum", "breakout", "swing", "csp_wheel", "atmna", "weekly_income", "cc"]),
+    ("ndx_breadth",       ["ko", "momentum", "breakout", "swing"]),
+    ("intermarket_score", ["ko", "momentum", "breakout", "swing", "value"]),
+    ("vix",               ["ko", "breakout", "atmna"]),
+    ("vvix",              ["ko", "breakout", "csp_wheel", "weekly_income"]),
+    ("skew",              ["csp_wheel", "atmna", "weekly_income"]),
+    ("pcr",               ["momentum", "breakout"]),
+    ("fear_greed",        ["momentum", "breakout", "ko"]),
+    ("bull_indicator",    ["ko", "momentum", "breakout", "swing"]),
+    ("fed_window",        ["ko", "momentum", "breakout", "swing", "csp_wheel", "atmna", "weekly_income"]),
+    ("nfp_window",        ["ko", "breakout"]),
+    ("cpi_window",        ["ko", "breakout", "csp_wheel"]),
+]
+
+_MCM_CALENDAR_CACHE = {"events": None, "loaded": False}
+
+
+def _mcm_load_macro_calendar():
+    """macro-calendar.json von axel-scanner laden (raw.githubusercontent, gecacht).
+    FAIL-CLOSED: bei Fehler bleibt events=None -> keine Calendar-Flags."""
+    if _MCM_CALENDAR_CACHE["loaded"]:
+        return _MCM_CALENDAR_CACHE["events"]
+    _MCM_CALENDAR_CACHE["loaded"] = True
+    try:
+        url = "https://raw.githubusercontent.com/ahsub/axel-scanner/main/macro-calendar.json"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            _MCM_CALENDAR_CACHE["events"] = data.get("events") or None
+            log.info(f"  [MCM] Makro-Kalender geladen — {len(data.get('events', []))} Events")
+        else:
+            log.warning(f"  [MCM] macro-calendar.json HTTP {r.status_code} — fail-closed, keine Event-Flags")
+    except Exception as e:
+        log.warning(f"  [MCM] macro-calendar.json nicht ladbar (fail-closed): {e}")
+    return _MCM_CALENDAR_CACHE["events"]
+
+
+def _mcm_eval_signal(rules, val):
+    """Erste passende Regel gewinnt. Identisch zu _evalSignalRules() im JS-Port."""
+    if val is None or rules is None:
+        return None
+    for r in rules:
+        if r.get("gte") is not None and not (val >= r["gte"]):
+            continue
+        if r.get("gt") is not None and not (val > r["gt"]):
+            continue
+        if r.get("lte") is not None and not (val <= r["lte"]):
+            continue
+        if r.get("lt") is not None and not (val < r["lt"]):
+            continue
+        return r["signal"]
+    return None
+
+
+def _mcm_eval_calendar_factor(cfg, events, now_utc):
+    """Identisch zu _evalCalendarFactor() im JS-Port (decision_utc/meeting_start_utc,
+    bufferMinutes-Karenz). FAIL-CLOSED bei fehlendem Kalender."""
+    if not events:
+        return None
+    buf = timedelta(minutes=cfg.get("buffer_minutes", 0))
+    for ev in events:
+        if ev.get("type") != cfg["event_type"] or not ev.get("decision_utc"):
+            continue
+        try:
+            decision = datetime.fromisoformat(ev["decision_utc"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if ev.get("meeting_start_utc"):
+            try:
+                window_start = datetime.fromisoformat(ev["meeting_start_utc"].replace("Z", "+00:00")) - buf
+            except Exception:
+                window_start = decision - timedelta(hours=24) - buf
+        else:
+            window_start = decision - timedelta(hours=24) - buf
+        window_end = decision + buf
+        if window_start <= now_utc <= window_end:
+            hrs = round((decision - now_utc).total_seconds() / 3600)
+            return {"signal": cfg["signal"], "label": ev.get("label", cfg["event_type"]) +
+                    (f" in {hrs}h" if hrs >= 0 else f" vor {-hrs}h")}
+    return None
+
+
+def build_server_market_context(master):
+    """market_context serverseitig — Pendant zu buildMarketContext() im JS-Port.
+    Nutzt nur Indikatoren, die im Aggregator-master tatsächlich vorliegen (vix,
+    vvix, skew, pcr, fear_greed, regime). Breadth/TSI/Bull-Indikator/Intermarket/
+    Dark-Pool-Score sind reine Client-DOM-Berechnungen (loadIntermarket(),
+    calcBullIndicator() etc.) OHNE Server-Äquivalent — werden hier bewusst NICHT
+    simuliert (fail-closed, kein Fake-Wert), sondern fehlen im Context.
+    BACKLOG: eigene Server-Berechnung dieser vier Faktoren wäre nötig für volle
+    Parität mit dem Client-Context (siehe SUITE.md Backlog).
+    """
+    market = master.get("market", {}) or {}
+    meta   = master.get("meta", {}) or {}
+    vt     = market.get("vixTerm", {}) or {}
+    pcr_d  = market.get("pcr", {}) or {}
+    fg     = market.get("fearGreed", {}) or {}
+    zsc    = market.get("zscores", {}) or {}
+
+    regime = master.get("masterShortlist_meta", {}).get("regimeUsed") or meta.get("regimeUsed")
+    # Fallback: regimeUsed liegt strukturell in der Leaderboard-Rueckgabe, nicht in meta
+    # (siehe Bugfix-Kommentar in generate_daily_snapshot). Wird dort korrekt injiziert.
+
+    factors = {}
+    caution, risk = [], []
+
+    def _add(fid, value, rules):
+        if value is None:
+            return
+        sig = _mcm_eval_signal(rules, value)
+        factors[fid] = {"value": value, "signal": sig}
+        if sig == "caution":
+            caution.append(fid)
+        elif sig == "risk":
+            risk.append(fid)
+
+    _add("vix",        vt.get("vix"),           _MCM_SIGNAL_RULES["vix"])
+    _add("vvix",        (zsc.get("vvix") or {}).get("zscore"), _MCM_SIGNAL_RULES["vvix"])
+    _add("skew",        (zsc.get("skew") or {}).get("percentile"), _MCM_SIGNAL_RULES["skew"])
+    _add("pcr",         pcr_d.get("pcr"),        _MCM_SIGNAL_RULES["pcr"])
+    _add("fear_greed",  fg.get("score"),         _MCM_SIGNAL_RULES["fear_greed"])
+
+    # Calendar-Faktoren
+    events = _mcm_load_macro_calendar()
+    now_utc = datetime.now(timezone.utc)
+    for fid, cfg in _MCM_CALENDAR_FACTORS.items():
+        r = _mcm_eval_calendar_factor(cfg, events, now_utc)
+        if r:
+            factors[fid] = r
+            if r["signal"] == "caution":
+                caution.append(fid)
+            elif r["signal"] == "risk":
+                risk.append(fid)
+
+    risk_level = "high" if risk else ("elevated" if len(caution) >= 2 else "low")
+    return {
+        "regime": regime,
+        "factors": factors,
+        "summary": {"risk_level": risk_level, "caution_flags": caution, "risk_flags": risk},
+    }
+
+
+def calc_server_strategy_gates(regime, ctx):
+    """Pendant zu KoMarketState.calcStrategyGates() im JS-Port. Nur Farben +
+    Downgrades — Notes/Labels bleiben UI-Domäne (Frontend zeigt sie an)."""
+    base = _MCM_REGIME_GATES.get(regime or "NEUTRAL", _MCM_REGIME_GATES["NEUTRAL"])
+    strategies = dict(base["strategies"])  # Kopie
+    downgrades = []
+    if ctx and ctx.get("factors"):
+        for fid, affected in _MCM_DOWNGRADE_RULES:
+            f = ctx["factors"].get(fid)
+            if not f or not f.get("signal") or f["signal"] == "ok":
+                continue
+            for s in affected:
+                if s not in strategies:
+                    continue
+                cur = strategies[s]
+                if f["signal"] == "caution" and cur == "green":
+                    strategies[s] = "amber"
+                    downgrades.append({"strategy": s, "from": "green", "to": "amber", "factor": fid})
+                elif f["signal"] == "risk" and cur in ("green", "amber"):
+                    strategies[s] = "red"
+                    downgrades.append({"strategy": s, "from": cur, "to": "red", "factor": fid})
+    return {"action": base["action"], "strategies": strategies, "downgrades": downgrades}
+
+
 def generate_daily_snapshot(master):
     """Generiert das Morning Briefing serverseitig via Anthropic API.
 
     Input:  master (vollstaendiger Aggregator-Output nach main())
     Output: daily_market_snapshot-Dict fuer KV-Push
     Fehler: fehlerisoliert - Exception bricht main() nie ab.
+
+    BUGFIX (14.07.2026, Axel-Review v323): Vor diesem Fix waren VIX/Regime/PCR
+    IMMER "n/v" im Briefing, unabhaengig von der tatsaechlichen Datenlage —
+    reine Feldpfad-Fehler, keine Timing-Probleme:
+      - regime kam aus meta["regimeUsed"] (existiert dort nie, liegt in der
+        Leaderboard-Rueckgabe) -> jetzt: master["masterShortlist_meta"] Fallback
+        UND direkter Parameter (siehe main()-Aufrufstelle, dort korrekt injiziert)
+      - VIX kam aus snapshot["vix"] (kein VIX-Symbol in fetch_market_snapshot())
+        -> jetzt: vixTerm["vix"] (fetch_vix_term() liefert den echten Wert)
+      - PCR kam aus pcr["pcr_equity"]/["pcr_index"] (Felder existieren nie im
+        Schema, nur ein einzelner Blended-Wert pcr["pcr"]) -> jetzt: pcr["pcr"]
+        direkt, ein Wert statt Equity/Index-Split
+    MCM-PORT (14.07.2026): market_context + calc_server_strategy_gates() bauen
+    denselben Kontext wie der Client (axel-scanner v322/v323) — Prompt bekommt
+    jetzt Signal-Flags (ok/caution/risk) + Calendar-Fenster + die bereits
+    berechnete Ampel mit dem Auftrag, sie zu erklaeren statt zu widersprechen.
     """
     import urllib.request as _ur
     import json as _j
@@ -4243,101 +4510,125 @@ def generate_daily_snapshot(master):
         log.warning("  [SNAPSHOT] ANTHROPIC_API_KEY fehlt - uebersprungen")
         return {"ok": False, "reason": "no_api_key"}
 
-    market    = master.get("market", {})
-    snap      = market.get("snapshot", {})
-    fg        = market.get("fearGreed", {})
-    meta      = master.get("meta", {})
-    regime    = meta.get("regimeUsed", "-")
-    pcr       = market.get("pcr", {})
-    shortlist = master.get("masterShortlist", [])[:10]
-    snap_ts   = meta.get("generated", "-")
-    ltd       = meta.get("last_trading_day", "-")
-
-    def _fmt(val, decimals=2, suffix=""):
-        if val is None:
-            return "n/v"
-        try:
-            return f"{round(float(val), decimals)}{suffix}"
-        except Exception:
-            return str(val)
-
-    mlines = [
-        f"SNAPSHOT-ZEITPUNKT: {snap_ts} UTC (Aggregator-Lauf, serverseitig)",
-        f"LETZTER HANDELSTAG: {ltd}",
-        "DATENBINDUNG: Ausschliesslich diese Messwerte - kein Trainingswissen.",
-        "",
-        "--- REGIME & TREND ---",
-        f"Markt-Regime (Markov): {regime}",
-    ]
-    for key, label in [("spy", "SPY"), ("qqq", "QQQ"), ("iwm", "IWM")]:
-        s = snap.get(key, {})
-        if s.get("ok"):
-            mlines.append(f"{label}: {_fmt(s.get('price'))} USD ({_fmt(s.get('chg_pct'), 2, '%')})")
-
-    mlines += ["", "--- VOLATILITAET & SENTIMENT ---"]
-    vix_s = snap.get("vix", {})
-    if vix_s.get("ok"):
-        mlines.append(f"VIX: {_fmt(vix_s.get('price'))}")
-    vix3m_s = snap.get("vix3m", {})
-    if vix3m_s.get("ok"):
-        mlines.append(f"VIX3M: {_fmt(vix3m_s.get('price'))}")
-    if pcr:
-        mlines.append(
-            f"Put/Call-Ratio: {_fmt(pcr.get('pcr_equity'))} (Equity) "
-            f"/ {_fmt(pcr.get('pcr_index'))} (Index)"
-        )
-    if fg:
-        mlines.append(f"Fear & Greed: {fg.get('score', '-')}/100 ({fg.get('rating', '-')})")
-
-    mlines += ["", "--- MAKRO ---"]
-    fred = market.get("fredMacro", {})
-    if fred:
-        mlines.append(f"HY-Spread: {_fmt(fred.get('hy_spread'))} %")
-        mlines.append(f"Net Liquidity (Fed): {_fmt(fred.get('net_liquidity'), 0)} Mrd USD")
-
-    mlines += ["", "--- ROHSTOFFE & FX ---"]
-    for key, label in [("gold", "Gold"), ("oil_wti", "Oel WTI"), ("btc", "Bitcoin")]:
-        s = snap.get(key, {})
-        if s.get("ok"):
-            mlines.append(f"{label}: {_fmt(s.get('price'))} ({_fmt(s.get('chg_pct'), 2, '%')})")
-
-    zscores   = market.get("zscores", {})
-    sektor_rs = zscores.get("sector_rs", {})
-    if sektor_rs:
-        sorted_rs = sorted(sektor_rs.items(), key=lambda x: x[1] if x[1] else 0, reverse=True)
-        top3  = ", ".join(f"{k}:+{v:.2f}" for k, v in sorted_rs[:3]  if v and v > 0)
-        flop3 = ", ".join(f"{k}:{v:.2f}"  for k, v in sorted_rs[-3:] if v and v < 0)
-        if top3:  mlines.append(f"Sektor RS Top:  {top3}")
-        if flop3: mlines.append(f"Sektor RS Flop: {flop3}")
-
-    if shortlist:
-        mlines += ["", "--- TOP-10 SHORTLIST ---"]
-        for t in shortlist:
-            mlines.append(
-                f"{t.get('sym', '?')}: Score {t.get('score', '?')}/100,"
-                f" Strategie {t.get('strategy', '?')}"
-            )
-
-    messwerte = "\n".join(mlines)
-
-    prompt = (
-        "Du bist UIQ Market Analyst. Erstelle das Morning Briefing fuer heute.\n\n"
-        "PFLICHTREGELN:\n"
-        "- Ausschliesslich die unten stehenden Messwerte verwenden - KEIN Trainingswissen.\n"
-        "- Keine Kurse, Zahlen oder Prozente erfinden. Fehlende Werte: n/v schreiben.\n"
-        "- Ampeln (gruen/gelb/rot/leer) NUR aus Messwerten ableiten, nie schaetzen.\n"
-        "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
-        "STRUKTUR (immer diese Reihenfolge):\n"
-        "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
-        "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, Fear&Greed.\n"
-        "3. MAKRO-KONDENSAT (2 Saetze): HY-Spread + Net Liquidity.\n"
-        "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert):\n"
-        "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
-        "5. TOP-KANDIDATEN (max 5 Ticker, 1 Zeile: Ticker - Strategie - Kernaussage)\n\n"
-        + messwerte
-    )
-
     try:
+        market    = master.get("market", {})
+        snap      = market.get("snapshot", {})
+        fg        = market.get("fearGreed", {})
+        meta      = master.get("meta", {})
+        # BUGFIX: regimeUsed korrekt lesen (siehe Docstring) — Aufruferstelle in
+        # main() injiziert regimeUsed zusaetzlich in meta, siehe dortigen Patch.
+        regime    = meta.get("regimeUsed") or "-"
+        vix_term  = market.get("vixTerm", {}) or {}
+        pcr_d     = market.get("pcr", {}) or {}
+        shortlist = master.get("masterShortlist", [])[:10]
+        snap_ts   = meta.get("generated", "-")
+        ltd       = meta.get("last_trading_day", "-")
+
+        def _fmt(val, decimals=2, suffix=""):
+            if val is None:
+                return "n/v"
+            try:
+                return f"{round(float(val), decimals)}{suffix}"
+            except Exception:
+                return str(val)
+
+        # ── MCM: market_context + deterministische Strategie-Gates ──────
+        ctx   = build_server_market_context(master)
+        ctx["regime"] = regime if regime != "-" else None
+        gates = calc_server_strategy_gates(regime if regime != "-" else None, ctx)
+
+        mlines = [
+            f"SNAPSHOT-ZEITPUNKT: {snap_ts} UTC (Aggregator-Lauf, serverseitig)",
+            f"LETZTER HANDELSTAG: {ltd}",
+            "DATENBINDUNG: Ausschliesslich diese Messwerte - kein Trainingswissen.",
+            "",
+            "--- REGIME & TREND ---",
+            f"Markt-Regime (Markov): {regime}",
+        ]
+        for key, label in [("spy", "SPY"), ("qqq", "QQQ"), ("iwm", "IWM")]:
+            s = snap.get(key, {})
+            if s.get("ok"):
+                mlines.append(f"{label}: {_fmt(s.get('price'))} USD ({_fmt(s.get('chg_pct'), 2, '%')})")
+
+        mlines += ["", "--- VOLATILITAET & SENTIMENT ---"]
+        # BUGFIX: VIX aus vixTerm (fetch_vix_term()), nicht aus snapshot (kein VIX-Symbol dort)
+        if vix_term.get("vix") is not None:
+            mlines.append(f"VIX: {_fmt(vix_term.get('vix'))}")
+        if vix_term.get("vix3m") is not None:
+            mlines.append(f"VIX3M: {_fmt(vix_term.get('vix3m'))}")
+        # BUGFIX: PCR-Schema hat nur einen Blended-Wert (pcr["pcr"]), keine Equity/Index-Trennung
+        if pcr_d.get("pcr") is not None:
+            mlines.append(f"Put/Call-Ratio: {_fmt(pcr_d.get('pcr'))} ({pcr_d.get('signal', '—')})")
+        if fg:
+            mlines.append(f"Fear & Greed: {fg.get('score', '-')}/100 ({fg.get('rating', '-')})")
+
+        mlines += ["", "--- MAKRO ---"]
+        fred = market.get("fredMacro", {})
+        if fred:
+            mlines.append(f"HY-Spread: {_fmt(fred.get('hy_spread'))} %")
+            mlines.append(f"Net Liquidity (Fed): {_fmt(fred.get('net_liquidity'), 0)} Mrd USD")
+
+        mlines += ["", "--- ROHSTOFFE & FX ---"]
+        for key, label in [("gold", "Gold"), ("oil_wti", "Oel WTI"), ("btc", "Bitcoin")]:
+            s = snap.get(key, {})
+            if s.get("ok"):
+                mlines.append(f"{label}: {_fmt(s.get('price'))} ({_fmt(s.get('chg_pct'), 2, '%')})")
+
+        zscores   = market.get("zscores", {})
+        sektor_rs = zscores.get("sector_rs", {})
+        if sektor_rs:
+            sorted_rs = sorted(sektor_rs.items(), key=lambda x: x[1] if x[1] else 0, reverse=True)
+            top3  = ", ".join(f"{k}:+{v:.2f}" for k, v in sorted_rs[:3]  if v and v > 0)
+            flop3 = ", ".join(f"{k}:{v:.2f}"  for k, v in sorted_rs[-3:] if v and v < 0)
+            if top3:  mlines.append(f"Sektor RS Top:  {top3}")
+            if flop3: mlines.append(f"Sektor RS Flop: {flop3}")
+
+        if shortlist:
+            mlines += ["", "--- TOP-10 SHORTLIST ---"]
+            for t in shortlist:
+                mlines.append(
+                    f"{t.get('sym', '?')}: Score {t.get('score', '?')}/100,"
+                    f" Strategie {t.get('strategy', '?')}"
+                )
+
+        # ── MCM: Context + berechnete Ampel als eigener Block ────────────
+        mlines += ["", "--- MARKET CONTEXT (Single Source of Truth, MCM) ---"]
+        mlines.append(f"Aggregiertes Risk-Level: {ctx['summary']['risk_level'].upper()}"
+                      + (f" | Caution: {', '.join(ctx['summary']['caution_flags'])}" if ctx['summary']['caution_flags'] else "")
+                      + (f" | Risk: {', '.join(ctx['summary']['risk_flags'])}" if ctx['summary']['risk_flags'] else ""))
+        for fid, f in ctx["factors"].items():
+            sig = f" [{f['signal'].upper()}]" if f.get("signal") else ""
+            val = f.get("label", f.get("value"))
+            mlines.append(f"{fid}: {val}{sig}")
+        mlines += ["", "--- STRATEGIE-AMPEL (bereits berechnet, regelbasiert) ---"]
+        if gates["downgrades"]:
+            dg_txt = " · ".join(f"{d['strategy']} {d['from']}->{d['to']} ({d['factor']})" for d in gates["downgrades"])
+            mlines.append(f"Context-Downgrades: {dg_txt}")
+        else:
+            mlines.append("Keine Context-Downgrades — Regime-Basis-Gates gelten unveraendert.")
+        gates_txt = ", ".join(f"{k}:{v}" for k, v in gates["strategies"].items())
+        mlines.append(f"Berechnete Gates: {gates_txt}")
+        mlines.append("AUFGABE: Deine Markteinschaetzung MUSS konsistent mit diesen Gates sein. Erklaere die Datenlage, die zu ihnen fuehrt — widersprich ihnen nicht.")
+
+        messwerte = "\n".join(mlines)
+
+        prompt = (
+            "Du bist UIQ Market Analyst. Erstelle das Morning Briefing fuer heute.\n\n"
+            "PFLICHTREGELN:\n"
+            "- Ausschliesslich die unten stehenden Messwerte verwenden - KEIN Trainingswissen.\n"
+            "- Keine Kurse, Zahlen oder Prozente erfinden. Fehlende Werte: n/v schreiben.\n"
+            "- Ampeln (gruen/gelb/rot/leer) NUR aus den bereits berechneten Gates uebernehmen, nie selbst schaetzen.\n"
+            "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
+            "STRUKTUR (immer diese Reihenfolge):\n"
+            "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
+            "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, Fear&Greed.\n"
+            "3. MAKRO-KONDENSAT (2 Saetze): HY-Spread + Net Liquidity.\n"
+            "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert, Ampel-Farbe aus den berechneten Gates uebernehmen):\n"
+            "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
+            "5. TOP-KANDIDATEN (max 5 Ticker, 1 Zeile: Ticker - Strategie - Kernaussage)\n\n"
+            + messwerte
+        )
+
         body = _j.dumps({
             "model":      "claude-sonnet-4-6",
             "max_tokens": 1200,
@@ -4366,10 +4657,12 @@ def generate_daily_snapshot(master):
             "briefing":         briefing_text,
             "messwerte_lines":  len(mlines),
             "model":            "claude-sonnet-4-6",
+            "marketContext":    ctx,     # MCM: fuer Frontend/Konsistenz-Checks verfuegbar
+            "strategyGates":    gates,   # MCM: deterministische Ampel, identisch zur Client-Berechnung
         }
     except Exception as e:
-        log.warning(f"  [SNAPSHOT] API-Fehler: {e}")
-        return {"ok": False, "reason": f"api_error: {e}"}
+        log.warning(f"  [SNAPSHOT] Fehler: {e}")
+        return {"ok": False, "reason": f"exception: {e}"}
 
 
 # ── HAUPTPROGRAMM ─────────────────────────────────────────────────────────────
@@ -4953,6 +5246,9 @@ def main():
         "timestamp":   strategy_data["timestamp"],
         "enriched":    bool(_ant_key),
     }
+    # BUGFIX (14.07.2026): regimeUsed lag bisher NUR in strategyMeta, generate_daily_snapshot()
+    # sucht aber in meta["regimeUsed"] (existierte dort nie -> immer "-" -> immer "n/v" im Briefing).
+    master["meta"]["regimeUsed"] = strategy_data["regimeUsed"]
 
     # ── TRACK-RECORD-LAYER Phase A (v4.4, Spez: docs/TRACK_RECORD_SPEC.md) ──
     # Snapshot der heutigen Empfehlungen nach tr:snap:<Handelstag> + tr:index.
