@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.8.2"
+AGGREGATOR_VERSION = "5.8.3"
 
 # yfinance für Marktdaten
 try:
@@ -1091,7 +1091,7 @@ def calc_markov(closes, lookback=60, stride=1):
     Regime-Label basiert auf 5T-Return fuer Rauschen-Reduktion.
     """
     if len(closes) < lookback:
-        return None, None, None
+        return None, None, None, None
     recent = closes[-lookback:]
     # Regime-Labels: 5T-Return fuer Stabilität, aber 1T-Uebergaenge messen
     labels = []
@@ -1103,7 +1103,7 @@ def calc_markov(closes, lookback=60, stride=1):
         else:             labels.append('side')
 
     if len(labels) < 10:
-        return None, None, None
+        return None, None, None, None
 
     # Transitions in 1T-Schritten (keine Autokorrelation)
     bull_to_bear = 0
@@ -1170,7 +1170,7 @@ def calc_ksi(closes, highs, lows, volumes, atr_len=14, vol_ema_len=20, sig_len=9
             lpc  = abs(lows[i]  - closes[i-1])
             tr_list.append(max(hl, hpc, lpc))
         if len(tr_list) < vol_ema_len + sig_len:
-            return None, None, None
+            return None, None, None, None
         # EMA Volumen (vol_ema_len)
         def _ema_list(arr, span):
             k = 2.0 / (span + 1)
