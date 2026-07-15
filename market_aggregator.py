@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.9.0"
+AGGREGATOR_VERSION = "5.10.0"
 
 # yfinance für Marktdaten
 try:
@@ -2741,6 +2741,116 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     }
 
 
+async def enrich_options_watchlist_with_ai(watchlist: list, market_data: dict,
+                                             api_key: str | None = None) -> list:
+    """
+    KI-Enrichment fuer die Options-Watchlist (Phase 0.5 Arbeitspaket F Punkt 2,
+    15.07.2026): Claude Sonnet analysiert Top-15 Options-Kandidaten und
+    generiert strukturierte Options-Handelsparameter als JSON. Analog zu
+    enrich_shortlist_with_ai(), aber Options-spezifisch (Strike/DTE/Delta/
+    Praemie statt Trigger/StopLoss/CRV fuer Aktienpositionen).
+
+    WICHTIG: die Strategie-WAHL (CSP vs. Covered Call vs. Credit Spread) wird
+    an die KI delegiert (Score-Vergleich CSP/CC/Spread pro Ticker im Prompt),
+    NICHT algorithmisch vorentschieden — die 4 Score-Felder (optsScore/
+    scoreCsp/scoreCc/scoreSpread) bilden nicht 1:1 auf eine einzelne Strategie
+    ab, ein hartes Mapping waere Raten (vgl. Client-seitige Vorsicht in
+    Arbeitspaket D/F).
+    """
+    if not api_key or not watchlist:
+        log.warning("  Options-KI-Enrichment: kein API-Key oder leere Watchlist — uebersprungen")
+        return watchlist
+
+    import json as json_mod, urllib.request, urllib.error
+
+    enriched = []
+    top15 = watchlist[:15]
+
+    vix_term  = market_data.get("vixTerm") or {}
+    vix_val   = vix_term.get("vix", "?")
+    vix3m_val = vix_term.get("vix3m", "?")
+    regime    = market_data.get("regimeUsed", "NEUTRAL")
+
+    for c in top15:
+        sym    = c["sym"]
+        price  = c.get("price")
+        hvp    = c.get("hvp", 0)
+        s_csp  = c.get("scoreCsp", 0)
+        s_cc   = c.get("scoreCc", 0)
+        s_spread = c.get("scoreSpread", 0)
+        rsi    = c.get("rsi")
+        dist200 = c.get("dist200")
+
+        prompt = f"""Du bist die quantitative Options-Analyse-Engine von UnderlyingIQ.
+Erstelle fuer diesen Kandidaten ein praezises Options-Setup-JSON.
+Antworte NUR mit dem JSON-Objekt — kein Markdown, kein Praeambel.
+
+MARKTKONTEXT:
+- Regime: {regime}
+- VIX: {vix_val} (VIX3M: {vix3m_val})
+- Fiktives Modell-Depot: 100.000 EUR (BaFin-konforme Deskription gemaess §1 WpHG)
+
+KANDIDAT:
+- Ticker: {sym}
+- Kurs: {price} USD
+- HVP (Historical Vol Percentile): {hvp}%
+- RSI(14): {round(rsi, 1) if rsi else 'n/v'}
+- Abstand 200-Tage-Linie: {dist200}%
+- Scores je Options-Strategie (0-100): CSP={s_csp} | Covered-Call={s_cc} | Credit-Spread={s_spread}
+
+Bestimme zuerst anhand der Scores, welche Options-Strategie fuer diesen Titel
+aktuell am besten passt (die mit dem hoechsten Score, es sei denn ein anderer
+Faktor spricht klar dagegen). Berechne dann mathematisch praezise (2 Dezimalstellen):
+{{
+  "sym": "{sym}",
+  "strategy": <"csp"|"covered_call"|"credit_spread" — die von dir gewaehlte beste Strategie>,
+  "strikeSuggestion": <Strike-Preis in USD, passend zur gewaehlten Strategie>,
+  "dte": <Tage bis Verfall: 30-45 Standard, 21-30 bei hoher HVP>,
+  "deltaTarget": <Ziel-Delta als Float, z.B. 0.20-0.30 fuer defensives CSP>,
+  "premiumEstimate": <geschaetzte Praemie als % des Strikes, informativ>,
+  "riskClass": <"LOW"|"MEDIUM"|"HIGH">,
+  "keyRisk": <1 Satz: Hauptrisiko dieses Setups>,
+  "note": <1 Satz: Wichtigste deskriptive Beobachtung, §1 WpHG-konform>
+}}"""
+
+        try:
+            req_body = json_mod.dumps({
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 350,
+                "messages": [{"role": "user", "content": prompt}]
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=req_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp_data = json_mod.loads(resp.read().decode())
+                text = resp_data.get("content", [{}])[0].get("text", "")
+                text = text.strip()
+                if text.startswith("```"):
+                    text = '\n'.join(text.split('\n')[1:-1])
+                ki_params = json_mod.loads(text)
+                enriched.append({**c, "ki": ki_params})
+                log.info(f"    Options-KI {sym}: Strategie={ki_params.get('strategy')} | "
+                         f"Strike={ki_params.get('strikeSuggestion')} | DTE={ki_params.get('dte')}")
+        except Exception as e:
+            log.warning(f"    Options-KI {sym} Fehler: {e}")
+            enriched.append(c)   # ohne KI-Enrichment
+
+    enriched_syms = {x["sym"] for x in enriched}
+    for c in watchlist[15:]:
+        if c["sym"] not in enriched_syms:
+            enriched.append(c)
+
+    return enriched
+
+
 async def enrich_shortlist_with_ai(shortlist: list, market_data: dict,
                                     api_key: str | None = None) -> list:
     """
@@ -5326,6 +5436,12 @@ def main():
         }
         master_shortlist = asyncio.run(
             enrich_shortlist_with_ai(master_shortlist, enrich_context, api_key=_ant_key)
+        )
+        # NEU (15.07.2026, Phase 0.5 Arbeitspaket F Punkt 2): Options-Watchlist
+        # analog zur Master-Shortlist mit KI-Setup-Parametern anreichern.
+        log.info(f"\n🤖 KI-Enrichment Options-Watchlist ({len(options_watchlist)} Kandidaten)...")
+        options_watchlist = asyncio.run(
+            enrich_options_watchlist_with_ai(options_watchlist, enrich_context, api_key=_ant_key)
         )
     else:
         log.warning("  ANTHROPIC_API_KEY fehlt — KI-Enrichment uebersprungen")
