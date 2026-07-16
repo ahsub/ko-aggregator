@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.10.0"
+AGGREGATOR_VERSION = "5.11.0"
 
 # yfinance für Marktdaten
 try:
@@ -5053,22 +5053,67 @@ def main():
         if "raw_sample" in finra_dix:
             dix_gex["dixDebugRawSample"] = finra_dix["raw_sample"]
 
-    log.info(f"  Sektor-Holdings (Proof-of-Concept, XLK)...")
+    # BUGFIX (16.07.2026, Axel-Anfrage): "ETF-Modul-Lösung" statt Einzelfall —
+    # vorher nur XLK als Proof-of-Concept. Liste identisch zur bereits
+    # bestehenden Sektor-Überhitzung-Liste in axel-scanner (index.html
+    # ~Zeile 15607), damit ALLE dort klickbaren Sektor-ETFs auch hier Holdings
+    # bekommen. build_sector_holdings() war schon immer generisch parametrisiert
+    # (etf_ticker, xlsx_path) — nur der Aufruf war XLK-only. Jetzt Config-Liste
+    # + Schleife. Pro ETF: erst automatischer Download-Versuch von der
+    # oeffentlichen SSGA-URL (Standardmuster fuer alle SPDR-Sektor-ETFs),
+    # bei Fehlschlag Fallback auf lokal abgelegte Datei (wie bisher bei XLK) —
+    # SO bleibt die bisherige manuelle Vorgehensweise als Sicherheitsnetz
+    # bestehen, falls der automatische Download aus irgendeinem Grund (Bot-
+    # Schutz, URL-Aenderung bei SSGA) nicht funktioniert.
+    SECTOR_ETF_LIST = ["XLK", "XLY", "XLF", "XLE", "XLV", "XLI", "XLU"]
+    log.info(f"  Sektor-Holdings ({len(SECTOR_ETF_LIST)} ETFs, automatischer Download + lokaler Fallback)...")
     sector_holdings = {}
-    try:
-        import os as _os
-        _xlk_path = "data/holdings_XLK.xlsx"
-        if _os.path.exists(_xlk_path):
-            xlk_holdings = build_sector_holdings("XLK", _xlk_path, top_n=15)
-            if xlk_holdings.get("ok"):
-                sector_holdings["XLK"] = xlk_holdings
-                log.info(f"  Sektor-Holdings XLK: {xlk_holdings['resolvedCount']}/{xlk_holdings['totalCount']} Ticker aufgelöst")
+    for _etf in SECTOR_ETF_LIST:
+        try:
+            import os as _os
+            _local_path = f"data/holdings_{_etf}.xlsx"
+            _xlsx_path = None
+
+            # Schritt 1: automatischer Download-Versuch (oeffentliche SSGA-URL,
+            # Standardmuster fuer alle SPDR-Sektor-ETFs — UNVERIFIZIERT ob
+            # dies aus der GHA-Umgebung heraus funktioniert, da mein eigener
+            # Sandbox-Netzwerkzugriff ssga.com nicht erlaubt und ich das daher
+            # nicht selbst testen konnte. Ergebnis bei naechstem echten Lauf
+            # in den Logs pruefen.)
+            _ssga_url = f"https://www.ssga.com/us/en/intermediary/etfs/library-content/products/fund-data/etfs/us/holdings-daily-us-en-{_etf.lower()}.xlsx"
+            try:
+                _resp = requests.get(_ssga_url, timeout=20, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+                })
+                if _resp.status_code == 200 and len(_resp.content) > 1000:
+                    _download_path = f"/tmp/holdings_{_etf}_download.xlsx"
+                    with open(_download_path, "wb") as f:
+                        f.write(_resp.content)
+                    _xlsx_path = _download_path
+                    log.info(f"    {_etf}: automatischer Download erfolgreich ({len(_resp.content)} Bytes)")
+                else:
+                    log.info(f"    {_etf}: automatischer Download fehlgeschlagen (HTTP {_resp.status_code}) — Fallback auf lokale Datei")
+            except Exception as _fetch_err:
+                log.info(f"    {_etf}: automatischer Download-Fehler ({str(_fetch_err)[:100]}) — Fallback auf lokale Datei")
+
+            # Schritt 2: Fallback auf lokal abgelegte Datei (manuell besorgt,
+            # wie bisher bei XLK)
+            if not _xlsx_path and _os.path.exists(_local_path):
+                _xlsx_path = _local_path
+                log.info(f"    {_etf}: lokale Datei gefunden ({_local_path})")
+
+            if not _xlsx_path:
+                log.warning(f"    {_etf}: weder automatischer Download noch lokale Datei verfuegbar — uebersprungen")
+                continue
+
+            _etf_holdings = build_sector_holdings(_etf, _xlsx_path, top_n=15)
+            if _etf_holdings.get("ok"):
+                sector_holdings[_etf] = _etf_holdings
+                log.info(f"    {_etf}: {_etf_holdings['resolvedCount']}/{_etf_holdings['totalCount']} Ticker aufgelöst")
             else:
-                log.warning(f"  Sektor-Holdings XLK fehlgeschlagen: {xlk_holdings.get('reason')}")
-        else:
-            log.info(f"  Sektor-Holdings: {_xlk_path} nicht gefunden — übersprungen (Proof-of-Concept, nur XLK vorbereitet)")
-    except Exception as _sh_err:
-        log.warning(f"  Sektor-Holdings-Aufbau fehlgeschlagen: {_sh_err}")
+                log.warning(f"    {_etf}: Holdings-Aufbau fehlgeschlagen ({_etf_holdings.get('reason')})")
+        except Exception as _etf_err:
+            log.warning(f"    {_etf}: unerwarteter Fehler ({str(_etf_err)[:150]})")
 
     log.info(f"  FRED Makro-Parameter (HY-Spread, Net Liquidity)...")
     fred_macro = fetch_fred_macro()
