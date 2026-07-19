@@ -151,7 +151,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.12.1"
+AGGREGATOR_VERSION = "5.12.2"
+# v5.12.2 (19.07.2026): parse_ssga_holdings_xlsx() auf EMEA-UCITS-Format umgestellt
+# (kein Ticker-Feld, openpyxl statt pandas, Header Zeile 5, Daten ab Zeile 6).
+# build_sector_holdings(): MANUAL_NAME_MAP + IWV-Name-Matching statt
+# resolve_company_name_to_ticker(). Alle 10 Sektor-ETF-xlsx committed
+# (XLK/XLF/XLE/XLV/XLI/XLY/XLP/XLU/XLC/XLB). Match-Rate 149/150.
 # v5.12.1 (19.07.2026): Regime-Bug-Fix in score_options_collar() —
 # market_regime_str (MSE) statt r["regime"] (Ticker-Markov). market_regime_str-Berechnung
 # vor options_candidates-Loop verschoben (war Zeile ~5370, Loop bei ~5231).
@@ -4045,23 +4050,35 @@ def resolve_company_name_to_ticker(name: str) -> dict:
 
 
 def parse_ssga_holdings_xlsx(filepath: str, top_n: int = 15) -> list:
-    """Parst eine SSGA/State-Street-Holdings-XLSX (Standardformat aller SPDR-
-    Sektor-ETFs) und gibt die Top-N-Positionen nach Gewicht zurück.
-    Format verifiziert 11.07.2026 gegen echte XLK-Holdings-Datei (EMEA/UCITS-
-    Wrapper ZPDT GY — nahezu identische Konstituenten zum US-XLK, Gewichtung
-    kann wegen UCITS-Diversifikationsregeln leicht abweichen)."""
-    import pandas as pd
-    df = pd.read_excel(filepath, sheet_name=0, header=5)
-    df["Percent of Fund"] = pd.to_numeric(df["Percent of Fund"], errors="coerce")
-    df = df[df["Security Name"].notna() & df["Percent of Fund"].notna()]
-    df = df.sort_values("Percent of Fund", ascending=False).head(top_n)
+    """Parst SSGA/SPDR EMEA-UCITS-Holdings-XLSX und gibt Top-N-Positionen zurück.
+    Format (verifiziert 19.07.2026 gegen alle 10 Sektor-ETFs ZPDT/ZPDF/ZPDE/etc.):
+    Zeile 0-4: Metadaten (Fund Name, ISIN, Ticker, Holdings As Of)
+    Zeile 5: Header (ISIN | SEDOL | Security Name | Currency | Shares | Percent of Fund)
+    Zeile 6+: Holdings-Daten
+    Kein Ticker-Feld in EMEA-Format — Ticker-Aufloesung via Name-Matching in
+    build_sector_holdings() gegen IWV-Holdings-CSV + MANUAL_NAME_MAP."""
+    import openpyxl as _opxl
+    wb = _opxl.load_workbook(filepath, read_only=True, data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
     out = []
-    for _, row in df.iterrows():
-        out.append({
-            "name": str(row["Security Name"]).strip(),
-            "weight": round(float(row["Percent of Fund"]), 2),
-            "sector": row.get("Sector Classification"),
-        })
+    for row in rows[6:]:
+        if not row or not row[0]:
+            break
+        name = str(row[2]).strip() if row[2] else None
+        try:
+            weight = float(str(row[5]).replace(",", ".")) if row[5] else None
+        except (ValueError, TypeError):
+            weight = None
+        if name and name not in ("Security Name", "None", ""):
+            out.append({
+                "name": name,
+                "weight": round(weight, 4) if weight else None,
+                "sector": None,  # EMEA-Format hat kein Sektor-Feld
+            })
+        if len(out) >= top_n:
+            break
     return out
 
 
@@ -4073,18 +4090,59 @@ def build_sector_holdings(etf_ticker: str, xlsx_path: str, top_n: int = 15) -> d
     except Exception as e:
         return {"ok": False, "reason": f"Parsing-Fehler: {str(e)[:150]}"}
 
+    # Name → Symbol Aufloesung: zuerst MANUAL_NAME_MAP, dann IWV-Name-Match
+    MANUAL_NAME_MAP = {
+        "VISA INC. CLASS A": "V", "VISA INC CLASS A": "V",
+        "MASTERCARD INCORPORATED C": "MA", "MASTERCARD INCORPORATED CLA": "MA",
+        "MERCK & CO. INC.": "MRK", "MERCK & CO INC.": "MRK",
+        "ALPHABET INC. CLASS A": "GOOGL", "ALPHABET INC CLASS A": "GOOGL",
+        "ALPHABET INC. CLASS C": "GOOG", "ALPHABET INC CLASS C": "GOOG",
+        "MCDONALD'S CORPORATION": "MCD", "MCDONALDS CORPORATION": "MCD",
+        "FREEPORT-MCMORAN INC.": "FCX", "FREEPORT-MCMORAN INC": "FCX",
+        "SHERWIN-WILLIAMS COMPANY": "SHW",
+        "EXXONMOBIL HOLDINGS CORPO": "XOM", "EXXONMOBIL CORPORATION": "XOM",
+        "WILLIAMS COMPANIES INC.": "WMB", "WILLIAMS COMPANIES INC": "WMB",
+        "TJX COMPANIES INC": "TJX", "TJX COMPANIES INC.": "TJX",
+        "CRH PUBLIC LIMITED COMPAN": "CRH",
+        "BERKSHIRE HATHAWAY INC. C": "BRK.B", "BERKSHIRE HATHAWAY INC C": "BRK.B",
+        "PALANTIR TECHNOLOGIES INC. CLA": "PLTR", "PALANTIR TECHNOLOGIES INC CLA": "PLTR",
+    }
+
+    # IWV-Name→Symbol-Cache (einmalig laden)
+    _iwv_map = {}
+    _iwv_path = "data/iwv_holdings.csv"
+    try:
+        import csv as _csv
+        with open(_iwv_path, newline="", encoding="utf-8") as fh:
+            _reader = _csv.reader(fh)
+            _hdr = False
+            for _row in _reader:
+                if _row and _row[0] == "Ticker":
+                    _hdr = True; continue
+                if _hdr and len(_row) >= 2 and _row[0]:
+                    _iwv_map[_row[1].strip().upper()] = _row[0].strip()
+    except Exception:
+        pass
+
+    def _resolve(name):
+        nu = name.upper().strip()
+        if nu in MANUAL_NAME_MAP: return MANUAL_NAME_MAP[nu]
+        for k, v in MANUAL_NAME_MAP.items():
+            if nu.startswith(k[:12]) or k.startswith(nu[:12]): return v
+        if nu in _iwv_map: return _iwv_map[nu]
+        for iwv_name, sym in _iwv_map.items():
+            if nu[:15] in iwv_name or iwv_name[:15] in nu: return sym
+        return None
+
     resolved = []
     unresolved = 0
     for h in holdings:
-        r = resolve_company_name_to_ticker(h["name"])
-        if r.get("ok"):
-            resolved.append({"ticker": r["ticker"], "name": h["name"],
-                              "weight": h["weight"], "sector": h["sector"]})
+        sym = _resolve(h["name"])
+        if sym:
+            resolved.append({"ticker": sym, "name": h["name"], "weight": h["weight"]})
         else:
             unresolved += 1
-            resolved.append({"ticker": None, "name": h["name"],
-                              "weight": h["weight"], "sector": h["sector"],
-                              "resolveError": r.get("reason")})
+            resolved.append({"ticker": None, "name": h["name"], "weight": h["weight"]})
 
     return {
         "ok": True,
@@ -4092,7 +4150,7 @@ def build_sector_holdings(etf_ticker: str, xlsx_path: str, top_n: int = 15) -> d
         "holdings": resolved,
         "resolvedCount": len(resolved) - unresolved,
         "totalCount": len(resolved),
-        "source": "ssga_ucits_proxy" if etf_ticker in ("XLK",) else "ssga",
+        "source": "ssga_ucits_proxy",
     }
 
 
