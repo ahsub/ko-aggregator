@@ -151,7 +151,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.12.2"
+AGGREGATOR_VERSION = "5.12.3"
+# v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
+# mit EMEA-Parser (CUSIP/SEDOL in Spalte 2 statt Security Name). Ausschliesslich
+# lokale EMEA-UCITS-Dateien (data/holdings_{ETF}.xlsx). Root Cause Run#123:
+# Download-Versuch erfolgreich (GHA erreicht ssga.com), aber falsches Format.
 # v5.12.2 (19.07.2026): parse_ssga_holdings_xlsx() auf EMEA-UCITS-Format umgestellt
 # (kein Ticker-Feld, openpyxl statt pandas, Header Zeile 5, Daten ab Zeile 6).
 # build_sector_holdings(): MANUAL_NAME_MAP + IWV-Name-Matching statt
@@ -5223,33 +5227,15 @@ def main():
             _local_path = f"data/holdings_{_etf}.xlsx"
             _xlsx_path = None
 
-            # Schritt 1: automatischer Download-Versuch (oeffentliche SSGA-URL,
-            # Standardmuster fuer alle SPDR-Sektor-ETFs — UNVERIFIZIERT ob
-            # dies aus der GHA-Umgebung heraus funktioniert, da mein eigener
-            # Sandbox-Netzwerkzugriff ssga.com nicht erlaubt und ich das daher
-            # nicht selbst testen konnte. Ergebnis bei naechstem echten Lauf
-            # in den Logs pruefen.)
-            _ssga_url = f"https://www.ssga.com/us/en/intermediary/etfs/library-content/products/fund-data/etfs/us/holdings-daily-us-en-{_etf.lower()}.xlsx"
-            try:
-                _resp = requests.get(_ssga_url, timeout=20, headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-                })
-                if _resp.status_code == 200 and len(_resp.content) > 1000:
-                    _download_path = f"/tmp/holdings_{_etf}_download.xlsx"
-                    with open(_download_path, "wb") as f:
-                        f.write(_resp.content)
-                    _xlsx_path = _download_path
-                    log.info(f"    {_etf}: automatischer Download erfolgreich ({len(_resp.content)} Bytes)")
-                else:
-                    log.info(f"    {_etf}: automatischer Download fehlgeschlagen (HTTP {_resp.status_code}) — Fallback auf lokale Datei")
-            except Exception as _fetch_err:
-                log.info(f"    {_etf}: automatischer Download-Fehler ({str(_fetch_err)[:100]}) — Fallback auf lokale Datei")
-
-            # Schritt 2: Fallback auf lokal abgelegte Datei (manuell besorgt,
-            # wie bisher bei XLK)
-            if not _xlsx_path and _os.path.exists(_local_path):
+            # Ausschliesslich lokale EMEA-UCITS-Dateien (data/holdings_{ETF}.xlsx).
+            # US-SSGA-Download deaktiviert (19.07.2026): GHA kann ssga.com erreichen,
+            # aber US-Format (CUSIP/SEDOL statt Security Name in Spalte 2) ist
+            # inkompatibel mit parse_ssga_holdings_xlsx() — Parser ist auf EMEA-
+            # UCITS-Format kalibriert (alle 10 ETFs, 149/150 Holdings korrekt gematchet).
+            # Manuelle Aktualisierung: monatlich analog IWV-Holdings-Update.
+            if _os.path.exists(_local_path):
                 _xlsx_path = _local_path
-                log.info(f"    {_etf}: lokale Datei gefunden ({_local_path})")
+                log.info(f"    {_etf}: lokale EMEA-Datei geladen ({_local_path})")
 
             if not _xlsx_path:
                 log.warning(f"    {_etf}: weder automatischer Download noch lokale Datei verfuegbar — uebersprungen")
