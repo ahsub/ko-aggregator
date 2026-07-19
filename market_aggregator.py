@@ -1212,7 +1212,7 @@ def score_options_credit_spread(r: dict) -> int:
     return max(0, min(100, s))
 
 
-def score_options_collar(r: dict) -> int:
+def score_options_collar(r: dict, market_regime: str = "NEUTRAL") -> int:
     """
     Collar / Protective Put Score 0-100.
 
@@ -1250,13 +1250,17 @@ def score_options_collar(r: dict) -> int:
 
     s = 0
 
-    # ── REGIME-KERN (entscheidend für Collar-Edge) ─────────────────────────
-    if   regime == "fragile":  s += 50  # BULL_FRAGILE: genau die identifizierte Lücke
-    elif regime == "side":     s += 20  # NEUTRAL: optional sinnvoll
-    elif regime == "volatile": return 0  # STRESS_UNSTABLE: Put-Prämie explodiert, zu spät
-    elif regime == "bull":     s += 5   # BULL_QUIET: kaum Edge
-    # bear: ebenfalls kein Collar-Setup (Position sollte geschlossen sein)
-    elif regime == "bear":     return 0
+    # ── REGIME-KERN: MSE-Marktregime (nicht Ticker-Markov-Regime!) ────────
+    # market_regime kommt aus dem Aggregator-Hauptlauf (VIX-Term-Structure).
+    # r["regime"] ist Ticker-Markov ("bull"/"side"/"bear") — kennt BULL_FRAGILE nicht.
+    mse = (market_regime or "NEUTRAL").upper()
+    if   mse == "BULL_FRAGILE":       s += 50  # Priorität 1: genau die Regime-Lücke
+    elif mse == "NEUTRAL":            s += 20  # Optional sinnvoll
+    elif mse == "STRESS_UNSTABLE":    return 0  # Zu spät: Put-Prämie explodiert
+    elif mse == "POST_PANIC_REVERSION": return 0  # Kein Collar-Setup in Panik-Reversion
+    elif mse == "BULL_QUIET":         s += 5   # Kaum Edge — Prämie kaum wert
+    # Ticker-Markov als Sekundär-Signal: Trend muss intakt sein
+    if regime == "bear": return 0  # Kein Collar wenn Einzeltitel im Downtrend
 
     # ── RSI: Überdehnung erhöht Absicherungsbedarf ────────────────────────
     if   rsi > 75: s += 30  # Stark überdehnt — Absicherung dringend
@@ -5222,6 +5226,36 @@ def main():
         key=lambda x: x.get("rsi", 99)   # nach RSI sortieren (niedrigster zuerst)
     )[:20]
 
+    # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
+    market_regime_str = 'NEUTRAL'
+    # Primärquelle: VIX Term Structure — KONVENTION: VIX3M/VIX (>1 = Contango/gesund)
+    # v4.3 KRITISCHER FIX (02.07.2026): vix_term['ratio'] ist VIX/VIX3M (<1 = gesund),
+    # die Schwellen unten (<0.98 STRESS, <1.05 POST_PANIC, sonst BULL) wurden aber
+    # für die INVERSE Konvention VIX3M/VIX geschrieben (wie mseHistory.vixRatio).
+    # Folge: ruhiger Contango-Markt wurde als STRESS_UNSTABLE geroutet und umgekehrt
+    # — Master-Shortlist lief im Bärenmodus bei gesunder Marktlage (Lauf v4.2:
+    # VIX 16.15 / VIX3M 19.04 / CONTANGO → fälschlich STRESS_UNSTABLE, 13× MR-Long
+    # + 7 Shorts). Fix: Ratio aus vix/vix3m-Rohwerten in VIX3M/VIX-Konvention bilden.
+    _regime_ratio = None
+    if vix_term and vix_term.get('vix') and vix_term.get('vix3m'):
+        _regime_ratio = round(vix_term['vix3m'] / vix_term['vix'], 3)
+    elif mse_history and mse_history.get('vixRatio') and mse_history['vixRatio']:
+        _regime_ratio = mse_history['vixRatio'][-1]   # bereits VIX3M/VIX
+
+    if _regime_ratio:
+        if _regime_ratio < 0.98:
+            market_regime_str = 'STRESS_UNSTABLE'
+        elif _regime_ratio < 1.05:
+            market_regime_str = 'POST_PANIC_REVERSION'
+        else:
+            # Contango = BULL — unterscheide QUIET vs FRAGILE per VIX-Niveau
+            _vix_val = vix_term.get('vix') if vix_term else None
+            if _vix_val and _vix_val > 25:
+                market_regime_str = 'BULL_FRAGILE'
+            else:
+                market_regime_str = 'BULL_QUIET'
+    log.info(f'  Markt-Regime: {market_regime_str} | Ratio: {_regime_ratio} (v5.12: vor Options-Loop verschoben fuer score_options_collar)')
+
     # 5a. Options-Watchlist (Top-50, Gemini-Architektur) ────────────────────────
     log.info(f"\n🎯 Options-Watchlist berechnen (3 Strategien)...")
 
@@ -5250,7 +5284,7 @@ def main():
         s_csp    = score_options_csp(r)
         s_cc     = score_options_covered_call(r)
         s_spread = score_options_credit_spread(r)
-        s_collar = score_options_collar(r)
+        s_collar = score_options_collar(r, market_regime=market_regime_str)
 
         # ── DIAGNOSE-LOG (erste 5 Ticker) ────────────────────────────────
         if len(options_candidates) < 3 or sym in ("DDOG","BAH","AAPL","MSFT","NVO"):
@@ -5366,35 +5400,6 @@ def main():
         fear_greed = calc_fg_proxy(vix_term, pcr, sector_rs)
         log.info(f"  Fear & Greed Proxy: {fear_greed.get('score')} ({fear_greed.get('rating')})")
 
-    # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
-    market_regime_str = 'NEUTRAL'
-    # Primärquelle: VIX Term Structure — KONVENTION: VIX3M/VIX (>1 = Contango/gesund)
-    # v4.3 KRITISCHER FIX (02.07.2026): vix_term['ratio'] ist VIX/VIX3M (<1 = gesund),
-    # die Schwellen unten (<0.98 STRESS, <1.05 POST_PANIC, sonst BULL) wurden aber
-    # für die INVERSE Konvention VIX3M/VIX geschrieben (wie mseHistory.vixRatio).
-    # Folge: ruhiger Contango-Markt wurde als STRESS_UNSTABLE geroutet und umgekehrt
-    # — Master-Shortlist lief im Bärenmodus bei gesunder Marktlage (Lauf v4.2:
-    # VIX 16.15 / VIX3M 19.04 / CONTANGO → fälschlich STRESS_UNSTABLE, 13× MR-Long
-    # + 7 Shorts). Fix: Ratio aus vix/vix3m-Rohwerten in VIX3M/VIX-Konvention bilden.
-    _regime_ratio = None
-    if vix_term and vix_term.get('vix') and vix_term.get('vix3m'):
-        _regime_ratio = round(vix_term['vix3m'] / vix_term['vix'], 3)
-    elif mse_history and mse_history.get('vixRatio') and mse_history['vixRatio']:
-        _regime_ratio = mse_history['vixRatio'][-1]   # bereits VIX3M/VIX
-
-    if _regime_ratio:
-        if _regime_ratio < 0.98:
-            market_regime_str = 'STRESS_UNSTABLE'
-        elif _regime_ratio < 1.05:
-            market_regime_str = 'POST_PANIC_REVERSION'
-        else:
-            # Contango = BULL — unterscheide QUIET vs FRAGILE per VIX-Niveau
-            _vix_val = vix_term.get('vix') if vix_term else None
-            if _vix_val and _vix_val > 25:
-                market_regime_str = 'BULL_FRAGILE'
-            else:
-                market_regime_str = 'BULL_QUIET'
-    log.info(f'  Markt-Regime (Leaderboards): {market_regime_str} | Ratio: {_regime_ratio}')
 
     # Fix A: rs_sorted wird nur innerhalb von `if spy_data is not None` befüllt
     # → außerhalb des Blocks nur loggen wenn vorhanden (verhindert NameError/UnboundLocalError)
