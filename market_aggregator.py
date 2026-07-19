@@ -151,7 +151,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.12.0"
+AGGREGATOR_VERSION = "5.12.1"
+# v5.12.1 (19.07.2026): Regime-Bug-Fix in score_options_collar() —
+# market_regime_str (MSE) statt r["regime"] (Ticker-Markov). market_regime_str-Berechnung
+# vor options_candidates-Loop verschoben (war Zeile ~5370, Loop bei ~5231).
 # v5.12.0 (19.07.2026): score_options_collar() — Collar/Protective-Put-Score 0-100.
 # Neue Funktion nach demselben Muster wie score_options_csp/cc/spread.
 # Regime-Gate: BULL_FRAGILE=+50 (Priorität 1, identifizierte Lücke in Regime-Coverage-Analyse),
