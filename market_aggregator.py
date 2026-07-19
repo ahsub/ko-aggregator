@@ -151,7 +151,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.12.3"
+AGGREGATOR_VERSION = "5.12.4"
+# v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
+# (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
 # mit EMEA-Parser (CUSIP/SEDOL in Spalte 2 statt Security Name). Ausschliesslich
 # lokale EMEA-UCITS-Dateien (data/holdings_{ETF}.xlsx). Root Cause Run#123:
@@ -5218,7 +5220,7 @@ def main():
     # SO bleibt die bisherige manuelle Vorgehensweise als Sicherheitsnetz
     # bestehen, falls der automatische Download aus irgendeinem Grund (Bot-
     # Schutz, URL-Aenderung bei SSGA) nicht funktioniert.
-    SECTOR_ETF_LIST = ["XLK", "XLY", "XLF", "XLE", "XLV", "XLI", "XLU"]
+    SECTOR_ETF_LIST = ["XLK", "XLY", "XLF", "XLE", "XLV", "XLI", "XLU", "XLP", "XLC", "XLB"]
     log.info(f"  Sektor-Holdings ({len(SECTOR_ETF_LIST)} ETFs, automatischer Download + lokaler Fallback)...")
     sector_holdings = {}
     for _etf in SECTOR_ETF_LIST:
