@@ -151,7 +151,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.11.0"
+AGGREGATOR_VERSION = "5.12.0"
+# v5.12.0 (19.07.2026): score_options_collar() — Collar/Protective-Put-Score 0-100.
+# Neue Funktion nach demselben Muster wie score_options_csp/cc/spread.
+# Regime-Gate: BULL_FRAGILE=+50 (Priorität 1, identifizierte Lücke in Regime-Coverage-Analyse),
+# NEUTRAL=+20, STRESS_UNSTABLE/bear=return 0. RSI-Überdehnung als Absicherungsbedarf-Proxy.
+# HVP-Fenster 25-65 ideal (Put nicht zu teuer), ATR/Preis-Ratio als Kosten-Proxy.
+# Eingebaut in: Output-Dict (scoreCollar), optsScore (max aller 4 Scores),
+# apply_macro_risk_overlay (Collar +20% bei GEX<0, Collar NICHT gedämpft bei IOS-Kapitalschutz).
+# Frontend: index.html v375 — Collar-Tab im Options-Deck-Board + Chip-Anzeige.
 
 # yfinance für Marktdaten
 try:
@@ -1200,6 +1208,77 @@ def score_options_credit_spread(r: dict) -> int:
             if bbpos >= 0.80:   s += 30  # Überdehnt = Bear-Call ideal
             elif bbpos <= 0.20: s += 15  # Gemini Fix: Überverkauft = Bounce-Prämie                      # Aktie stößt an Oberkante — ideal für Bear Call
             s += min(hvp // 3, 25)       # Höhere HVP = teurere Calls zu verkaufen
+
+    return max(0, min(100, s))
+
+
+def score_options_collar(r: dict) -> int:
+    """
+    Collar / Protective Put Score 0-100.
+
+    Konzept: KEIN Prämien-Trade — Absicherung einer bestehenden Long-Position.
+    Ideales Umfeld: BULL_FRAGILE (Trend intakt, aber erhöhtes Air-Pocket-Risiko).
+    Proxy-Modus: echte Strikes/Prämien nicht verfügbar — ATR/HVP-basierte Näherung,
+    wie in ko-prompts.js / UIQ-Suite/docs/REGIME-COVERAGE-ANALYSE.md dokumentiert.
+
+    Score-Logik:
+    - Regime BULL_FRAGILE  → maximaler Bedarf (Priorität 1 laut Regime-Coverage)
+    - Regime NEUTRAL       → moderat sinnvoll (optional)
+    - Regime BULL_QUIET    → kein Collar-Edge (Absicherung zu teuer, kaum Risiko)
+    - Regime STRESS_UNSTABLE → zu spät (Vola zu hoch, Put-Prämien explodiert)
+    - RSI > 65             → Überdehnung = Absicherungsbedarf steigt
+    - HVP 25–65            → Prämienband günstig (Put nicht zu teuer, Call kompensiert)
+    - HVP > 70             → Put-Prämie zu teuer → Score-Malus
+    - dist200 > 0          → Bestandsposition muss im Uptrend sein (sonst kein Sinn)
+    - ATR/Preis < 4%       → günstiger Collar umsetzbar (enger Kurs = enger Strike-Abstand)
+    """
+    price  = r.get("price", 0) or 0
+    ema200 = r.get("ema200")
+    rsi    = r.get("rsi", 50) or 50
+    hvp    = r.get("hvp", 0) or 0
+    dist200 = r.get("dist200", 0) or 0
+    atr    = r.get("atr")
+    regime = (r.get("regime") or "").lower()
+
+    # Gate 1: Bestandsposition muss im Uptrend sein
+    if not ema200 or price < ema200:
+        return 0
+
+    # Gate 2: Mindest-HVP für überhaupt handelbare Optionsprämien
+    if hvp < 20:
+        return 0
+
+    s = 0
+
+    # ── REGIME-KERN (entscheidend für Collar-Edge) ─────────────────────────
+    if   regime == "fragile":  s += 50  # BULL_FRAGILE: genau die identifizierte Lücke
+    elif regime == "side":     s += 20  # NEUTRAL: optional sinnvoll
+    elif regime == "volatile": return 0  # STRESS_UNSTABLE: Put-Prämie explodiert, zu spät
+    elif regime == "bull":     s += 5   # BULL_QUIET: kaum Edge
+    # bear: ebenfalls kein Collar-Setup (Position sollte geschlossen sein)
+    elif regime == "bear":     return 0
+
+    # ── RSI: Überdehnung erhöht Absicherungsbedarf ────────────────────────
+    if   rsi > 75: s += 30  # Stark überdehnt — Absicherung dringend
+    elif rsi > 65: s += 20  # Leicht überdehnt — Collar attraktiv
+    elif rsi > 55: s += 10  # Neutral — Collar optional
+    # rsi <= 55: kein Bedarf (Aktie nicht überdehnt)
+
+    # ── HVP-FENSTER: zu hoch = Put-Prämie frisst Ertrag ──────────────────
+    if   25 <= hvp <= 45: s += 20  # Ideal: Prämien vorhanden, nicht explodiert
+    elif 45 <  hvp <= 65: s += 10  # Noch akzeptabel
+    elif hvp > 65:        s -= 15  # Put-Prämie zu teuer → Collar unattraktiv
+
+    # ── DIST200: Je weiter über EMA200, desto mehr zu schützen ────────────
+    if   dist200 > 20: s += 10  # Viel Gewinn zu sichern
+    elif dist200 > 10: s += 5
+
+    # ── ATR-KOSTEN-PROXY: enge ATR = günstiger Strike-Abstand ─────────────
+    if atr and price > 0:
+        atr_pct = atr / price * 100
+        if   atr_pct < 2.0: s += 10  # Sehr günstig umsetzbar
+        elif atr_pct < 3.5: s += 5   # Akzeptabel
+        elif atr_pct > 6.0: s -= 10  # Strike zu weit weg → teuer
 
     return max(0, min(100, s))
 
@@ -2367,6 +2446,10 @@ def apply_macro_risk_overlay(options_candidates: list, dix_gex: dict, pcr_data: 
             # Risikobegrenzte Spreads bevorzugen
             if r.get("scoreSpread", 0) > 0:
                 r["scoreSpread"] = min(100, int(r["scoreSpread"] * 1.20))
+            # Collar aufwerten: Absicherung bei Gamma-Flip besonders sinnvoll
+            if r.get("scoreCollar", 0) > 0:
+                r["scoreCollar"] = min(100, int(r["scoreCollar"] * 1.20))
+                r["_macroNote"] = r.get("_macroNote", "") + " | Collar aufgewertet (GEX-Flip)"
 
         # ── PCR < 0.75: Extremes Bull-Sentiment → CCs gefährdet (Rallye-Kapper) ──
         if pcr < 0.75:
@@ -2383,7 +2466,7 @@ def apply_macro_risk_overlay(options_candidates: list, dix_gex: dict, pcr_data: 
                 r["_macroNote"] = r.get("_macroNote", "") + " | PCR>1.10 — Spread bevorzugt"
 
         # Gesamtscore nach Overlay neu berechnen
-        r["optsScore"] = max(r.get("scoreCsp", 0), r.get("scoreCc", 0), r.get("scoreSpread", 0))
+        r["optsScore"] = max(r.get("scoreCsp", 0), r.get("scoreCc", 0), r.get("scoreSpread", 0), r.get("scoreCollar", 0))
 
     return options_candidates
 
@@ -2404,6 +2487,7 @@ def apply_ios_market_overlay(options_candidates: list, ios_market: dict) -> list
             # Kapitalschutz: alle Long-Options-Strategien stark dämpfen
             r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.30))
             r["scoreCc"]  = max(0, int(r.get("scoreCc",  0) * 0.30))
+            # Collar bewusst NICHT gedämpft — Absicherung bei Kapitalschutz sinnvoll
             r["_macroNote"] = r.get("_macroNote","") + " | IOS: KAPITAL SCHUETZEN"
         elif decision == "KEINE NEUEN BREAKOUTS":
             r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.55))
@@ -2415,7 +2499,7 @@ def apply_ios_market_overlay(options_candidates: list, ios_market: dict) -> list
             r["scoreCsp"] = min(100, int(r.get("scoreCsp", 0) * 1.10))
             r["scoreCc"]  = min(100, int(r.get("scoreCc",  0) * 1.10))
         # optsScore neu
-        r["optsScore"] = max(r.get("scoreCsp",0), r.get("scoreCc",0), r.get("scoreSpread",0))
+        r["optsScore"] = max(r.get("scoreCsp",0), r.get("scoreCc",0), r.get("scoreSpread",0), r.get("scoreCollar",0))
     return options_candidates
 
 
@@ -5166,6 +5250,7 @@ def main():
         s_csp    = score_options_csp(r)
         s_cc     = score_options_covered_call(r)
         s_spread = score_options_credit_spread(r)
+        s_collar = score_options_collar(r)
 
         # ── DIAGNOSE-LOG (erste 5 Ticker) ────────────────────────────────
         if len(options_candidates) < 3 or sym in ("DDOG","BAH","AAPL","MSFT","NVO"):
@@ -5194,6 +5279,7 @@ def main():
             "scoreCsp":    s_csp,
             "scoreCc":     s_cc,
             "scoreSpread": s_spread,
+            "scoreCollar": s_collar,
             # NEU (30.06.2026): Fibo-Setup/Score mit ausgeben — macht den in
             # score_options_csp()/score_options_covered_call() eingerechneten
             # Fibo-Boost im Output nachvollziehbar (vorher nur intern verwendet,
@@ -5201,7 +5287,7 @@ def main():
             "fSetup":      r.get("f_setup"),
             "fScore":      r.get("f_score"),
             # Bester Score fuer Sortierung
-            "optsScore":   max(s_csp, s_cc, s_spread),
+            "optsScore":   max(s_csp, s_cc, s_spread, s_collar),
         })
 
     # Sortierung: bester Strategie-Score zuerst, Top-50
