@@ -4793,6 +4793,276 @@ def _mcm_eval_calendar_factor(cfg, events, now_utc):
     return None
 
 
+# ── MCM-PARITÄT: SERVER-PORTS DER 4 CLIENT-FUNKTIONEN (v5.13.0, 21.07.2026) ──────────────
+# Port von loadIntermarket() / calcTreasuryStress() / calcBullIndicator() / NDX-Breadth
+# aus index.html — exakte Schwellen und Logik 1:1 übernommen.
+
+def _get_closes(hist_data: dict, sym: str, n: int = None) -> list:
+    """Hilfsfunktion: letzte n Close-Werte für ein Symbol aus hist_data."""
+    df = hist_data.get(sym)
+    if df is None or df.empty:
+        return []
+    closes = df["Close"].dropna().tolist()
+    return closes[-n:] if n else closes
+
+
+def _get_last_price(hist_data: dict, sym: str):
+    """Letzter Close-Kurs für ein Symbol."""
+    closes = _get_closes(hist_data, sym)
+    return closes[-1] if closes else None
+
+
+def _get_chg5d(hist_data: dict, sym: str):
+    """5-Tage-Kursveränderung in % (identisch zu fetchYahooSingle.chg5d im JS)."""
+    closes = _get_closes(hist_data, sym)
+    if len(closes) < 6:
+        return None
+    prev5 = closes[-6]
+    if prev5 == 0:
+        return None
+    return round((closes[-1] - prev5) / prev5 * 100, 2)
+
+
+def calc_mcm_ndx_breadth(hist_data: dict) -> float | None:
+    """Port der NDX-Breadth-Berechnung aus calcBullIndicator() in index.html.
+    Berechnet % der NDX-100 Titel über ihrer 50-EMA (Näherung: SMA50).
+    Schwellen: caution ≤ 50%, risk ≤ 35% (identisch zu _MCM_SIGNAL_RULES).
+    Nutzt Scanner-Universum als Proxy (enthält den Großteil der NDX-Titel).
+    """
+    NDX_PROXY = [
+        "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "COST",
+        "ASML", "NFLX", "AMD", "AZN", "ADBE", "QCOM", "CSCO", "TMUS", "LIN", "PEP",
+        "INTC", "INTU", "AMAT", "AMGN", "ISRG", "MU", "ARM", "BKNG", "LRCX", "REGN",
+        "ADI", "KLAC", "PANW", "MDLZ", "FTNT", "SNPS", "CRWD", "CDNS", "MRVL", "CEG",
+        "CSGP", "CSX", "ORLY", "NXPI", "MCHP", "PCAR", "AEP", "WDAY", "ROST", "MNST",
+        "DXCM", "PAYX", "CHTR", "FANG", "ODFL", "KDP", "EXC", "FAST", "BIIB", "IDXX",
+        "ON", "GFS", "KHC", "EA", "DDOG", "CTSH", "VRSK", "GEHC", "XEL", "ANSS",
+        "CTAS", "CPRT", "TEAM", "SIRI", "TTWO", "DLTR", "ILMN", "ZS", "ALGN", "WBD",
+        "MTCH", "LCID", "PDD", "BIDU", "JD", "MELI", "ABNB", "ZM", "DOCU",
+    ]
+    above, total = 0, 0
+    for sym in NDX_PROXY:
+        closes = _get_closes(hist_data, sym, 60)
+        if len(closes) < 50:
+            continue
+        sma50 = sum(closes[-50:]) / 50
+        if closes[-1] > sma50:
+            above += 1
+        total += 1
+    if total < 10:  # Zu wenige Daten — kein verlässlicher Wert
+        return None
+    return round(above / total * 100, 1)
+
+
+def calc_mcm_intermarket_score(hist_data: dict, market: dict) -> int | None:
+    """Port von loadIntermarket() Scoring-Teil aus index.html.
+    Score 0-100: niedrig = Risk-On, hoch = Risk-Off (identisch zur JS-Logik).
+    Verwendet gewichteten Durchschnitt der verfügbaren Signale.
+    Schwellen: caution ≥ 40, risk ≥ 60 (identisch zu _MCM_SIGNAL_RULES).
+    """
+    score_points, score_count = 0, 0
+
+    # VVIX: <90 OK (15 Pts Risk-On), 90-110 Warnung (8), >110 Risk-Off (2)
+    zsc = market.get("zscores", {}) or {}
+    vvix_val = (zsc.get("vvix") or {}).get("value")  # Rohwert, nicht Z-Score
+    if vvix_val is None:
+        vix_term = market.get("vixTerm", {}) or {}
+        vvix_val = vix_term.get("vvix")
+    if vvix_val is not None:
+        pts = 15 if vvix_val < 90 else (8 if vvix_val < 110 else 2)
+        score_points += pts; score_count += 1
+
+    # AUD/USD: 5d-Chg >+0.5% = Risk-On (14), <-0.5% = Risk-Off (5), sonst neutral (9)
+    aud_chg = _get_chg5d(hist_data, "AUDUSD=X")
+    if aud_chg is None:
+        aud_chg = _get_chg5d(hist_data, "AUD=X")
+    if aud_chg is not None:
+        pts = 14 if aud_chg > 0.5 else (5 if aud_chg < -0.5 else 9)
+        score_points += pts; score_count += 1
+
+    # JPY/USD: steigend = Risk-Off (5), fallend = Risk-On (14)
+    jpy_chg = _get_chg5d(hist_data, "JPYUSD=X")
+    if jpy_chg is None:
+        jpy_chg = _get_chg5d(hist_data, "JPY=X")
+    if jpy_chg is not None:
+        pts = 5 if jpy_chg > 0.3 else (14 if jpy_chg < -0.3 else 9)
+        score_points += pts; score_count += 1
+
+    # Cu/Gold Ratio: steigend = Risk-On (15), fallend = Risk-Off (4)
+    cu_closes  = _get_closes(hist_data, "HG=F", 2)
+    gld_closes = _get_closes(hist_data, "GC=F", 2)
+    if len(cu_closes) >= 2 and len(gld_closes) >= 2 and gld_closes[-1] > 0 and gld_closes[-2] > 0:
+        ratio_now  = cu_closes[-1]  / gld_closes[-1]
+        ratio_prev = cu_closes[-2]  / gld_closes[-2]
+        cu_gold_chg = (ratio_now - ratio_prev) / ratio_prev * 100 if ratio_prev > 0 else 0
+        pts = 15 if cu_gold_chg > 0.5 else (4 if cu_gold_chg < -0.5 else 8)
+        score_points += pts; score_count += 1
+
+    # JNK/LQD Spread: steigend = Risk-On (15), fallend = Risk-Off (4)
+    jnk_closes = _get_closes(hist_data, "JNK", 2)
+    lqd_closes = _get_closes(hist_data, "LQD", 2)
+    if len(jnk_closes) >= 2 and len(lqd_closes) >= 2 and lqd_closes[-1] > 0 and lqd_closes[-2] > 0:
+        ratio_now  = jnk_closes[-1] / lqd_closes[-1]
+        ratio_prev = jnk_closes[-2] / lqd_closes[-2]
+        spread_chg = (ratio_now - ratio_prev) / ratio_prev * 100 if ratio_prev > 0 else 0
+        pts = 15 if spread_chg > 0.2 else (4 if spread_chg < -0.2 else 8)
+        score_points += pts; score_count += 1
+
+    # 10J Treasury: >5% = Risk-Off stark (4), >4.5% = Risk-Off (7), >3.5% = Neutral (10), sonst Risk-On (13)
+    tnx = _get_last_price(hist_data, "^TNX")
+    if tnx is not None:
+        pts = 4 if tnx > 5 else (7 if tnx > 4.5 else (10 if tnx > 3.5 else 13))
+        score_points += pts; score_count += 1
+
+    # 2J/10J Yield Spread aus FRED (bereits im Aggregator)
+    fred = market.get("fredMacro", {}) or {}
+    yc = fred.get("yield_curve", {}) or {}
+    if yc.get("ok"):
+        spread = yc.get("spread_10y2y")
+        if spread is not None:
+            pts = 14 if spread > 0.5 else (9 if spread > 0 else (5 if spread > -0.5 else 2))
+            score_points += pts; score_count += 1
+
+    if score_count == 0:
+        return None
+    # Normalisierung auf 0-100 (analog JS: scorePoints / (scoreCount * 15) * 100, invertiert)
+    max_possible = score_count * 15
+    # JS-Score: hoch = Risk-On. Wir wollen: hoch = Risk-Off (Stress). Invertieren:
+    raw_pct = round(score_points / max_possible * 100)
+    return 100 - raw_pct  # 0 = pure Risk-On, 100 = pure Risk-Off
+
+
+def calc_mcm_treasury_stress(market: dict, hist_data: dict) -> int | None:
+    """Port von calcTreasuryStress() aus index.html.
+    Score 0-100: hoch = Treasury-Stress.
+    Schwellen: caution ≥ 35, risk ≥ 60 (identisch zu _MCM_SIGNAL_RULES).
+    Auktionsparameter nicht serverseitig verfügbar → nur Marktdaten-Komponenten.
+    """
+    score = 0
+    components = 0
+
+    # Zinskurve: Inversion = +15 Punkte (aus FRED, bereits im Aggregator)
+    fred = market.get("fredMacro", {}) or {}
+    yc = fred.get("yield_curve", {}) or {}
+    if yc.get("ok") and yc.get("inverted"):
+        score += 15
+    if yc.get("ok"):
+        components += 1
+
+    # DXY vs SMA20: starker Dollar = +15 Stress (analog calcTreasuryStress JS)
+    dxy_closes = _get_closes(hist_data, "DX-Y.NYB", 25)
+    if not dxy_closes:
+        dxy_closes = _get_closes(hist_data, "DXY", 25)
+    if len(dxy_closes) >= 20:
+        sma20 = sum(dxy_closes[-20:]) / 20
+        if dxy_closes[-1] > sma20:
+            score += 15
+        components += 1
+
+    # VIX > 20 = +15 Stress
+    vix_term = market.get("vixTerm", {}) or {}
+    vix = vix_term.get("vix")
+    if vix is not None:
+        if vix > 20:
+            score += 15
+        components += 1
+
+    # MOVE-Index-Level als Anleihe-Vola-Signal
+    move = market.get("moveIndex", {}) or {}
+    move_val = move.get("current") or move.get("value")
+    if move_val is not None:
+        # MOVE > 130 = erhöhter Bond-Stress (+10), > 160 = stark (+20)
+        if move_val > 160:
+            score += 20
+        elif move_val > 130:
+            score += 10
+        components += 1
+
+    if components == 0:
+        return None
+    return min(100, round(score))
+
+
+def calc_mcm_bull_indicator(market: dict, hist_data: dict, ios_market: dict) -> int | None:
+    """Port von calcBullIndicator() aus index.html.
+    Score 0-100: hoch = bullisch, niedrig = bearisch.
+    Schwellen: caution ≤ 35 (identisch zu _MCM_SIGNAL_RULES).
+    Nutzt server-verfügbare Daten; UI-only Signale (tickerData MACD) werden
+    durch ios_market.iosMarketScore ersetzt (semantisch äquivalent).
+    """
+    total_score, max_score = 0, 0
+
+    # SIGNAL 1: IOS-Market-Score als Marktbreite-Proxy (ersetzt tickerData MACD-Breadth)
+    ios_score = ios_market.get("iosMarketScore") if ios_market else None
+    if ios_score is not None:
+        # Analog zu pctBullMacd in JS: >61 = 20 Pts, >50 = 12, >40 = 6, sonst 2
+        pts = 20 if ios_score > 61 else (12 if ios_score > 50 else (6 if ios_score > 40 else 2))
+        total_score += pts; max_score += 20
+
+    # SIGNAL 2: JNK/SPY Divergenz (HYG/SPY Divergenz-Port)
+    jnk_chg = _get_chg5d(hist_data, "JNK")
+    spy_chg  = _get_chg5d(hist_data, "SPY")
+    if jnk_chg is not None and spy_chg is not None:
+        if spy_chg < -1 and jnk_chg > -0.5:
+            pts = 18  # SPY schwach aber JNK stabil — Smart Money kauft
+        elif spy_chg > 0 and jnk_chg > 0:
+            pts = 15  # Risk-On bestätigt
+        elif spy_chg < -2 and jnk_chg < -1:
+            pts = 2   # Beide schwach
+        else:
+            pts = 8   # Neutral
+        total_score += pts; max_score += 18
+
+    # SIGNAL 3: VVIX als Frühwarner
+    vix_term = market.get("vixTerm", {}) or {}
+    zsc = market.get("zscores", {}) or {}
+    vvix_val = (zsc.get("vvix") or {}).get("value") or vix_term.get("vvix")
+    vvix_chg = _get_chg5d(hist_data, "^VVIX")
+    if vvix_val is not None:
+        if vvix_val > 100 and vvix_chg is not None and vvix_chg < -5:
+            pts = 15  # VVIX fällt von hohem Niveau
+        elif vvix_val < 90:
+            pts = 12  # Ruhig
+        elif vvix_val > 110:
+            pts = 2   # Extrem hoch
+        else:
+            pts = 7
+        total_score += pts; max_score += 15
+
+    # SIGNAL 4: CNN Fear & Greed (kontraindikativ)
+    fg = market.get("fearGreed", {}) or {}
+    fg_score = fg.get("score")
+    if fg_score is not None:
+        if fg_score <= 20:
+            pts = 15  # Extreme Fear = Kontraindikator bullisch
+        elif fg_score <= 35:
+            pts = 11
+        elif fg_score >= 80:
+            pts = 2
+        elif fg_score >= 65:
+            pts = 7
+        else:
+            pts = 8
+        total_score += pts; max_score += 15
+
+    # SIGNAL 5: VIX als Kontraindikator
+    vix = vix_term.get("vix")
+    if vix is not None:
+        if vix > 35:
+            pts = 12  # Panik = Kontraindikator
+        elif vix > 25:
+            pts = 8
+        elif vix < 15:
+            pts = 6
+        else:
+            pts = 7
+        total_score += pts; max_score += 12
+
+    if max_score == 0:
+        return None
+    return round(total_score / max_score * 100)
+
+
 def build_server_market_context(master):
     """market_context serverseitig — Pendant zu buildMarketContext() im JS-Port.
     Nutzt nur Indikatoren, die im Aggregator-master tatsächlich vorliegen (vix,
@@ -4832,6 +5102,21 @@ def build_server_market_context(master):
     _add("skew",        (zsc.get("skew") or {}).get("percentile"), _MCM_SIGNAL_RULES["skew"])
     _add("pcr",         pcr_d.get("pcr"),        _MCM_SIGNAL_RULES["pcr"])
     _add("fear_greed",  fg.get("score"),         _MCM_SIGNAL_RULES["fear_greed"])
+
+    # ── MCM-Parität: 4 neue Server-Faktoren (v5.13.0) ────────────────────────
+    # hist_data wird von main() in master["_hist_data"] injiziert (analog regimeUsed).
+    hist_data  = master.get("_hist_data") or {}
+    ios_market = market.get("iosMarket") or {}
+
+    ndx_b  = calc_mcm_ndx_breadth(hist_data)
+    im_s   = calc_mcm_intermarket_score(hist_data, market)
+    tr_s   = calc_mcm_treasury_stress(market, hist_data)
+    bull_i = calc_mcm_bull_indicator(market, hist_data, ios_market)
+
+    _add("ndx_breadth",       ndx_b,  _MCM_SIGNAL_RULES["ndx_breadth"])
+    _add("intermarket_score", im_s,   _MCM_SIGNAL_RULES["intermarket_score"])
+    _add("treasury_stress",   tr_s,   _MCM_SIGNAL_RULES["treasury_stress"])
+    _add("bull_indicator",    bull_i, _MCM_SIGNAL_RULES["bull_indicator"])
 
     # Calendar-Faktoren
     events = _mcm_load_macro_calendar()
@@ -5813,6 +6098,10 @@ def main():
     log.info(f"\n[SNAPSHOT] Daily Market Snapshot generieren...")
     try:
         import datetime as _dt
+        # MCM-Parität (v5.13.0): hist_data für build_server_market_context() verfügbar machen.
+        # Analog zum regimeUsed-Patch: wird in master injiziert, damit generate_daily_snapshot()
+        # keine Signatur-Änderung braucht. Schlüssel mit "_" Prefix = interne Nutzung, nicht im KV.
+        master["_hist_data"] = hist_data
         _snap_result = generate_daily_snapshot(master)
         # Lauf-Zeitpunkt bestimmen: vor 12:00 UTC = Morgen-Lauf, danach = NYSE-Lauf
         _lauf_hour = _dt.datetime.utcnow().hour
