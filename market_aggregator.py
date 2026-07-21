@@ -1759,6 +1759,61 @@ def score_long_minervini(r: dict) -> int:
     return max(0, min(100, s))
 
 
+def score_long_breakout(r: dict) -> int:
+    """
+    Breakout-Long: Ausbruch nahe 52W-Hoch mit Volumen- und OBV-Bestätigung.
+    Konzept: Minervini Stage-2 + strengerer 52W-Hoch-Filter (≤5% Abstand)
+    + erhöhtes Volumen als Pflicht-Gate.
+
+    Kriterien (Maximal ~100 Punkte):
+    - Stage-2-Grundvoraussetzung: Kurs > EMA50 > EMA200 (sonst 0)
+    - 52W-Hoch-Nähe: ≤5% = 30 Pts, ≤10% = 18 Pts, ≤15% = 8 Pts, sonst 0
+    - Volumen-Bestätigung: volRatio ≥ 1.5 = 25 Pts, ≥ 1.2 = 15 Pts (Kern-Signal)
+    - OBV-Akkumulation: obv > 0 = 15 Pts
+    - Momentum: macdHist > 0 = 10 Pts
+    - RS-Rating: ≥85 = 20 Pts, ≥70 = 10 Pts (Breakouts aus starkem Universum bevorzugen)
+    """
+    s = 0
+    price   = r.get("price")
+    ema50   = r.get("ema50")
+    ema200  = r.get("ema200")
+    pct_high = r.get("pctFromHigh52")
+    vol_ratio = r.get("volRatio", 1) or 1
+    obv     = r.get("obvTrend", 0) or 0
+    macd_h  = r.get("macdHist")
+    rs_rating = r.get("rsRating")
+
+    # Pflicht-Gate: Stage-2-Aufwärtstrend
+    if not price or not ema50 or not ema200: return 0
+    if price < ema50 or price < ema200 or ema50 < ema200: return 0
+
+    # Gate 1: 52W-Hoch-Nähe (Kernkriterium Breakout)
+    if pct_high is None: return 0  # ohne 52W-Daten kein Breakout-Score
+    if pct_high >= -5:    s += 30
+    elif pct_high >= -10: s += 18
+    elif pct_high >= -15: s += 8
+    else: return 0  # >15% vom Hoch = kein Breakout-Kandidat
+
+    # Gate 2: Volumen-Bestätigung (Pflicht für echten Breakout)
+    if vol_ratio >= 1.5:   s += 25
+    elif vol_ratio >= 1.2: s += 15
+    # Kein Malus bei niedrigem Volumen — Score bleibt niedrig genug für Ausschluss
+
+    # Gate 3: OBV-Akkumulation (zeigt institutionelles Interesse)
+    if obv > 0: s += 15
+
+    # Gate 4: Momentum-Bestätigung
+    if macd_h is not None and macd_h > 0: s += 10
+
+    # Gate 5: RS-Rating (Breakouts aus Relative-Stärke-Titeln bevorzugen)
+    if rs_rating is not None:
+        if rs_rating >= 85:   s += 20
+        elif rs_rating >= 70: s += 10
+        elif rs_rating < 50:  s -= 5  # schwache RS = Breakout wahrscheinlich False Break
+
+    return min(100, max(0, s))
+
+
 def score_long_swing(r: dict) -> int:
     """
     Swing-Pullback: EMA50-Bounce im Aufwaertstrend.
@@ -2575,6 +2630,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         s_minervini = score_long_minervini(r)
         s_swing     = score_long_swing(r)
         s_mr_long   = score_long_mean_reversion(r)
+        s_breakout  = score_long_breakout(r)   # NEU (21.07.2026)
         s_breakdown = score_short_breakdown(r)
         s_fading    = score_short_fading(r)
         s_csp       = score_options_csp(r)
@@ -2637,6 +2693,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "sMinervini":    s_minervini,
             "sSwing":        s_swing,
             "sMrLong":       s_mr_long,
+            "sBreakout":     s_breakout,   # NEU (21.07.2026)
             "sBreakdown":    s_breakdown,
             "sFading":       s_fading,
             "sCsp":          s_csp,
@@ -2679,6 +2736,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         r["sMinervini"]    = s.get("sMinervini",    0)
         r["sSwing"]        = s.get("sSwing",         0)
         r["sMrLong"]       = s.get("sMrLong",        0)
+        r["sBreakout"]     = s.get("sBreakout",      0)  # NEU (21.07.2026)
         r["sBreakdown"]    = s.get("sBreakdown",     0)
         r["sFading"]       = s.get("sFading",        0)
         r["bestLong"]      = s.get("bestLong",       0)
@@ -2692,6 +2750,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "long_minervini": top20("sMinervini", 40),
         "long_swing":     top20("sSwing",     35),
         "long_mr":        top20("sMrLong",    30),
+        "long_breakout":  top20("sBreakout",  40),   # NEU (21.07.2026)
         "short_breakdown":top20("sBreakdown", 35),
         "short_fading":   top20("sFading",    35),
         "ko_long":        top20("sKoLong",    50),
@@ -2817,6 +2876,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     log.info(f"  Leaderboards: Minervini={len(leaderboards['long_minervini'])} | "
              f"Swing={len(leaderboards['long_swing'])} | MR={len(leaderboards['long_mr'])} | "
+             f"Breakout={len(leaderboards['long_breakout'])} | "
              f"Breakdown={len(leaderboards['short_breakdown'])} | Fading={len(leaderboards['short_fading'])} | "
              f"KO-Long={len(leaderboards['ko_long'])} | CSP={len(leaderboards['options_csp'])} | CC={len(leaderboards['options_cc'])} | VCP={len(leaderboards['vcp_setups'])}")
 
