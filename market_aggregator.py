@@ -1689,6 +1689,15 @@ def score_long_minervini(r: dict) -> int:
     p_b2b    = r.get("pBull2Bear", 0) or 0
     rsi      = r.get("rsi")
     hvp      = r.get("hvp")
+    avg_vol  = r.get("avgVol20")  # NEU: Absolutvolumen-Filter
+
+    # Liquiditäts-Soft-Gate (21.07.2026): Trendfolge braucht institutionelle Beteiligung.
+    # Kein harter Ausschluss (UIQ scannt auch Mid-Caps), aber signifikanter Malus.
+    # Schwelle 500k/Tag: unter dieser Marke können große Fonds keine Position aufbauen.
+    if avg_vol is not None and avg_vol < 500_000:
+        s -= 20
+    elif avg_vol is not None and avg_vol < 250_000:
+        s -= 35  # Sehr dünnes Volumen — Stage-2-Trends nicht verlässlich
 
     # Gate 1: Stage 2 Uptrend — Pflicht (jetzt mit echter 50>150>200-Kette wenn verfügbar)
     if not ema50 or not ema200: return 0
@@ -1782,10 +1791,17 @@ def score_long_breakout(r: dict) -> int:
     obv     = r.get("obvTrend", 0) or 0
     macd_h  = r.get("macdHist")
     rs_rating = r.get("rsRating")
+    avg_vol = r.get("avgVol20")  # NEU: Absolutvolumen-Filter
 
     # Pflicht-Gate: Stage-2-Aufwärtstrend
     if not price or not ema50 or not ema200: return 0
     if price < ema50 or price < ema200 or ema50 < ema200: return 0
+
+    # Liquiditäts-Soft-Gate: Breakouts ohne institutionelles Volumen sind False Breaks
+    if avg_vol is not None and avg_vol < 500_000:
+        s -= 15
+    elif avg_vol is not None and avg_vol < 250_000:
+        s -= 25
 
     # Gate 1: 52W-Hoch-Nähe (Kernkriterium Breakout)
     if pct_high is None: return 0  # ohne 52W-Daten kein Breakout-Score
@@ -2681,6 +2697,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "obvTrend":      r.get("obvTrend"),
             "bbPos":         r.get("bbPos"),
             "volRatio":      r.get("volRatio"),
+            "avgVol20":      r.get("avgVol20"),   # NEU (21.07.2026): Absolutvolumen
             "hvp":           r.get("hvp"),
             "hv10":          r.get("hv10"),
             "pctFromHigh52": r.get("pctFromHigh52"),
@@ -3485,6 +3502,7 @@ def process_ticker(ticker, hist_df):
             "dist50":        dist_50,
             "dist200":       dist_200,
             "volRatio":      vol_ratio,
+            "avgVol20":      round(avg_vol20) if avg_vol20 else None,  # NEU (21.07.2026): Absolutvolumen-Filter
             "bars":          len(closes),
             "_bars_raw":     len(hist_df) if hist_df is not None else 0,
             "hvp":           calc_hv_percentile(closes),
