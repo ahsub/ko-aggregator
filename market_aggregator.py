@@ -905,11 +905,11 @@ def calc_overheat(closes, highs, lows, ema200_val, atr_val):
 
 
 def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
-             swing_window=5, min_contractions=2, lookback=90):
-    """VCP (Volatility Contraction Pattern, Minervini) — Sprint 1: reine Preis-Struktur.
-    Volumen-Bestätigung bewusst NICHT enthalten (vorgemerkt als Sprint 2,
-    SUITE.md Backlog #18 — Entscheidung Axel 14.07.2026: erst Preis-Struktur
-    validieren, Volumen erst mit Praxis-Erfahrung draufsetzen).
+             swing_window=5, min_contractions=2, lookback=90, volumes=None):
+    """VCP (Volatility Contraction Pattern, Minervini) — Sprint 1+2: Preis-Struktur + Volumen.
+    Volumen-Bestätigung ergänzt (22.07.2026, Sprint 2, SUITE.md Backlog #18):
+      vcpVolContraction: Volumen waehrend letzter Contraction vs. 20T-Schnitt (<0.6 = stark getrocknet)
+      vcpBreakoutVol: volRatio des letzten Bars (Ausbruch-Bestaetigung)
 
     Methodik:
     1. Swing-Hochs/-Tiefs über ein gleitendes Fenster (swing_window) im
@@ -948,7 +948,8 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
 
     if len(swing_points) < min_contractions * 2:
         return {"vcpDetected": False, "vcpContractions": 0, "vcpLastPct": None,
-                "vcpAvgPrevPct": None, "vcpTightening": False}
+                "vcpAvgPrevPct": None, "vcpTightening": False,
+                "vcpVolContraction": None, "vcpBreakoutVol": None}
 
     # Alternierende Hoch/Tief-Folge erzwingen (bei Gleichstand: höheren Wert behalten)
     seq = []
@@ -976,7 +977,8 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
     if num_contractions < min_contractions:
         return {"vcpDetected": False, "vcpContractions": num_contractions,
                 "vcpLastPct": contractions[-1] if contractions else None,
-                "vcpAvgPrevPct": None, "vcpTightening": False}
+                "vcpAvgPrevPct": None, "vcpTightening": False,
+                "vcpVolContraction": None, "vcpBreakoutVol": None}
 
     last_pct  = contractions[-1]
     prev_pcts = contractions[:-1]
@@ -992,12 +994,36 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
 
     vcp_detected = bool(tightening and trend_ok and num_contractions >= min_contractions)
 
+    # ── Volumen-Metriken (Sprint 2, 22.07.2026) ──────────────────────────
+    # vcpVolContraction: Wie stark hat das Volumen während der letzten
+    # Contraction abgenommen? Vergleich: Contraction-Durchschnitt vs. 20T davor.
+    # <0.6 = stark getrocknet (ideales VCP-Signal), >1.0 = kein Trockenlegung
+    vcp_vol_contraction = None
+    vcp_breakout_vol    = None
+    if volumes is not None and len(volumes) >= 25:
+        # Letzte Contraction: vereinfacht = letzte 5-15 Bars je nach Muster
+        # Pragmatisch: letzte max(5, lookback//15) Bars als Contraction-Proxy
+        contraction_len = max(5, lookback // 15)
+        vol_contraction_period = volumes[-contraction_len-1:-1]  # ohne letzten Bar
+        vol_20d_before = volumes[-contraction_len-21:-contraction_len-1]
+        if len(vol_contraction_period) > 0 and len(vol_20d_before) > 0:
+            avg_contraction = sum(vol_contraction_period) / len(vol_contraction_period)
+            avg_20d = sum(vol_20d_before) / len(vol_20d_before)
+            if avg_20d > 0:
+                vcp_vol_contraction = round(avg_contraction / avg_20d, 2)
+        # vcpBreakoutVol: letzter Bar vs. 20T-Schnitt (Ausbruch-Bestätigung)
+        vol_20d_ma = sum(volumes[-21:-1]) / 20 if len(volumes) >= 21 else None
+        if vol_20d_ma and vol_20d_ma > 0:
+            vcp_breakout_vol = round(volumes[-1] / vol_20d_ma, 2)
+
     return {
-        "vcpDetected":     vcp_detected,
-        "vcpContractions": num_contractions,
-        "vcpLastPct":      last_pct,
-        "vcpAvgPrevPct":   avg_prev,
-        "vcpTightening":   tightening,
+        "vcpDetected":      vcp_detected,
+        "vcpContractions":  num_contractions,
+        "vcpLastPct":       last_pct,
+        "vcpAvgPrevPct":    avg_prev,
+        "vcpTightening":    tightening,
+        "vcpVolContraction":vcp_vol_contraction,  # NEU: <0.6 ideal
+        "vcpBreakoutVol":   vcp_breakout_vol,     # NEU: >1.5 Ausbruch bestätigt
     }
 
 
@@ -1122,10 +1148,17 @@ def score_options_csp(r: dict) -> int:
 
 
 def score_vcp(r: dict) -> int:
-    """VCP-Score 0-100 (Sprint 1, Preis-Struktur — Volumen als Sprint 2 vorgemerkt,
-    SUITE.md Backlog #18). Basis-Score bei erkanntem Muster, Bonus für Anzahl
-    der Contractions (mehr Evidenz) und für Enge der letzten Contraction
-    (stärker gecoiled = näher am Breakout).
+    """VCP-Score 0-100 — Sprint 1+2 (22.07.2026, SUITE.md Backlog #18 erledigt).
+    Sprint 1: Preis-Struktur (Contractions, Tightening).
+    Sprint 2: Volumen-Bestätigung (vcpVolContraction, vcpBreakoutVol).
+
+    Punkte-Struktur:
+    - Basis (Muster erkannt):        +40
+    - Contractions (Anzahl):         bis +30
+    - Letzte Contraction (Enge):     bis +30
+    - Volumen-Trockenlegung (NEU):   bis +15
+    - Ausbruch-Volumen (NEU):        bis +15
+    Maximal: 130 → auf 100 gekappt
     """
     if not r.get("vcpDetected"):
         return 0
@@ -1133,56 +1166,107 @@ def score_vcp(r: dict) -> int:
     last_pct     = r.get("vcpLastPct")
 
     s = 40  # Basis: Muster erkannt + Trend-Gate bestanden
-    # Bonus: mehr Contractions = mehr Bestätigung (Cap bei +30, ab 5 Contractions voll)
+
+    # Struktur: Contractions (mehr = mehr Bestätigung, Cap bei +30)
     s += min(30, max(0, contractions - 2) * 10)
-    # Bonus: enge letzte Contraction = staerker gecoiled (Cap bei +30)
+
+    # Struktur: Enge letzte Contraction (stärker gecoiled = näher am Breakout)
     if last_pct is not None:
         if   last_pct <= 5:  s += 30
         elif last_pct <= 8:  s += 20
         elif last_pct <= 12: s += 10
+
+    # Volumen-Trockenlegung (NEU, Sprint 2): <0.6 = stark getrocknet = ideales VCP
+    vol_contraction = r.get("vcpVolContraction")
+    if vol_contraction is not None:
+        if   vol_contraction < 0.6:  s += 15  # Stark getrocknet
+        elif vol_contraction < 0.8:  s += 10  # Moderat getrocknet
+        elif vol_contraction < 1.0:  s +=  5  # Leicht getrocknet
+        # >1.0 = kein Bonus (Volumen nicht getrocknet = schwächeres VCP-Signal)
+
+    # Ausbruch-Volumen (NEU, Sprint 2): >1.5 = Ausbruch bestätigt
+    breakout_vol = r.get("vcpBreakoutVol")
+    if breakout_vol is not None:
+        if   breakout_vol >= 2.0: s += 15  # Starker Ausbruch
+        elif breakout_vol >= 1.5: s += 10  # Bestätigter Ausbruch
+        elif breakout_vol >= 1.2: s +=  5  # Schwacher Ausbruch
+
     return min(100, s)
 
 
 def score_options_covered_call(r: dict) -> int:
     """
-    Covered Call Score 0-100 — Gemini v3.
-    CCs brauchen strukturell stabile Underlyings: EMA50-Gate schützt vor
-    fallenden Messern. Leicht überkaufte Phasen (RSI 55-70) sind ideal,
-    da Call-Prämien teuer sind. Überhitzte Titel (overheat>75) ausschließen
-    — Gefahr verpasster Mega-Rallies beim Cap.
+    Covered Call Score 0-100 — v2.0 (22.07.2026, KIMI-Analyse-Destillat).
+
+    CC ist fundamental anders als CSP:
+    - CSP will kaufen (Überverkauf, BBPos tief, RSI <45)
+    - CC verwaltet Bestand (moderate Überhitzung OK, Seitwärts ideal)
+
+    Kernunterschiede zu score_options_csp():
+    - RSI-Optimum: 60-75 (CC toleriert Überhitzung, CSP will Überverkauf)
+    - HVP Sweet Spot: 40-75 (CC = Prämieneinnahme, höhere IV OK)
+    - Gate: Kurs 0.92-1.15 × EMA50 (kein Crash, kein Explosion)
+    - Regime: Side +30 > Bull +20 (Seitwärts = Theta-Paradisziplin für CC)
+    - Fib: RETRACEMENT bevorzugen (Bestandsmanagement), nicht EXTENSION (Einstieg)
+    - kein overheat-Gate unter 85 (CC auf überhitzten Positionen ist gewollt)
     """
     comp_score = r.get("score", 50) or 50
     price      = r.get("price", 0) or 0
     ema50      = r.get("ema50")
+    ema200     = r.get("ema200")
     hvp        = r.get("hvp", 0) or 0
     regime     = (r.get("regime") or "").lower()
     rsi        = r.get("rsi", 50) or 50
     overheat   = r.get("overheat", 0) or 0
+    bbpos      = r.get("bbPos")
 
-    # Gates: Schutz vor strukturellen Abwärtstrends
-    if comp_score < 45:            return 0  # Mindestkvalität
-    if ema50 and price < ema50 * 0.90: return 0  # Gemini Fix: 10% Puffer erlaubt
-    if overheat > 75:              return 0  # Keine CCs bei extrem überhitzten Titeln
+    # Gate 1: Mindestqualität
+    if comp_score < 45: return 0
+
+    # Gate 2: Kurs-EMA50-Band — CC braucht weder Crash noch Explosion
+    # 0.92: unter diesem Level ist die Bestandsposition bereits im echten Drawdown
+    # 1.20: über diesem Level ist Opportunity Cost der Ausübung zu hoch → Momentum statt CC
+    if ema50:
+        if price < ema50 * 0.92: return 0  # Falling Knife — kein CC
+        if price > ema50 * 1.20: return 0  # Zu explosiv — Momentum bevorzugen
+
+    # Gate 3: Mindest-Volatilität für attraktive Prämie
+    if hvp < 25: return 0   # Unter 25 zu wenig Prämie für sinnvollen CC
+
+    # Gate 4: Extreme Überhitzung verhindert (explosiver Trend, Ausübung sicher)
+    if overheat > 85: return 0   # Lockerer als CSP (85 statt 75) — CC toleriert Überhitzung
 
     s = 0
-    # CCs lieben leicht überkaufte Phasen — Call-Prämien teuer, Kurs begrenzt
-    if   55 <= rsi <= 70: s += 35
-    elif 45 <= rsi < 55:  s += 15
 
-    # Regime: Bull = Prämie gut aber Kurs kann wegrennen; Side = reiner Theta-Gewinn
-    if   regime == "bull": s += 30
-    elif regime == "side": s += 25
+    # RSI: CC liebt moderate Überhitzung — Call-Prämien teuer, Upside begrenzt
+    if   60 <= rsi <= 75: s += 35   # Sweet Spot: leicht überhitzt, Prämie gut
+    elif 75 < rsi <= 80:  s += 20   # Noch OK — hohe Prämie, erhöhtes Assignment-Risiko
+    elif 55 <= rsi < 60:  s += 15   # Neutrale Zone — Prämie moderat
+    elif 50 <= rsi < 55:  s +=  5   # Knapp unter Optimum
 
-    # HVP: Gesunde Bandbreite — nicht zu tief (wenig Prämie), nicht zu hoch (Event-Risiko)
-    if 30 <= hvp <= 65: s += 20
-    elif hvp > 65:      s += 10   # Noch akzeptabel, aber erhöhtes Gap-Risiko
+    # Regime: Seitwärts ist Paradedisziplin für CC (kein Wegrennen des Kurses)
+    if   regime == "side": s += 30   # Optimal: Theta-Verfall, kein Directional Risk
+    elif regime == "bull": s += 20   # Gut: Prämie OK, aber Ausübung wahrscheinlicher
+    elif regime == "volatile": s += 5  # Grenzwertig: hohe Prämie, aber Kursrisiko
 
-    # Fibonacci-Boost (NEU 30.06.2026, Gemini-Blueprint-Zuordnung) — EXTENSION
-    # bestaetigt: Kurs nahe 127.2%/161.8%-Extension + ueberkauft (RSI>70) =
-    # klassische Covered-Call-Zone (Strike am Extension-Level). Skaliert mit
-    # Confluence-Score (0-100), max +15 Pkt bei Score>=75.
-    if r.get("f_setup") == "EXTENSION":
-        s += min(int((r.get("f_score", 0) or 0) * 0.20), 15)
+    # HVP: CC-Sweet-Spot höher als CSP (wir wollen Prämie, nicht Ausverkauf-Signal)
+    if   40 <= hvp <= 65: s += 25   # Ideal: gute Prämie ohne extremes Event-Risiko
+    elif 65 < hvp <= 80:  s += 15   # Hohe Prämie — erhöhtes Gap-Risiko beachten
+    elif 25 <= hvp < 40:  s += 10   # Niedrige Prämie — grenzwertig
+
+    # EMA200-Trend: CC funktioniert besser in stabilen Aufwärtstrends
+    if ema200 and price > ema200: s += 10   # Über langfristigem Trend = stabiler Bestand
+
+    # BBPos: CC liebt mittlere bis obere Bollinger-Zone (Kurs hat Spielraum nach unten)
+    if bbpos is not None:
+        if   0.50 <= bbpos <= 0.80: s += 15   # Idealzone: OTM-Strike gut platzierbar
+        elif 0.80 < bbpos <= 0.92:  s +=  8   # Nah am oberen Band — enger Strike nötig
+        elif bbpos < 0.30:          s -=  5   # Zu tief — CSP wäre besser
+
+    # Fibonacci: RETRACEMENT bevorzugen (Kurs auf Unterstützung = guter CC-Entry auf Bestand)
+    # EXTENSION-Setups werden hier NICHT belohnt (das ist CSP-Logik)
+    if r.get("f_setup") == "RETRACEMENT":
+        s += min(int((r.get("f_score", 0) or 0) * 0.15), 12)
 
     return max(0, min(100, s))
 
@@ -2773,7 +2857,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "ko_long":        top20("sKoLong",    50),
         "options_csp":    top20("sCsp",       50),
         "options_cc":     top20("sCc",        30),
-        "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct"]),
+        "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct", "vcpVolContraction", "vcpBreakoutVol"]),
     }
 
     # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS v2 (Gemini-Review Fix C+F) ──
@@ -3351,9 +3435,9 @@ def process_ticker(ticker, hist_df):
         obv_tr  = calc_obv_trend(closes, volumes)
         bbpos   = calc_bb(closes)
         overh   = calc_overheat(closes, highs, lows, ema200v, atrv)
-        # ── VCP Detection (Sprint 1, Preis-Struktur, 14.07.2026) ─────────────
+        # ── VCP Detection (Sprint 1+2, Preis-Struktur + Volumen, 22.07.2026) ──
         ema150v_for_vcp = sma150v  # sma150 als Trend-Proxy verwendet (bereits berechnet)
-        vcp = calc_vcp(closes, highs, lows, ema150=ema150v_for_vcp)
+        vcp = calc_vcp(closes, highs, lows, ema150=ema150v_for_vcp, volumes=volumes)
         regime, p_bull2bear, bull_pct, warn_level = calc_markov(closes)
 
         # ── KSI: Kinetic Slippage Index (HPotter, 12.07.2026) ────────────────
@@ -3463,6 +3547,8 @@ def process_ticker(ticker, hist_df):
             "vcpContractions": vcp["vcpContractions"] if vcp else 0,
             "vcpLastPct":      vcp["vcpLastPct"] if vcp else None,
             "vcpAvgPrevPct":   vcp["vcpAvgPrevPct"] if vcp else None,
+            "vcpVolContraction":vcp["vcpVolContraction"] if vcp else None,  # NEU (22.07.2026)
+            "vcpBreakoutVol":   vcp["vcpBreakoutVol"] if vcp else None,    # NEU (22.07.2026)
             "patternEntry":  pattern_entry,
             "atr":           atrv,
             "rsi":           rsiv,
