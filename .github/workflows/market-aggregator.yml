@@ -54,7 +54,7 @@ jobs:
           CF_KV_NS_ID:    ${{ secrets.CF_KV_NS_ID }}
         run: python tr_backup.py
 
-      - name: Archive committen (tr-Backup + FIN-Archiv, Git-History = Archiv)
+      - name: Archive committen (tr-Backup + FIN-Archiv + Snapshots, Git-History = Archiv)
         if: always()
         run: |
           git config user.name "uiq-nightly"
@@ -62,7 +62,11 @@ jobs:
           [ -f backups/tr_backup_latest.json ] && git add backups/tr_backup_latest.json || true
           [ -d data/fundamentals ] && git add data/fundamentals || true
           [ -d data/iv_history ] && git add data/iv_history || true
-          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup/FIN-Archiv $(date -u +%F)" && git push)
+          # Rolling-Window-Snapshots (v5.16.0): gzip'd master_market_data, 90-Tage-Fenster
+          # Gelöschte Snapshots (>90 Tage) via git rm entfernen
+          [ -d data/snapshots ] && git add data/snapshots/ || true
+          git ls-files --deleted data/snapshots/ | xargs -r git rm --cached
+          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup/FIN-Archiv/Snapshots $(date -u +%F)" && git push)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
