@@ -6154,6 +6154,36 @@ def main():
         json.dump(master, f, ensure_ascii=False, separators=(",", ":"))
     log.info(f"   💾 Lokal gespeichert: master_market_data.json")
 
+    # 7b. Rolling-Window-Archiv: master_market_data gzip'd ins data/snapshots/ Verzeichnis
+    # (v5.16.0, 22.07.2026): 90-Tage-Rolling-Window für Cross-Repo-Nutzung.
+    # Namensschema: data/snapshots/YYYY-MM-DD_HH.json.gz (Lauf-Stunde für 2 Runs/Tag)
+    # Rotation: Dateien älter als 90 Tage werden automatisch gelöscht.
+    # FIN-Archiv: tr_backup.py übernimmt historische Sicherung via KV-Export.
+    try:
+        import gzip, glob
+        from datetime import datetime as _dt_snap, timezone as _tz_snap
+        _snap_dir = "data/snapshots"
+        os.makedirs(_snap_dir, exist_ok=True)
+        _now_utc = _dt_snap.now(_tz_snap.utc)
+        _snap_name = f"{_snap_dir}/{_now_utc.strftime('%Y-%m-%d_%H')}.json.gz"
+        _snap_bytes = json.dumps(master, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        with gzip.open(_snap_name, "wb", compresslevel=6) as gz:
+            gz.write(_snap_bytes)
+        _snap_kb = len(_snap_bytes) / 1024
+        _snap_gz_kb = os.path.getsize(_snap_name) / 1024
+        log.info(f"   📦 Snapshot: {_snap_name} ({_snap_kb:.0f} KB → {_snap_gz_kb:.0f} KB gz)")
+        # Rotation: Dateien älter als 90 Tage löschen
+        _cutoff = _now_utc.timestamp() - 90 * 86400
+        _deleted = 0
+        for _old in glob.glob(f"{_snap_dir}/*.json.gz"):
+            if os.path.getmtime(_old) < _cutoff:
+                os.remove(_old)
+                _deleted += 1
+        if _deleted:
+            log.info(f"   🗑️  {_deleted} Snapshots älter als 90 Tage gelöscht")
+    except Exception as _e:
+        log.warning(f"   ⚠️ Snapshot-Archivierung fehlgeschlagen: {_e}")
+
     # 8. Cloudflare KV Upload
     log.info(f"\n☁️  Cloudflare KV Upload...")
     push_to_cloudflare_kv(master, key="master_market_data")
