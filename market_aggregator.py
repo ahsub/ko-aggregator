@@ -2815,9 +2815,16 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
     def top20(key, min_score=35, extra_fields=None):
+        # Kern-Felder: für alle Strategien relevant für KI-Analyse
+        # (v5.18.0, 22.07.2026): MACD, OBV, volRatio, HVP, EMA50/200, pctFromHigh52
+        # ergänzt — waren bisher nicht im LB-Eintrag, KI-Prompt sagte "Daten fehlen"
+        _core = ["sym", "score", "price", "grade", "rsi", "atr",
+                 "macdHist", "obvTrend", "volRatio", "hvp",
+                 "ema50", "ema200", "pctFromHigh52", "dist200",
+                 "bbPos", "sma150", "rsRating", "avgVol20",
+                 "high52", "low52", "overheat"]
         return [
-            {**{"sym": x["sym"], "score": x[key], "price": x["price"],
-                "grade": x["grade"], "rsi": x["rsi"], "atr": x["atr"]},
+            {**{f: x.get(f) for f in _core},
              **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
             for x in sorted(scored, key=lambda x: x[key], reverse=True)
             if x[key] >= min_score
