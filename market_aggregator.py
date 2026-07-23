@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.12.4"
+AGGREGATOR_VERSION = "5.18.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2853,6 +2853,8 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         r["squeezeRisk"]   = s.get("squeezeRisk")   # 0-100, >=70 = Fading-Gate zu
         r["koShortLev"]    = s.get("koShortLev")    # Empfohlener Hebel (3-8) oder None
         r["sVcp"]          = s.get("sVcp", 0)
+        r["scoreCsp"]      = s.get("sCsp", 0)   # Fix 23.07.2026: fehlte im Merge-Block
+        r["scoreCc"]       = s.get("sCc",  0)   # Fix 23.07.2026: fehlte im Merge-Block
 
     leaderboards = {
         "long_minervini": top20("sMinervini", 40),
