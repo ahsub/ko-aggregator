@@ -2,7 +2,7 @@
 """
 UIQ Track-Record-Layer — Snapshot-Writer (Phase A) + Evaluator (Phase B)
 =========================================================================
-Version 1.1 (03.07.2026) | Spezifikation: docs/TRACK_RECORD_SPEC.md v1.2
+Version 1.2 (23.07.2026) | Spezifikation: docs/TRACK_RECORD_SPEC.md v1.2
 
 Protokolliert die nächtlichen Empfehlungen des Strategie-Routers nach
 Cloudflare KV (append-only), als Grundlage für die spätere Bewertung
@@ -93,7 +93,8 @@ def _ctx(ticker_rec, shortlist_rec=None):
     """Kleine, feste Kalibrierfeld-Auswahl (Spez §3.1) — kein Voll-Dump."""
     src = ticker_rec or {}
     ctx = {}
-    for f in ("rsi", "hvp", "bbPos", "dist200"):
+    for f in ("rsi", "hvp", "bbPos", "dist200",
+              "tightnessPct", "vcpVolContraction", "vcpBreakoutVol"):
         v = src.get(f)
         if v is not None:
             ctx[f] = v
@@ -362,7 +363,12 @@ def _sim_trade(rec, ser, tday, max_bars):
     out = {"st": st}
     if exit_p is not None:
         r = (exit_p - trig) / risk if d == 1 else (trig - exit_p) / risk
-        out["r"], out["bars"] = round(r, 2), exit_i - i0
+        bars_held = exit_i - i0
+        out["r"]          = round(r, 2)
+        out["bars"]       = bars_held
+        out["returnPct"]  = round((exit_p / trig - 1) * d * 100, 2)  # NEU: richtungsger. %
+        if exit_i < len(dates):
+            out["exitDate"] = dates[exit_i]  # NEU: Kalenderdatum des Exits
     return out
 
 
