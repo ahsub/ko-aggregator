@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.18.0"
+AGGREGATOR_VERSION = "5.19.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -949,7 +949,7 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
     if len(swing_points) < min_contractions * 2:
         return {"vcpDetected": False, "vcpContractions": 0, "vcpLastPct": None,
                 "vcpAvgPrevPct": None, "vcpTightening": False,
-                "vcpVolContraction": None, "vcpBreakoutVol": None}
+                "vcpVolContraction": None, "vcpBreakoutVol": None, "tightnessPct": None}
 
     # Alternierende Hoch/Tief-Folge erzwingen (bei Gleichstand: höheren Wert behalten)
     seq = []
@@ -978,7 +978,7 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
         return {"vcpDetected": False, "vcpContractions": num_contractions,
                 "vcpLastPct": contractions[-1] if contractions else None,
                 "vcpAvgPrevPct": None, "vcpTightening": False,
-                "vcpVolContraction": None, "vcpBreakoutVol": None}
+                "vcpVolContraction": None, "vcpBreakoutVol": None, "tightnessPct": None}
 
     last_pct  = contractions[-1]
     prev_pcts = contractions[:-1]
@@ -993,6 +993,15 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
         trend_ok = price > ema150
 
     vcp_detected = bool(tightening and trend_ok and num_contractions >= min_contractions)
+
+    # ── Tightness-Metrik (23.07.2026, P1-Sprint) ────────────────────────
+    # 5-Tage-Range: (max(high[-5:]) - min(low[-5:])) / close * 100
+    # Minervini: <3% = "Tight" (ideale Konsolidierung), <5% = akzeptabel
+    tightness_pct = None
+    if len(highs) >= 5 and len(lows) >= 5 and closes[-1] > 0:
+        h5 = max(highs[-5:])
+        l5 = min(lows[-5:])
+        tightness_pct = round((h5 - l5) / closes[-1] * 100, 2)
 
     # ── Volumen-Metriken (Sprint 2, 22.07.2026) ──────────────────────────
     # vcpVolContraction: Wie stark hat das Volumen während der letzten
@@ -1024,6 +1033,7 @@ def calc_vcp(closes, highs, lows, ema150=None, ema200=None,
         "vcpTightening":    tightening,
         "vcpVolContraction":vcp_vol_contraction,  # NEU: <0.6 ideal
         "vcpBreakoutVol":   vcp_breakout_vol,     # NEU: >1.5 Ausbruch bestätigt
+        "tightnessPct":     tightness_pct,        # NEU: 5T-Range/Kurs% (<3%=Tight, <5%=OK)
     }
 
 
@@ -2855,6 +2865,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         r["sVcp"]          = s.get("sVcp", 0)
         r["scoreCsp"]      = s.get("sCsp", 0)   # Fix 23.07.2026: fehlte im Merge-Block
         r["scoreCc"]       = s.get("sCc",  0)   # Fix 23.07.2026: fehlte im Merge-Block
+        r["tightnessPct"]  = r.get("tightnessPct")  # 5T-Range% aus calc_vcp()
 
     leaderboards = {
         "long_minervini": top20("sMinervini", 40),
