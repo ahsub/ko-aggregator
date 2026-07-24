@@ -3569,6 +3569,7 @@ def process_ticker(ticker, hist_df):
             "vcpAvgPrevPct":   vcp["vcpAvgPrevPct"] if vcp else None,
             "vcpVolContraction":vcp["vcpVolContraction"] if vcp else None,  # NEU (22.07.2026)
             "vcpBreakoutVol":   vcp["vcpBreakoutVol"] if vcp else None,    # NEU (22.07.2026)
+            "tightnessPct":     vcp["tightnessPct"]   if vcp else None,    # NEU (23.07.2026) 5T-Range/Kurs% (<3%=Tight)
             "patternEntry":  pattern_entry,
             "atr":           atrv,
             "rsi":           rsiv,
