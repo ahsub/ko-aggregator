@@ -4781,8 +4781,9 @@ def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
         log.info("  Setze: CF_ACCOUNT_ID, CF_API_TOKEN, CF_KV_NS_ID als Umgebungsvariablen.")
         return False
 
-    from urllib.parse import quote as _q
-    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{ns_id}/values/{_q(key, safe='')}"
+    # Kein URL-Encoding des Keys: identisch zu _kv_url() in tr_layer.py, das
+    # seit Wochen tr:snap:*/tr:eval:* mit rohen Doppelpunkten schreibt und liest.
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{ns_id}/values/{key}"
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type":  "application/json",
@@ -5633,17 +5634,18 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
         "tickers": tickers_out,
     }
 
-    # Datumsbezogener Key: market-snapshot-YYYY-MM-DD (letzter Handelstag)
-    kv_key = f"market-snapshot-{tday}"
+    # Datumsbezogener Key: market:snapshot:YYYY-MM-DD (letzter Handelstag).
+    # Doppelpunkt-Schema konsistent zu tr:snap:*/tr:eval:* (26.07.2026).
+    kv_key = f"market:snapshot:{tday}"
     ok = push_to_cloudflare_kv(snapshot, key=kv_key)
 
-    # Alias-Key: market-snapshot-latest — immer aktuellster Lauf, unabhaengig vom
+    # Alias-Key: market:snapshot:latest — immer aktuellster Lauf, unabhaengig vom
     # Kalendertag. Frontend liest diesen Key zuerst → funktioniert an Wochenenden
     # und Feiertagen ohne Sonderfallbehandlung, solange der letzte Werktag-Lauf
     # erfolgreich war. Das Feld "tday" im Payload zeigt den echten Handelstag.
     if ok:
-        push_to_cloudflare_kv(snapshot, key="market-snapshot-latest")
-        log.info(f"[MARKET] ✅ market-snapshot-{tday} + market-snapshot-latest — "
+        push_to_cloudflare_kv(snapshot, key="market:snapshot:latest")
+        log.info(f"[MARKET] ✅ market:snapshot:{tday} + market:snapshot:latest — "
                  f"{len(tickers_out)} Ticker, {len(tickers_out[0])-3} Felder/Ticker")
     return ok
 
