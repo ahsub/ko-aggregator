@@ -45,7 +45,7 @@ def main():
         # sein (%3A), damit die CF KV API sie korrekt verarbeitet.
         from urllib.parse import quote as _q
         all_keys = []
-        for prefix in ("tr:", "market:"):
+        for prefix in ("tr:", "market-"):
             keys, cursor = [], None
             while True:
                 url = f"{base}/keys?prefix={_q(prefix, safe='')}&limit=1000"
