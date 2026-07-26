@@ -5562,31 +5562,62 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
         if not sym or price is None:
             continue
         tickers_out.append({
-            "symbol":         sym,
-            "price":          float(price),
-            "ema20":          pick(r, "ema20", "EMA20"),
-            "ema50":          pick(r, "ema50", "EMA50"),
-            "ema200":         pick(r, "ema200", "EMA200"),
-            "sma50":          pick(r, "sma50", "SMA50", "sma_50"),
-            "sma200":         pick(r, "sma200", "SMA200", "sma_200"),
-            "rsi14":          pick(r, "rsi14", "rsi", "RSI", "RSI14"),
-            "hvp":            pick(r, "hvp", "HVP", "hist_vol_pct", "histVolPct"),
-            "atr14":          pick(r, "atr14", "atr", "ATR", "ATR14"),
-            "adx":            pick(r, "adx", "ADX"),
-            "macd":           pick(r, "macd", "MACD"),
-            "macdSignal":     pick(r, "macdSignal", "macd_signal"),
-            "bbWidth":        pick(r, "bbWidth", "bb_width"),
-            "volumeRatio":    pick(r, "volumeRatio", "vol_ratio", "volRatio"),
-            "relStrength":    pick(r, "relStrength", "rs_rating", "rsRating", "perfRsRaw"),
-            "regime":         pick(r, "regime", "markovRegime", "trend", "regimeState"),
-            "compositeScore": pick(r, "compositeScore", "score", "trendScore", "totalScore"),
-            "ivRank":         pick(r, "ivRank", "iv_rank"),
-            "zScore":         pick(r, "zScore", "z_score"),
-            "distToPocPct":   pick(r, "distToPocPct", "dist_to_poc_pct"),
-            "squeezeRisk":    pick(r, "squeezeRisk", "squeeze_risk"),
-            "patternEntry":   pick(r, "patternEntry"),
-            "sector":         pick(r, "sector", "gics_sector"),
-            "marketCap":      pick(r, "marketCap", "market_cap"),
+            # -- Basis -----------------------------------------------------
+            "symbol":             sym,
+            "price":              float(price),
+            "regime":             pick(r, "regime", "markovRegime", "trend"),
+            "grade":              pick(r, "grade"),
+            "compositeScore":     pick(r, "compositeScore", "score", "totalScore"),
+            # -- Options-Strategie-Scores (v3: Kern fuer CSP/CC-Consumer) ---
+            "scoreCsp":           pick(r, "scoreCsp", "score_csp"),
+            "scoreCc":            pick(r, "scoreCc", "score_cc"),
+            # -- Implizite Volatilitaet ------------------------------------
+            # ivRank/ivPercentile bleiben vorerst None: IV-Archiv braucht
+            # 30 Handelstage, Stand 26.07.2026 sind es 15. Fuellen sich ab
+            # ca. Mitte August selbst. ivAtm/ivExpiry sind der Ersatz bis dahin.
+            "ivAtm":              pick(r, "ivAtm", "iv_atm"),
+            "ivDte":              pick(r, "ivDte", "iv_dte"),
+            "ivExpiry":           pick(r, "ivExpiry", "iv_expiry"),
+            "ivRank":             pick(r, "ivRank", "iv_rank"),
+            "ivPercentile":       pick(r, "ivPercentile", "iv_percentile"),
+            # -- Historische Volatilitaet / Range ---------------------------
+            "hvp":                pick(r, "hvp", "HVP", "hist_vol_pct"),
+            "hv10":               pick(r, "hv10", "hv_10"),
+            "atr":                pick(r, "atr", "atr14", "ATR"),
+            # -- Strike-Anker ----------------------------------------------
+            # chanHigh3sd/chanLow3sd = 3-Sigma-Band des Regressionskanals;
+            # liefert die statistische Bandbreite direkt (besser als ATR allein).
+            "chanHigh3sd":        pick(r, "chanHigh3sd", "chan_high_3sd"),
+            "chanLow3sd":         pick(r, "chanLow3sd", "chan_low_3sd"),
+            "high52":             pick(r, "high52", "high_52"),
+            "low52":              pick(r, "low52", "low_52"),
+            "pctFromHigh52":      pick(r, "pctFromHigh52", "pct_from_high52"),
+            "distToPocPct":       pick(r, "distToPocPct", "dist_to_poc_pct"),
+            # -- Assignment-Naehe ------------------------------------------
+            "nearestSellStopPct": pick(r, "nearestSellStopPct"),
+            "nearestBuyStopPct":  pick(r, "nearestBuyStopPct"),
+            "dist50":             pick(r, "dist50", "dist_50"),
+            "dist200":            pick(r, "dist200", "dist_200"),
+            # -- Risikoflags -----------------------------------------------
+            "squeezeRisk":        pick(r, "squeezeRisk", "squeeze_risk"),
+            "warnLevel":          pick(r, "warnLevel", "warn_level"),
+            "overheat":           pick(r, "overheat"),
+            # -- Trend / Momentum ------------------------------------------
+            "ema50":              pick(r, "ema50", "EMA50"),
+            "ema200":             pick(r, "ema200", "EMA200"),
+            "sma150":             pick(r, "sma150", "SMA150", "sma_150"),
+            "ema200SlopeUp":      pick(r, "ema200SlopeUp"),
+            "rsi14":              pick(r, "rsi14", "rsi", "RSI"),
+            "macdLine":           pick(r, "macdLine", "macd_line"),
+            "macdSignal":         pick(r, "macdSignal", "macd_signal"),
+            "macdHist":           pick(r, "macdHist", "macd_hist"),
+            "bbPos":              pick(r, "bbPos", "bb_pos"),
+            "zScore":             pick(r, "zScore", "z_score"),
+            # -- Liquiditaet -----------------------------------------------
+            "volRatio":           pick(r, "volRatio", "volumeRatio", "vol_ratio"),
+            "avgVol20":           pick(r, "avgVol20", "avg_vol20"),
+            # Hinweis: kein "timestamp" pro Ticker — identisch fuer alle 700
+            # und bereits im Header als "run". Spart ~35 KB pro Snapshot.
         })
 
     if not tickers_out:
@@ -5595,7 +5626,7 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
 
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     snapshot = {
-        "v":       2,          # Schema-Version (v2: erweitertes Feld-Set)
+        "v":       3,          # Schema v3 (26.07.2026): Options-Feldset (CSP/CC)
         "tday":    tday,       # letzter echter Handelstag (nicht notwendig = heute)
         "run":     run_ts,     # tatsächlicher Lauf-Zeitpunkt (kann Wochenende sein)
         "count":   len(tickers_out),
@@ -6397,14 +6428,6 @@ def main():
         _ms_tday = master["meta"].get("last_trading_day") or \
                    datetime.now(timezone.utc).strftime("%Y-%m-%d")
         log.info(f"[MARKET] tday={_ms_tday}, results={len(results)} Ticker")
-
-        # Diagnose-Ping: drei Test-Keys mit verschiedenen Formaten
-        _p1 = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="marketping")
-        log.info(f"[MARKET] Ping marketping (kein Sonderzeichen): {_p1}")
-        _p2 = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market_ping")
-        log.info(f"[MARKET] Ping market_ping (Unterstrich): {_p2}")
-        _p3 = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market-ping")
-        log.info(f"[MARKET] Ping market-ping (Bindestrich): {_p3}")
 
         _ms_ok = _write_market_snapshot(results, _ms_tday)
         log.info(f"[MARKET] _write_market_snapshot returned: {_ms_ok}")
