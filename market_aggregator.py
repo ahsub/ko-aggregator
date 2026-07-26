@@ -6398,9 +6398,13 @@ def main():
                    datetime.now(timezone.utc).strftime("%Y-%m-%d")
         log.info(f"[MARKET] tday={_ms_tday}, results={len(results)} Ticker")
 
-        # Diagnose-Ping: einfacher Test-Key ohne Ticker-Daten
-        _ping_ok = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market-ping")
-        log.info(f"[MARKET] Diagnose-Ping market-ping: {_ping_ok}")
+        # Diagnose-Ping: drei Test-Keys mit verschiedenen Formaten
+        _p1 = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="marketping")
+        log.info(f"[MARKET] Ping marketping (kein Sonderzeichen): {_p1}")
+        _p2 = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market_ping")
+        log.info(f"[MARKET] Ping market_ping (Unterstrich): {_p2}")
+        _p3 = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market-ping")
+        log.info(f"[MARKET] Ping market-ping (Bindestrich): {_p3}")
 
         _ms_ok = _write_market_snapshot(results, _ms_tday)
         log.info(f"[MARKET] _write_market_snapshot returned: {_ms_ok}")
