@@ -6391,6 +6391,23 @@ def main():
         }
     }
     push_to_cloudflare_kv(options_kv, key="options_watchlist")
+    # 10. Market Snapshot — alle Indikatoren für externe Konsumenten
+    log.info(f"\n[MARKET] Market-Snapshot schreiben...")
+    try:
+        _ms_tday = master["meta"].get("last_trading_day") or \
+                   datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        log.info(f"[MARKET] tday={_ms_tday}, results={len(results)} Ticker")
+
+        # Diagnose-Ping: einfacher Test-Key ohne Ticker-Daten
+        _ping_ok = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market-ping")
+        log.info(f"[MARKET] Diagnose-Ping market-ping: {_ping_ok}")
+
+        _ms_ok = _write_market_snapshot(results, _ms_tday)
+        log.info(f"[MARKET] _write_market_snapshot returned: {_ms_ok}")
+    except Exception as _me:
+        import traceback
+        log.warning(f"[MARKET] fehlerisoliert übersprungen: {_me}")
+        log.warning(f"[MARKET] Traceback: {traceback.format_exc()}")
     # 9. Daily Market Snapshot - serverseitiges Briefing fuer Beta-Tester
     log.info(f"\n[SNAPSHOT] Daily Market Snapshot generieren...")
     try:
@@ -6416,24 +6433,6 @@ def main():
         master["dailySnapshot"] = {"ok": False, "reason": f"exception: {_se}"}
 
     log.info(f"   ✅ options_watchlist KV-Key aktualisiert ({len(options_watchlist)} Ticker)")
-
-    # 10. Market Snapshot — alle Indikatoren für externe Konsumenten
-    log.info(f"\n[MARKET] Market-Snapshot schreiben...")
-    try:
-        _ms_tday = master["meta"].get("last_trading_day") or \
-                   datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        log.info(f"[MARKET] tday={_ms_tday}, results={len(results)} Ticker")
-
-        # Diagnose-Ping: einfacher Test-Key ohne Ticker-Daten
-        _ping_ok = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market-ping")
-        log.info(f"[MARKET] Diagnose-Ping market-ping: {_ping_ok}")
-
-        _ms_ok = _write_market_snapshot(results, _ms_tday)
-        log.info(f"[MARKET] _write_market_snapshot returned: {_ms_ok}")
-    except Exception as _me:
-        import traceback
-        log.warning(f"[MARKET] fehlerisoliert übersprungen: {_me}")
-        log.warning(f"[MARKET] Traceback: {traceback.format_exc()}")
 
     log.info(f"\n{'='*60}")
     log.info(f"✅ Fertig in {elapsed}s")
