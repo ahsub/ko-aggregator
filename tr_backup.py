@@ -40,25 +40,28 @@ def main():
     hdr  = {"Authorization": f"Bearer {tok}"}
 
     try:
-        # 1) Alle tr:*-Keys auflisten (Cursor-Pagination)
-        keys, cursor = [], None
-        while True:
-            url = f"{base}/keys?prefix=tr:&limit=1000"
-            if cursor:
-                url += f"&cursor={cursor}"
-            r = requests.get(url, headers=hdr, timeout=30).json()
-            keys += [k["name"] for k in r.get("result", [])]
-            cursor = (r.get("result_info") or {}).get("cursor")
-            if not cursor:
-                break
+        # 1) Alle tr:*- und market:*-Keys auflisten (Cursor-Pagination)
+        all_keys = []
+        for prefix in ("tr:", "market:"):
+            keys, cursor = [], None
+            while True:
+                url = f"{base}/keys?prefix={prefix}&limit=1000"
+                if cursor:
+                    url += f"&cursor={cursor}"
+                r = requests.get(url, headers=hdr, timeout=30).json()
+                keys += [k["name"] for k in r.get("result", [])]
+                cursor = (r.get("result_info") or {}).get("cursor")
+                if not cursor:
+                    break
+            all_keys.extend(keys)
 
-        if not keys:
-            print("[TR-BACKUP] Keine tr:*-Keys vorhanden — nichts zu sichern.")
+        if not all_keys:
+            print("[TR-BACKUP] Keine tr:*- oder market:*-Keys vorhanden — nichts zu sichern.")
             return 0
 
         # 2) Werte holen
         data, failed = {}, []
-        for k in keys:
+        for k in all_keys:
             rr = requests.get(f"{base}/values/{k}", headers=hdr, timeout=30)
             if rr.status_code == 200:
                 try:
