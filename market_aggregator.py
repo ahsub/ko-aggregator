@@ -6423,6 +6423,11 @@ def main():
         _ms_tday = master["meta"].get("last_trading_day") or \
                    datetime.now(timezone.utc).strftime("%Y-%m-%d")
         log.info(f"[MARKET] tday={_ms_tday}, results={len(results)} Ticker")
+
+        # Diagnose-Ping: einfacher Test-Key ohne Ticker-Daten
+        _ping_ok = push_to_cloudflare_kv({"ping": "ok", "ts": _ms_tday}, key="market-ping")
+        log.info(f"[MARKET] Diagnose-Ping market-ping: {_ping_ok}")
+
         _ms_ok = _write_market_snapshot(results, _ms_tday)
         log.info(f"[MARKET] _write_market_snapshot returned: {_ms_ok}")
     except Exception as _me:
