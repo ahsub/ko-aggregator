@@ -6422,9 +6422,13 @@ def main():
     try:
         _ms_tday = master["meta"].get("last_trading_day") or \
                    datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        _write_market_snapshot(results, _ms_tday)
+        log.info(f"[MARKET] tday={_ms_tday}, results={len(results)} Ticker")
+        _ms_ok = _write_market_snapshot(results, _ms_tday)
+        log.info(f"[MARKET] _write_market_snapshot returned: {_ms_ok}")
     except Exception as _me:
+        import traceback
         log.warning(f"[MARKET] fehlerisoliert übersprungen: {_me}")
+        log.warning(f"[MARKET] Traceback: {traceback.format_exc()}")
 
     log.info(f"\n{'='*60}")
     log.info(f"✅ Fertig in {elapsed}s")
