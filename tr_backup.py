@@ -76,13 +76,19 @@ def main():
 
         # 3) Schreiben
         os.makedirs("backups", exist_ok=True)
+        mkt_keys_found = [k for k in data if k.startswith('market')]
         out = {"exported": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-               "keyCount": len(data), "failedKeys": failed, "keys": data}
+               "keyCount": len(data), "failedKeys": failed,
+               "_diag_market_keys": mkt_keys_found,
+               "_diag_all_prefixes": list({k.split(':')[0]+'-' if ':' in k else k.split('-')[0]+'-' for k in data}),
+               "keys": data}
         with open("backups/tr_backup_latest.json", "w", encoding="utf-8") as f:
             json.dump(out, f, ensure_ascii=False)
         size_kb = os.path.getsize("backups/tr_backup_latest.json") / 1024
+        mkt_keys = [k for k in data if k.startswith('market')]
         print(f"[TR-BACKUP] ✅ {len(data)} Keys exportiert ({size_kb:.0f} KB)"
-              + (f" | ⚠ {len(failed)} fehlgeschlagen: {failed[:5]}" if failed else ""))
+              + (f" | ⚠ {len(failed)} fehlgeschlagen: {failed[:5]}" if failed else "")
+              + f" | market-* Keys: {len(mkt_keys)}: {mkt_keys[:5]}")
     except Exception as e:
         print(f"[TR-BACKUP] ⚠ Fehler (nicht kritisch): {e}")
     return 0
