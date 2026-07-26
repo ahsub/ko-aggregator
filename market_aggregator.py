@@ -5592,18 +5592,27 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
         log.warning("[MARKET] Keine Ticker mit sym+price — Market-Snapshot übersprungen.")
         return False
 
+    run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     snapshot = {
         "v":       2,          # Schema-Version (v2: erweitertes Feld-Set)
-        "tday":    tday,
-        "run":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "tday":    tday,       # letzter echter Handelstag (nicht notwendig = heute)
+        "run":     run_ts,     # tatsächlicher Lauf-Zeitpunkt (kann Wochenende sein)
         "count":   len(tickers_out),
         "tickers": tickers_out,
     }
+
+    # Datumsbezogener Key: market:snapshot:YYYY-MM-DD (letzter Handelstag)
     kv_key = f"market:snapshot:{tday}"
     ok = push_to_cloudflare_kv(snapshot, key=kv_key)
+
+    # Alias-Key: market:snapshot:latest — immer aktuellster Lauf, unabhaengig vom
+    # Kalendertag. Frontend liest diesen Key zuerst → funktioniert an Wochenenden
+    # und Feiertagen ohne Sonderfallbehandlung, solange der letzte Werktag-Lauf
+    # erfolgreich war. Das Feld "tday" im Payload zeigt den echten Handelstag.
     if ok:
-        log.info(f"[MARKET] ✅ market:snapshot:{tday} — {len(tickers_out)} Ticker, "
-                 f"{len(tickers_out[0])-3} Felder/Ticker")
+        push_to_cloudflare_kv(snapshot, key="market:snapshot:latest")
+        log.info(f"[MARKET] ✅ market:snapshot:{tday} + market:snapshot:latest — "
+                 f"{len(tickers_out)} Ticker, {len(tickers_out[0])-3} Felder/Ticker")
     return ok
 
 
