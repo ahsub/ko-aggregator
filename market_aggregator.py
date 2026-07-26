@@ -5535,6 +5535,78 @@ def generate_daily_snapshot(master):
 
 # ── HAUPTPROGRAMM ─────────────────────────────────────────────────────────────
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MARKET SNAPSHOT (v1.0, 26.07.2026)
+# Schreibt alle berechneten Indikatoren aus results[] in einen eigenen KV-Key.
+# Wird von externen Konsumenten (z.B. GuidelineIQ-Companion, künftige Apps)
+# gelesen — unabhängig vom Track-Record und ohne zusätzliche API-Calls.
+# Nutzt push_to_cloudflare_kv() für Konsistenz mit dem restlichen Aggregator.
+# ═══════════════════════════════════════════════════════════════════════════════
+def _write_market_snapshot(results: list, tday: str) -> bool:
+    if not results:
+        log.warning("[MARKET] results[] leer — Market-Snapshot übersprungen.")
+        return False
+
+    def pick(r, *keys):
+        """Erstes verfügbares Feld aus r, probiert alle Namens-Varianten."""
+        for k in keys:
+            if k in r and r[k] is not None:
+                return r[k]
+        return None
+
+    tickers_out = []
+    for r in results:
+        sym = r.get("sym") or r.get("symbol") or r.get("ticker")
+        price = r.get("price") or r.get("close") or r.get("lastPrice")
+        if not sym or price is None:
+            continue
+        tickers_out.append({
+            "symbol":         sym,
+            "price":          float(price),
+            "ema20":          pick(r, "ema20", "EMA20"),
+            "ema50":          pick(r, "ema50", "EMA50"),
+            "ema200":         pick(r, "ema200", "EMA200"),
+            "sma50":          pick(r, "sma50", "SMA50", "sma_50"),
+            "sma200":         pick(r, "sma200", "SMA200", "sma_200"),
+            "rsi14":          pick(r, "rsi14", "rsi", "RSI", "RSI14"),
+            "hvp":            pick(r, "hvp", "HVP", "hist_vol_pct", "histVolPct"),
+            "atr14":          pick(r, "atr14", "atr", "ATR", "ATR14"),
+            "adx":            pick(r, "adx", "ADX"),
+            "macd":           pick(r, "macd", "MACD"),
+            "macdSignal":     pick(r, "macdSignal", "macd_signal"),
+            "bbWidth":        pick(r, "bbWidth", "bb_width"),
+            "volumeRatio":    pick(r, "volumeRatio", "vol_ratio", "volRatio"),
+            "relStrength":    pick(r, "relStrength", "rs_rating", "rsRating", "perfRsRaw"),
+            "regime":         pick(r, "regime", "markovRegime", "trend", "regimeState"),
+            "compositeScore": pick(r, "compositeScore", "score", "trendScore", "totalScore"),
+            "ivRank":         pick(r, "ivRank", "iv_rank"),
+            "zScore":         pick(r, "zScore", "z_score"),
+            "distToPocPct":   pick(r, "distToPocPct", "dist_to_poc_pct"),
+            "squeezeRisk":    pick(r, "squeezeRisk", "squeeze_risk"),
+            "patternEntry":   pick(r, "patternEntry"),
+            "sector":         pick(r, "sector", "gics_sector"),
+            "marketCap":      pick(r, "marketCap", "market_cap"),
+        })
+
+    if not tickers_out:
+        log.warning("[MARKET] Keine Ticker mit sym+price — Market-Snapshot übersprungen.")
+        return False
+
+    snapshot = {
+        "v":       2,          # Schema-Version (v2: erweitertes Feld-Set)
+        "tday":    tday,
+        "run":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "count":   len(tickers_out),
+        "tickers": tickers_out,
+    }
+    kv_key = f"market:snapshot:{tday}"
+    ok = push_to_cloudflare_kv(snapshot, key=kv_key)
+    if ok:
+        log.info(f"[MARKET] ✅ market:snapshot:{tday} — {len(tickers_out)} Ticker, "
+                 f"{len(tickers_out[0])-3} Felder/Ticker")
+    return ok
+
+
 def main():
     start_time = time.time()
     import time as _time
@@ -6334,6 +6406,15 @@ def main():
         master["dailySnapshot"] = {"ok": False, "reason": f"exception: {_se}"}
 
     log.info(f"   ✅ options_watchlist KV-Key aktualisiert ({len(options_watchlist)} Ticker)")
+
+    # 10. Market Snapshot — alle Indikatoren für externe Konsumenten
+    log.info(f"\n[MARKET] Market-Snapshot schreiben...")
+    try:
+        _ms_tday = master["meta"].get("last_trading_day") or \
+                   datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        _write_market_snapshot(results, _ms_tday)
+    except Exception as _me:
+        log.warning(f"[MARKET] fehlerisoliert übersprungen: {_me}")
 
     log.info(f"\n{'='*60}")
     log.info(f"✅ Fertig in {elapsed}s")
