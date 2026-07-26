@@ -5602,17 +5602,17 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
         "tickers": tickers_out,
     }
 
-    # Datumsbezogener Key: market:snapshot:YYYY-MM-DD (letzter Handelstag)
-    kv_key = f"market:snapshot:{tday}"
+    # Datumsbezogener Key: market-snapshot-YYYY-MM-DD (letzter Handelstag)
+    kv_key = f"market-snapshot-{tday}"
     ok = push_to_cloudflare_kv(snapshot, key=kv_key)
 
-    # Alias-Key: market:snapshot:latest — immer aktuellster Lauf, unabhaengig vom
+    # Alias-Key: market-snapshot-latest — immer aktuellster Lauf, unabhaengig vom
     # Kalendertag. Frontend liest diesen Key zuerst → funktioniert an Wochenenden
     # und Feiertagen ohne Sonderfallbehandlung, solange der letzte Werktag-Lauf
     # erfolgreich war. Das Feld "tday" im Payload zeigt den echten Handelstag.
     if ok:
-        push_to_cloudflare_kv(snapshot, key="market:snapshot:latest")
-        log.info(f"[MARKET] ✅ market:snapshot:{tday} + market:snapshot:latest — "
+        push_to_cloudflare_kv(snapshot, key="market-snapshot-latest")
+        log.info(f"[MARKET] ✅ market-snapshot-{tday} + market-snapshot-latest — "
                  f"{len(tickers_out)} Ticker, {len(tickers_out[0])-3} Felder/Ticker")
     return ok
 
