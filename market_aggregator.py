@@ -4781,7 +4781,8 @@ def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
         log.info("  Setze: CF_ACCOUNT_ID, CF_API_TOKEN, CF_KV_NS_ID als Umgebungsvariablen.")
         return False
 
-    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{ns_id}/values/{key}"
+    from urllib.parse import quote as _q
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces/{ns_id}/values/{_q(key, safe='')}"
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type":  "application/json",
