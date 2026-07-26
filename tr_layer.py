@@ -368,7 +368,9 @@ def _sim_trade(rec, ser, tday, max_bars):
         out["bars"]       = bars_held
         out["returnPct"]  = round((exit_p / trig - 1) * d * 100, 2)  # NEU: richtungsger. %
         if exit_i < len(dates):
-            out["exitDate"] = dates[exit_i]  # NEU: Kalenderdatum des Exits
+            # isoformat(): dates[] enthaelt datetime.date-Objekte (Z.275), die
+            # json.dumps() in kv_put() nicht serialisieren kann (Fix 26.07.2026).
+            out["exitDate"] = dates[exit_i].isoformat()
     return out
 
 
@@ -534,11 +536,19 @@ def run_evaluation(hist_data):
                 tr = _sim_trade(rec, ser, d, max_bars)
                 if tr:
                     er["trade"] = tr   # bei jedem Pass aktualisiert; final ab h90
-        for H in due:
-            drec[f"h{H}"] = True
+        # Flags NUR nach erfolgreichem Write setzen (Fix 26.07.2026): vorher
+        # wurden sie unabhaengig vom kv_put-Ergebnis gesetzt. Ging in einem Lauf
+        # ein Tag durch und ein anderer nicht, persistierte tr:index die Flags
+        # auch fuer den gescheiterten Tag — dauerhaft als bewertet markiert,
+        # aber ohne tr:eval-Key. Stille, irreversible Luecke im Track Record.
         if kv_put(f"tr:eval:{d}", ev):
+            for H in due:
+                drec[f"h{H}"] = True
             changed.append(d)
             log.info(f"  [TR] Bewertet {d}: Horizonte {due} | {len(ev['recs'])} Empfehlungen")
+        else:
+            log.warning(f"  [TR] {d}: kv_put fehlgeschlagen — Horizont-Flags "
+                        f"NICHT gesetzt, Retry im naechsten Lauf.")
 
     if not changed:
         return {"evaluated": 0}
