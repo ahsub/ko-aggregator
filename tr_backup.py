@@ -41,16 +41,15 @@ def main():
 
     try:
         # 1) Alle tr:*- und market:*-Keys auflisten (Cursor-Pagination)
-        # Doppelpunkte im prefix-Query und im values/-Pfad muessen URL-encoded
-        # sein (%3A), damit die CF KV API sie korrekt verarbeitet.
-        from urllib.parse import quote as _q
+        # Kein URL-Encoding: rohe Doppelpunkte funktionieren, die tr:*-Keys
+        # werden so seit Wochen erfolgreich gelistet und gesichert.
         all_keys = []
-        for prefix in ("tr:", "market", "marketping", "market_"):
+        for prefix in ("tr:", "market:"):
             keys, cursor = [], None
             while True:
-                url = f"{base}/keys?prefix={_q(prefix, safe='')}&limit=1000"
+                url = f"{base}/keys?prefix={prefix}&limit=1000"
                 if cursor:
-                    url += f"&cursor={_q(cursor, safe='')}"
+                    url += f"&cursor={cursor}"
                 r = requests.get(url, headers=hdr, timeout=30).json()
                 keys += [k["name"] for k in r.get("result", [])]
                 cursor = (r.get("result_info") or {}).get("cursor")
@@ -62,10 +61,10 @@ def main():
             print("[TR-BACKUP] Keine tr:*- oder market:*-Keys vorhanden — nichts zu sichern.")
             return 0
 
-        # 2) Werte holen — Key im Pfad URL-encoden
+        # 2) Werte holen
         data, failed = {}, []
         for k in all_keys:
-            rr = requests.get(f"{base}/values/{_q(k, safe='')}", headers=hdr, timeout=30)
+            rr = requests.get(f"{base}/values/{k}", headers=hdr, timeout=30)
             if rr.status_code == 200:
                 try:
                     data[k] = rr.json()
