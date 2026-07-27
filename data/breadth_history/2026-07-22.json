@@ -1,0 +1,11 @@
+{
+  "date": "2026-07-22",
+  "advances": 331,
+  "declines": 340,
+  "unchanged": 9,
+  "net_ad": -9,
+  "ad_ratio": 0.493,
+  "total": 671,
+  "regimeUsed": "BULL_QUIET",
+  "_source": "snapshot_backfill"
+}
