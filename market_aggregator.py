@@ -4701,8 +4701,10 @@ def fetch_vix_term():
         vix3m_close = vix3m["Close"]
         if hasattr(vix_close, "squeeze"):  vix_close  = vix_close.squeeze()
         if hasattr(vix3m_close,"squeeze"): vix3m_close = vix3m_close.squeeze()
-        vix_val   = float(vix_close.dropna().iloc[-1])
-        vix3m_val = float(vix3m_close.dropna().iloc[-1])
+        # squeeze() kann bei Einzelwert (Wochenende) einen numpy.float64-Skalar
+        # zurueckgeben — der hat kein .dropna(). Fallback: direkt float().
+        vix_val   = float(vix_close.dropna().iloc[-1]) if hasattr(vix_close,   "dropna") else float(vix_close)
+        vix3m_val = float(vix3m_close.dropna().iloc[-1]) if hasattr(vix3m_close, "dropna") else float(vix3m_close)
         spread   = round(vix3m_val - vix_val, 2)
         contango = spread > 0
         log.info(f"  VIX: {vix_val:.2f} | VIX3M: {vix3m_val:.2f} | Spread: {spread:+.2f} | {'CONTANGO' if contango else 'BACKWARDATION'}")
