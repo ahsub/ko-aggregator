@@ -72,6 +72,7 @@ jobs:
           [ -f backups/tr_backup_latest.json ] && git add backups/tr_backup_latest.json || true
           [ -d data/fundamentals ] && git add data/fundamentals || true
           [ -d data/iv_history ] && git add data/iv_history || true
+          [ -d data/breadth_history ] && git add data/breadth_history || true
           # Rolling-Window-Snapshots (v5.16.0): gzip'd master_market_data, 90-Tage-Fenster
           # Gelöschte Snapshots (>90 Tage) via git rm entfernen
           [ -d data/snapshots ] && git add data/snapshots/ || true
