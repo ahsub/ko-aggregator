@@ -3655,6 +3655,14 @@ def process_ticker(ticker, hist_df):
         result["perf12m"]    = round(perf_12m, 2) if perf_12m is not None else None
         result["rsRating"]   = None   # wird in main() Stufe 2 befuellt
 
+        # ── Breadth-Oszillator: Advance-Flag (27.07.2026, SUITE.md Backlog #12) ──
+        # True = heute höher als gestern, False = tiefer, None = Daten fehlen
+        result["advance"] = (
+            closes[-1] > closes[-2]
+            if len(closes) >= 2 and closes[-2] > 0
+            else None
+        )
+
         # ── Rohdaten-Cache für Sprint B Layer (reg_vp + cluster) ─────────────
         # Werden nach Layer-Aufruf via .pop() entfernt — nicht in KV geschrieben.
         result["_closes"]    = closes
@@ -5546,6 +5554,105 @@ def generate_daily_snapshot(master):
 # gelesen — unabhängig vom Track-Record und ohne zusätzliche API-Calls.
 # Nutzt push_to_cloudflare_kv() für Konsistenz mit dem restlichen Aggregator.
 # ═══════════════════════════════════════════════════════════════════════════════
+def calc_breadth_oscillator(results: list, tday: str) -> dict:
+    """UIQ Breadth-Oszillator nach McClellan-Methodik (27.07.2026, SUITE.md Backlog #12).
+
+    Berechnet aus dem Scan-Universum (~700 Ticker) täglich Advances/Declines und
+    daraus den McClellan-Oszillator (EMA19 − EMA39 der Net-Advance-Zeitreihe).
+    Kein externer Datenfeed — Rohdaten stammen aus dem nächtlichen Ticker-Scan
+    (process_ticker() setzt advance=True/False/None pro Ticker).
+
+    Abgrenzung: Eigenes UIQ-Universum (~700 Titel), NICHT der offizielle NYSE-NYMO.
+    Intern konsistent; für UIQ-Strategie-Logik ausreichend.
+
+    Signallogik (bewusst einfach):
+      > +50  SEHR_BULLISH — breite Marktbeteiligung, seltenes Signal
+      > +10  BULLISH      — Mehrheit advances
+      -10…+10 NEUTRAL
+      < -10  BEARISH      — Mehrheit declines
+      < -50  SEHR_BEARISH — breite Kapitulation
+    """
+    BREADTH_DIR = "data/breadth_history"
+
+    # ── Schritt 1: Heutige Advance/Decline aus results ────────────────────────
+    advances  = sum(1 for r in results if r.get("advance") is True)
+    declines  = sum(1 for r in results if r.get("advance") is False)
+    unchanged = len(results) - advances - declines
+    net_ad    = advances - declines
+    total     = advances + declines
+    ad_ratio  = round(advances / total, 3) if total > 0 else None
+
+    log.info(f"[BREADTH] {tday}: ▲{advances} ▼{declines} ≡{unchanged} | NetAD={net_ad:+d}")
+
+    # ── Schritt 2: Tages-Eintrag ins Archiv schreiben ────────────────────────
+    try:
+        import os as _os
+        _os.makedirs(BREADTH_DIR, exist_ok=True)
+        today_path = _os.path.join(BREADTH_DIR, f"{tday}.json")
+        with open(today_path, "w") as _f:
+            json.dump({"date": tday, "advances": advances, "declines": declines,
+                       "unchanged": unchanged, "net_ad": net_ad,
+                       "ad_ratio": ad_ratio, "total": total}, _f)
+    except Exception as _e:
+        log.warning(f"[BREADTH] Archiv-Write fehlgeschlagen: {_e}")
+
+    # ── Schritt 3: Archiv laden (chronologisch) ───────────────────────────────
+    archive = []
+    try:
+        import glob as _glob, os as _os
+        for fp in sorted(_glob.glob(_os.path.join(BREADTH_DIR, "*.json"))):
+            try:
+                with open(fp) as _f:
+                    archive.append(json.load(_f))
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    archive_days   = len(archive)
+    net_ad_series  = [e["net_ad"] for e in archive]
+
+    # ── Schritt 4: EMA19 und EMA39 → McClellan-Oszillator ───────────────────
+    def _ema(values, period):
+        if not values:
+            return []
+        k = 2.0 / (period + 1)
+        out = [float(values[0])]
+        for v in values[1:]:
+            out.append(v * k + out[-1] * (1.0 - k))
+        return out
+
+    ema19_s = _ema(net_ad_series, 19)
+    ema39_s = _ema(net_ad_series, 39)
+
+    ema19      = round(ema19_s[-1], 2) if ema19_s else None
+    ema39      = round(ema39_s[-1], 2) if ema39_s else None
+    oscillator = round(ema19 - ema39, 2) if (ema19 is not None and ema39 is not None) else None
+
+    if oscillator is None:        signal = "N/A"
+    elif oscillator > 50:         signal = "SEHR_BULLISH"
+    elif oscillator > 10:         signal = "BULLISH"
+    elif oscillator > -10:        signal = "NEUTRAL"
+    elif oscillator > -50:        signal = "BEARISH"
+    else:                         signal = "SEHR_BEARISH"
+
+    log.info(f"[BREADTH] McClellan={oscillator} | EMA19={ema19} EMA39={ema39} | "
+             f"Signal={signal} | {archive_days}T Archiv")
+
+    return {
+        "oscillator":  oscillator,
+        "ema19":       ema19,
+        "ema39":       ema39,
+        "advances":    advances,
+        "declines":    declines,
+        "unchanged":   unchanged,
+        "adRatio":     ad_ratio,
+        "netAd":       net_ad,
+        "signal":      signal,
+        "archiveDays": archive_days,
+    }
+
+
 def _write_market_snapshot(results: list, tday: str) -> bool:
     if not results:
         log.warning("[MARKET] results[] leer — Market-Snapshot übersprungen.")
@@ -6059,6 +6166,10 @@ def main():
     last_trading_day = validate_data_freshness(results)
     log.info(f"  Referenz-Handelstag: {last_trading_day}")
 
+    # ── Breadth-Oszillator (McClellan, SUITE.md Backlog #12, 27.07.2026) ──────
+    log.info(f"\n📊 Breadth-Oszillator (McClellan)...")
+    breadth_osc = calc_breadth_oscillator(results, last_trading_day)
+
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
     master  = {
@@ -6137,6 +6248,7 @@ def main():
             "fredMacro":  fred_macro,        # HY-Spread + Net Liquidity (FRED)
             "moveIndex":  move_index,        # Treasury-Volatilität (Renten-VIX)
             "sectorHoldings": sector_holdings, # ETF-Holdings-Klickthrough (Proof-of-Concept, nur XLK, 11.07.2026)
+            "breadthOsc":     breadth_osc,     # McClellan Breadth-Oszillator (27.07.2026, Backlog #12)
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
