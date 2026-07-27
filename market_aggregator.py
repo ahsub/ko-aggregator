@@ -5554,7 +5554,7 @@ def generate_daily_snapshot(master):
 # gelesen — unabhängig vom Track-Record und ohne zusätzliche API-Calls.
 # Nutzt push_to_cloudflare_kv() für Konsistenz mit dem restlichen Aggregator.
 # ═══════════════════════════════════════════════════════════════════════════════
-def calc_breadth_oscillator(results: list, tday: str) -> dict:
+def calc_breadth_oscillator(results: list, tday: str, regime: str = None) -> dict:
     """UIQ Breadth-Oszillator nach McClellan-Methodik (27.07.2026, SUITE.md Backlog #12).
 
     Berechnet aus dem Scan-Universum (~700 Ticker) täglich Advances/Declines und
@@ -5590,9 +5590,16 @@ def calc_breadth_oscillator(results: list, tday: str) -> dict:
         _os.makedirs(BREADTH_DIR, exist_ok=True)
         today_path = _os.path.join(BREADTH_DIR, f"{tday}.json")
         with open(today_path, "w") as _f:
-            json.dump({"date": tday, "advances": advances, "declines": declines,
-                       "unchanged": unchanged, "net_ad": net_ad,
-                       "ad_ratio": ad_ratio, "total": total}, _f)
+            json.dump({
+                "date":       tday,
+                "advances":   advances,
+                "declines":   declines,
+                "unchanged":  unchanged,
+                "net_ad":     net_ad,
+                "ad_ratio":   ad_ratio,
+                "total":      total,
+                "regimeUsed": regime or "unknown",
+            }, _f)
     except Exception as _e:
         log.warning(f"[BREADTH] Archiv-Write fehlgeschlagen: {_e}")
 
@@ -5611,6 +5618,15 @@ def calc_breadth_oscillator(results: list, tday: str) -> dict:
 
     archive_days   = len(archive)
     net_ad_series  = [e["net_ad"] for e in archive]
+
+    # ── Regime-Streak: konsekutive Tage mit identischem Regime ───────────────
+    regime_streak = 0
+    if regime and archive:
+        for _entry in reversed(archive):
+            if _entry.get("regimeUsed") == regime:
+                regime_streak += 1
+            else:
+                break
 
     # ── Schritt 4: EMA19 und EMA39 → McClellan-Oszillator ───────────────────
     def _ema(values, period):
@@ -5637,7 +5653,7 @@ def calc_breadth_oscillator(results: list, tday: str) -> dict:
     else:                         signal = "SEHR_BEARISH"
 
     log.info(f"[BREADTH] McClellan={oscillator} | EMA19={ema19} EMA39={ema39} | "
-             f"Signal={signal} | {archive_days}T Archiv")
+             f"Signal={signal} | {archive_days}T Archiv | Streak={regime_streak}T")
 
     return {
         "oscillator":  oscillator,
@@ -5650,6 +5666,7 @@ def calc_breadth_oscillator(results: list, tday: str) -> dict:
         "netAd":       net_ad,
         "signal":      signal,
         "archiveDays": archive_days,
+        "regimeStreak": regime_streak,
     }
 
 
@@ -6168,7 +6185,14 @@ def main():
 
     # ── Breadth-Oszillator (McClellan, SUITE.md Backlog #12, 27.07.2026) ──────
     log.info(f"\n📊 Breadth-Oszillator (McClellan)...")
-    breadth_osc = calc_breadth_oscillator(results, last_trading_day)
+    # Regime-Mehrheitsvotum aus results für Breadth-Archiv (Korrelation Sept. 2026)
+    _regime_votes = {}
+    for _r in results:
+        _reg = _r.get("regime")
+        if _reg:
+            _regime_votes[_reg] = _regime_votes.get(_reg, 0) + 1
+    _dominant_regime = max(_regime_votes, key=_regime_votes.get) if _regime_votes else None
+    breadth_osc = calc_breadth_oscillator(results, last_trading_day, regime=_dominant_regime)
 
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
