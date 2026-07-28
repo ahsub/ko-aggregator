@@ -2904,10 +2904,27 @@ def enrich_with_fundamentals(sym: str, price: float, sector: str = None) -> dict
         de_raw   = info.get("debtToEquity")
         d_eq     = round(de_raw, 1) if de_raw and not is_structural_debt else None
         # Dividend-Felder (28.07.2026, Backlog #13b)
-        div_raw  = info.get("dividendYield")        # z.B. 0.032 = 3.2%
-        div_yield= round(div_raw * 100, 2) if div_raw else None
-        pr_raw   = info.get("payoutRatio")           # z.B. 0.45 = 45%
-        payout   = round(pr_raw * 100, 1) if pr_raw else None
+        div_raw  = info.get("dividendYield")        # yfinance: meist 0.032 = 3.2%, selten 3.2 direkt
+        # Normalisierung: Werte > 0.25 sind bereits in % (z.B. 3.2 statt 0.032)
+        if div_raw and div_raw > 0.25:
+            div_yield = round(div_raw, 2)            # schon in %, z.B. 3.2
+        elif div_raw:
+            div_yield = round(div_raw * 100, 2)      # Dezimal → %, z.B. 0.032 → 3.2
+        else:
+            div_yield = None
+        # Sanity-Gate: >25% ist praktisch nie real — Datenfehler abfangen
+        if div_yield and div_yield > 25:
+            div_yield = None
+            log.debug(f"  divYield {sym}: Wert >25% verworfen (Datenfehler yfinance)")
+        pr_raw   = info.get("payoutRatio")           # yfinance: meist 0.45 = 45%, selten 45 direkt
+        if pr_raw and pr_raw > 1.5:
+            payout = round(pr_raw, 1)                # schon in %, z.B. 45.0
+        elif pr_raw:
+            payout = round(pr_raw * 100, 1)          # Dezimal → %
+        else:
+            payout = None
+        if payout and payout > 200:
+            payout = None                             # >200% Payout = Datenfehler
         # Value-Felder (28.07.2026, Backlog #13b)
         pe_fwd   = info.get("forwardPE")
         pe_fwd   = round(pe_fwd, 1) if pe_fwd and pe_fwd > 0 else None
