@@ -6185,14 +6185,10 @@ def main():
 
     # ── Breadth-Oszillator (McClellan, SUITE.md Backlog #12, 27.07.2026) ──────
     log.info(f"\n📊 Breadth-Oszillator (McClellan)...")
-    # Regime-Mehrheitsvotum aus results für Breadth-Archiv (Korrelation Sept. 2026)
-    _regime_votes = {}
-    for _r in results:
-        _reg = _r.get("regime")
-        if _reg:
-            _regime_votes[_reg] = _regime_votes.get(_reg, 0) + 1
-    _dominant_regime = max(_regime_votes, key=_regime_votes.get) if _regime_votes else None
-    breadth_osc = calc_breadth_oscillator(results, last_trading_day, regime=_dominant_regime)
+    # MCM-Regime (bereits berechnet) für Breadth-Archiv verwenden — NICHT Ticker-Markov
+    # Fix 28.07.2026: _dominant_regime war Ticker-Markov ("bull"/"side"/"bear"),
+    # market_regime_str ist das korrekte globale MCM-Regime ("BULL_QUIET" etc.)
+    breadth_osc = calc_breadth_oscillator(results, last_trading_day, regime=market_regime_str)
 
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
