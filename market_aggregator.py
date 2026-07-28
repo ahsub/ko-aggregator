@@ -2033,6 +2033,195 @@ def score_long_mean_reversion(r: dict) -> int:
     return max(0, min(100, s))
 
 
+def score_long_dividend(r: dict) -> int:
+    """
+    Dividend Income Score (0-100) — Backlog #13b, 28.07.2026.
+
+    Ziel: Qualitäts-Dividendentitel für CSP/CC-Unterlegung und Income-Portfolio.
+    Kein reiner Hochdividenden-Filter — Qualität vor Rendite.
+
+    Felder (aus enrich_with_fundamentals, nur für Shortlist-Kandidaten verfügbar):
+      divYield    — Dividendenrendite % (optimal: 2–6%)
+      payoutRatio — Ausschüttungsquote % (nachhaltig: <75%)
+      fcfYield    — FCF-Yield % (Qualitätsgate: >0)
+      debtToEquity— Verschuldung (konservativ: <150)
+      roe         — Return on Equity % (Qualität: >10%)
+
+    Technische Basis (immer verfügbar):
+      ema50/ema200 — Trend-Gate (kein Div-Catch in Downtrend)
+      rsi          — kein überhitzter Einstieg
+      regime       — Ticker-Markov (bull/side bevorzugt)
+    """
+    s = 0
+    price     = r.get("price", 0)
+    ema50     = r.get("ema50")
+    ema200    = r.get("ema200")
+    rsi       = r.get("rsi")
+    regime    = (r.get("regime") or "").lower()
+
+    # Fundamental-Felder (nur für Shortlist-Kandidaten nach Enrichment verfügbar)
+    div_yield = r.get("divYield")       # %
+    payout    = r.get("payoutRatio")    # %
+    fcf_yield = r.get("fcfYield")       # %
+    d_eq      = r.get("debtToEquity")
+    roe       = r.get("roe")            # %
+
+    if not price or price <= 0: return 0
+
+    # ── Gate: Kein Dividendentitel ohne messbare Ausschüttung ────────────────
+    if not div_yield or div_yield < 1.0: return 0
+
+    # ── Gate: Technischer Trend — kein Div-Catch in echtem Downtrend ─────────
+    if ema200 and price < ema200 * 0.92: return 0   # >8% unter EMA200 = Downtrend
+
+    # ── Dividendenrendite (Kern-Score) ────────────────────────────────────────
+    if   div_yield >= 5.0: s += 20   # Hochdividende — attraktiv, aber Qualität prüfen
+    elif div_yield >= 3.0: s += 30   # Sweet Spot: gute Rendite + meist nachhaltig
+    elif div_yield >= 2.0: s += 20   # Solide Basisrendite
+    elif div_yield >= 1.0: s += 10   # Schwacher Starter — Wachstumsdividende möglich
+
+    # Bonus: Hochdividende NUR wenn FCF-gedeckt (kein Div-Trap)
+    if div_yield >= 5.0 and fcf_yield and fcf_yield > 0:
+        s += 10   # FCF-gedeckte Hochdividende = echter Wert
+
+    # ── Ausschüttungsquote — Nachhaltigkeit ──────────────────────────────────
+    if payout is not None:
+        if   payout <= 40:  s += 20  # Konservativ — viel Wachstumspuffer
+        elif payout <= 60:  s += 15  # Gesund
+        elif payout <= 75:  s += 8   # Akzeptabel
+        elif payout <= 90:  s += 0   # Grenzwertig
+        else:               s -= 15  # Nicht nachhaltig (>90%)
+
+    # ── FCF-Yield — Qualitätsgate ────────────────────────────────────────────
+    if fcf_yield is not None:
+        if   fcf_yield >= 6: s += 15  # Exzellente Cash-Generierung
+        elif fcf_yield >= 3: s += 10  # Solide
+        elif fcf_yield >= 0: s += 3   # Neutral
+        else:                s -= 20  # Cash-Burner — Dividende auf Pump
+
+    # ── Return on Equity — Unternehmensqualität ───────────────────────────────
+    if roe is not None:
+        if   roe >= 20: s += 10
+        elif roe >= 10: s += 5
+        elif roe <  0:  s -= 10
+
+    # ── Verschuldung ─────────────────────────────────────────────────────────
+    if d_eq is not None:
+        if   d_eq > 300: s -= 15
+        elif d_eq > 150: s -= 8
+
+    # ── Technisches Timing ────────────────────────────────────────────────────
+    if ema50  and price > ema50:  s += 8   # Kurzfristiger Aufwärtstrend
+    if ema200 and price > ema200: s += 7   # Langfristig gesund
+    if rsi:
+        if   rsi < 35: s += 10  # Günstiger Einstieg
+        elif rsi > 70: s -= 8   # Überhitzt — warten
+
+    # ── Regime-Bonus ─────────────────────────────────────────────────────────
+    if regime in ("bull", "side"): s += 5
+
+    return max(0, min(100, s))
+
+
+def score_long_value(r: dict) -> int:
+    """
+    Value Score (0-100) — Backlog #13b, 28.07.2026.
+
+    Ziel: Günstig bewertete Qualitätstitel mit positivem Catalyst-Potenzial.
+    Kein reiner Graham-Screen — Kombination aus Bewertung + Qualität + Momentum.
+
+    Felder (aus enrich_with_fundamentals):
+      peForward   — Forward KGV (günstig: <20, sehr günstig: <15)
+      pb          — Price/Book (günstig: <3, sehr günstig: <1.5)
+      fcfYield    — FCF-Yield % (Qualitätsgate: >3%)
+      roe         — Return on Equity % (Qualität: >10%)
+      analystUpside — Konsens-Upside % (Catalyst: >10%)
+      debtToEquity— Verschuldungsgate
+
+    Technische Basis:
+      ema50/ema200 — kein Kauf fallender Messer
+      rsi          — moderate Bewertung bevorzugt
+    """
+    s = 0
+    price     = r.get("price", 0)
+    ema50     = r.get("ema50")
+    ema200    = r.get("ema200")
+    rsi       = r.get("rsi")
+    regime    = (r.get("regime") or "").lower()
+
+    pe_fwd    = r.get("peForward")
+    pb        = r.get("pb")
+    fcf_yield = r.get("fcfYield")
+    roe       = r.get("roe")
+    upside    = r.get("analystUpside")
+    d_eq      = r.get("debtToEquity")
+
+    if not price or price <= 0: return 0
+
+    # ── Gate: Mindestens ein Bewertungsanker muss vorhanden sein ─────────────
+    if pe_fwd is None and pb is None and fcf_yield is None: return 0
+
+    # ── Gate: Kein fallender Messer — EMA200-Boden ───────────────────────────
+    if ema200 and price < ema200 * 0.88: return 0   # >12% unter EMA200
+
+    # ── Forward KGV ──────────────────────────────────────────────────────────
+    if pe_fwd is not None:
+        if   pe_fwd <= 10: s += 30   # Sehr günstig (Deep Value)
+        elif pe_fwd <= 15: s += 25   # Günstig
+        elif pe_fwd <= 20: s += 15   # Moderat bewertet
+        elif pe_fwd <= 25: s += 5    # Fair
+        elif pe_fwd <= 35: s -= 5    # Teuer
+        else:              s -= 15   # Sehr teuer (>35x)
+
+    # ── Price/Book ────────────────────────────────────────────────────────────
+    if pb is not None:
+        if   pb <= 1.0: s += 20   # Unter Buchwert — klassischer Value
+        elif pb <= 1.5: s += 15
+        elif pb <= 2.5: s += 8
+        elif pb <= 4.0: s += 0
+        else:           s -= 8    # Teures Wachstum (kein Value-Kandidat)
+
+    # ── FCF-Yield — operativer Beweis ────────────────────────────────────────
+    if fcf_yield is not None:
+        if   fcf_yield >= 8: s += 25  # Exzellent
+        elif fcf_yield >= 5: s += 18
+        elif fcf_yield >= 3: s += 10
+        elif fcf_yield >= 0: s += 3
+        else:                s -= 15  # Negativer FCF = kein Value
+
+    # ── ROE — Qualitätsfilter (Value Trap vermeiden) ──────────────────────────
+    if roe is not None:
+        if   roe >= 20: s += 15
+        elif roe >= 12: s += 10
+        elif roe >= 5:  s += 3
+        elif roe <  0:  s -= 15   # Verlustbetrieb — Value Trap-Warnung
+
+    # ── Analyst-Upside — externer Catalyst ───────────────────────────────────
+    if upside is not None:
+        if   upside >= 30: s += 15
+        elif upside >= 15: s += 10
+        elif upside >= 5:  s += 5
+        elif upside <  0:  s -= 10  # Konsens sieht Downside
+
+    # ── Verschuldung ─────────────────────────────────────────────────────────
+    if d_eq is not None:
+        if   d_eq > 300: s -= 20  # Hoch verschuldet = Value Trap-Risiko
+        elif d_eq > 150: s -= 10
+
+    # ── Technisches Timing ────────────────────────────────────────────────────
+    if ema50  and price > ema50:  s += 5
+    if ema200 and price > ema200: s += 5
+    if rsi:
+        if   rsi < 40:          s += 10  # Günstiges Einstiegsfenster
+        elif 40 <= rsi <= 60:   s += 5   # Neutral — akzeptabel
+        elif rsi > 70:          s -= 5   # Teures Momentum — Value-Timing ungünstig
+
+    # ── Regime ───────────────────────────────────────────────────────────────
+    if regime in ("bull", "side"): s += 5
+
+    return max(0, min(100, s))
+
+
 def score_short_breakdown(r: dict) -> int:
     """
     Short Breakdown: Death-Cross-Bereich, fallender OBV, Distribution.
@@ -2714,10 +2903,27 @@ def enrich_with_fundamentals(sym: str, price: float, sector: str = None) -> dict
         is_structural_debt = any(s in det_sector for s in _STRUCTURAL_HIGH_DEBT_SECTORS)
         de_raw   = info.get("debtToEquity")
         d_eq     = round(de_raw, 1) if de_raw and not is_structural_debt else None
+        # Dividend-Felder (28.07.2026, Backlog #13b)
+        div_raw  = info.get("dividendYield")        # z.B. 0.032 = 3.2%
+        div_yield= round(div_raw * 100, 2) if div_raw else None
+        pr_raw   = info.get("payoutRatio")           # z.B. 0.45 = 45%
+        payout   = round(pr_raw * 100, 1) if pr_raw else None
+        # Value-Felder (28.07.2026, Backlog #13b)
+        pe_fwd   = info.get("forwardPE")
+        pe_fwd   = round(pe_fwd, 1) if pe_fwd and pe_fwd > 0 else None
+        pb_raw   = info.get("priceToBook")
+        pb       = round(pb_raw, 2) if pb_raw and pb_raw > 0 else None
+        roe_raw  = info.get("returnOnEquity")        # z.B. 0.18 = 18%
+        roe      = round(roe_raw * 100, 1) if roe_raw else None
         return {
             "analystUpside":  upside,
             "fcfYield":       fcf_yield,
             "debtToEquity":   d_eq,
+            "divYield":       div_yield,   # % (z.B. 3.2)
+            "payoutRatio":    payout,      # % (z.B. 45.0)
+            "peForward":      pe_fwd,      # z.B. 18.5
+            "pb":             pb,          # Price/Book z.B. 2.1
+            "roe":            roe,         # % (z.B. 18.0)
         }
     except Exception as e:
         log.warning(f"  Fundamental-Fetch {sym}: {e}")
@@ -2746,6 +2952,8 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         s_csp       = score_options_csp(r)
         s_cc        = score_options_covered_call(r)
         s_vcp       = score_vcp(r)
+        s_dividend  = score_long_dividend(r)   # Backlog #13b, 28.07.2026
+        s_value     = score_long_value(r)      # Backlog #13b, 28.07.2026
         # KO-Long: Momentum-Setup (Minervini-Basis) + KO-handelbare Preisspanne
         s_ko_long   = s_minervini if (r.get("price") or 0) <= 500 else int(s_minervini * 0.7)
 
@@ -2813,6 +3021,14 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "vcpContractions": r.get("vcpContractions"),
             "vcpLastPct":      r.get("vcpLastPct"),
             "sKoLong":       s_ko_long,
+            "sDividend":     s_dividend,   # Backlog #13b, 28.07.2026
+            "sValue":        s_value,      # Backlog #13b, 28.07.2026
+            # Fundamental-Felder (aus enrich_with_fundamentals, nur Shortlist-Kandidaten)
+            "divYield":      r.get("divYield"),
+            "payoutRatio":   r.get("payoutRatio"),
+            "peForward":     r.get("peForward"),
+            "pb":            r.get("pb"),
+            "roe":           r.get("roe"),
             "bestLong":      best_long,
             "bestShort":     best_short,
             "shortDir":      short_dir,
@@ -2878,6 +3094,8 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "options_csp":    top20("sCsp",       50),
         "options_cc":     top20("sCc",        30),
         "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct", "vcpVolContraction", "vcpBreakoutVol"]),
+        "long_dividend":  top20("sDividend",  35, extra_fields=["divYield", "payoutRatio", "fcfYield", "roe"]),   # Backlog #13b
+        "long_value":     top20("sValue",     35, extra_fields=["peForward", "pb", "fcfYield", "roe", "analystUpside"]),  # Backlog #13b
     }
 
     # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS v2 (Gemini-Review Fix C+F) ──
@@ -6204,6 +6422,8 @@ def main():
                     "long_minervini":   "Minervini SEPA Score 0-100: Stage2-Uptrend, 52W-Hoch-Naehe, Volumen-Akkumulation",
                     "long_swing":       "Swing-Pullback Score 0-100: EMA50-Bounce, RSI 30-50, Bollinger-Kompression",
                     "long_mr":          "Mean Reversion Long Score 0-100: Extreme Kapitulation >2 ATR unter EMA200, RSI<30",
+                    "long_dividend":    "Dividend Income Score 0-100: divYield 2-6%, payoutRatio <75%, FCF-gedeckt, Qualitaetsfilter (ROE, D/E)",
+                    "long_value":       "Value Score 0-100: peForward <20, pb <3, fcfYield >3%, ROE >10%, Analyst-Upside als Catalyst",
                     "short_breakdown":  "Short Breakdown Score 0-100: Downtrend unter EMA200, OBV faellt, Markov baerig, RSI 28-60",
                     "short_fading":     "Short Fading Score 0-100: FOMO-Top >2.5 ATR ueber EMA200, RSI>68, Kauf-Erschoepfung",
                 },
