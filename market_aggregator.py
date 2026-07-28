@@ -5772,6 +5772,183 @@ def generate_daily_snapshot(master):
 # gelesen — unabhängig vom Track-Record und ohne zusätzliche API-Calls.
 # Nutzt push_to_cloudflare_kv() für Konsistenz mit dem restlichen Aggregator.
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def calc_score_divergences(regime: str, ios_market: dict, breadth_osc: dict) -> list:
+    """Score-Paar-Divergenz-Detektor (SUITE.md Backlog #11, 28.07.2026).
+
+    Prüft methodisch unabhängige Sub-Scores auf signifikante Widersprüche.
+    Divergenzen sind kein Fehler — sie sind eigenständige Information:
+    "Das Signal ist widersprüchlich, hier ist warum."
+
+    Server-seitig verfügbare Paare (alle Inputs im nächtlichen Snapshot):
+      1. Regime vs. IOS-Market-Score   — Makro-Klassifikation vs. Breiten-Score
+      2. IOS-Trend vs. IOS-Breadth     — Trend-Leadership ohne Marktbreite
+      3. Breadth-Oszillator vs. Regime — McClellan vs. Makro-Regime-Richtung
+
+    Rückgabe: Liste von Divergenz-Objekten, leer wenn keine signifikante Divergenz.
+    Jedes Objekt: {type, severity, scoreA, scoreB, delta, label, explanation}
+    severity: "low" | "medium" | "high"
+    """
+    divergences = []
+
+    def _add(dtype, severity, score_a, score_b, delta, label, explanation):
+        divergences.append({
+            "type":        dtype,
+            "severity":    severity,
+            "scoreA":      score_a,
+            "scoreB":      score_b,
+            "delta":       delta,
+            "label":       label,
+            "explanation": explanation,
+        })
+
+    regime_up = (regime or "NEUTRAL").upper()
+    is_bull   = any(x in regime_up for x in ("BULL", "POST_PANIC"))
+    is_stress = any(x in regime_up for x in ("STRESS", "BEAR"))
+
+    ios       = ios_market or {}
+    ios_score = ios.get("iosMarketScore")       # 0–100
+    ios_trend = ios.get("iosMarketTrend")       # 0–35
+    ios_bread = ios.get("iosMarketBreadth")     # 0–25
+    ios_dec   = ios.get("iosMarketDecision", "") # "SELEKTIV KAUFEN" etc.
+
+    mcl       = (breadth_osc or {}).get("mclellan")  # McClellan-Wert, kann None sein
+
+    # ── Paar 1: Regime vs. IOS-Market-Score ──────────────────────────────────
+    # Klassischer Widerspruch aus SUITE.md #11:
+    # MSE zeigt STRESS, IOS zeigt Kaufsignal — oder umgekehrt.
+    if ios_score is not None:
+        if is_stress and ios_score >= 65:
+            # Regime warnt, IOS-Score kauft — gefährliche Diskrepanz
+            sev = "high" if ios_score >= 75 else "medium"
+            _add(
+                dtype="regime_vs_ios",
+                severity=sev,
+                score_a=regime_up,
+                score_b=ios_score,
+                delta=ios_score,
+                label=f"Regime {regime_up} ↔ IOS {ios_score}/100 ({ios_dec})",
+                explanation=(
+                    f"Das Makro-Regime ({regime_up}) signalisiert erhöhtes Risiko, "
+                    f"während der IOS-Market-Score ({ios_score}/100) gleichzeitig "
+                    f"\"{ios_dec}\" anzeigt. Beide Scores sind methodisch unabhängig: "
+                    f"das Regime basiert auf VIX-Termstruktur, der IOS-Score auf "
+                    f"Trend/Breadth/Rotation/Risk-Subkomponenten. Die Divergenz deutet "
+                    f"auf eine gespaltene Marktlage hin — selektiver Einsatz empfohlen, "
+                    f"kein breites Exposure."
+                ),
+            )
+        elif is_bull and ios_score <= 40:
+            # Regime bullisch, IOS-Score schwach — Bull-Trap-Risiko
+            sev = "high" if ios_score <= 30 else "medium"
+            _add(
+                dtype="regime_vs_ios",
+                severity=sev,
+                score_a=regime_up,
+                score_b=ios_score,
+                delta=100 - ios_score,
+                label=f"Regime {regime_up} ↔ IOS {ios_score}/100 ({ios_dec})",
+                explanation=(
+                    f"Das Makro-Regime ({regime_up}) ist bullisch (VIX-Termstruktur "
+                    f"im Contango), aber der IOS-Market-Score ({ios_score}/100) zeigt "
+                    f"schwache interne Marktdynamik. Mögliche Ursache: "
+                    f"Regime-Klassifikation reagiert schneller auf Makro-Normalisierung "
+                    f"als die Breiten-/Rotations-Metriken des IOS. "
+                    f"Strategie-Timing mit Vorsicht: Regime-Gate allein reicht nicht."
+                ),
+            )
+
+    # ── Paar 2: IOS-Trend vs. IOS-Breadth ────────────────────────────────────
+    # "Leadership-Rallye ohne Breite" — klassisches Warnsignal vor Trendumkehr.
+    # Wenige große Titel ziehen den Index, Mehrheit der Ticker schwächelt.
+    if ios_trend is not None and ios_bread is not None:
+        trend_pct = ios_trend / 35   # normiert 0–1
+        bread_pct = ios_bread / 25   # normiert 0–1
+        gap = trend_pct - bread_pct  # positiv = Trend stärker als Breite
+
+        if gap >= 0.35:  # mind. 35%-Punkte Differenz (normiert)
+            sev = "high" if gap >= 0.55 else "medium"
+            _add(
+                dtype="trend_vs_breadth",
+                severity=sev,
+                score_a=round(ios_trend, 1),
+                score_b=round(ios_bread, 1),
+                delta=round(gap * 100, 1),
+                label=f"IOS-Trend {ios_trend}/35 ↔ IOS-Breadth {ios_bread}/25",
+                explanation=(
+                    f"Der IOS-Trend-Score ({ios_trend}/35) ist deutlich stärker als "
+                    f"der IOS-Breadth-Score ({ios_bread}/25) — klassisches Zeichen "
+                    f"einer Leadership-Rallye ohne breite Marktpartizipation. "
+                    f"Wenige Sektoren/Titel treiben den Trend, die Mehrheit des "
+                    f"Marktes partizipiert nicht. Historisch erhöhtes Umkehrrisiko, "
+                    f"besonders für Breakout- und Momentum-Setups."
+                ),
+            )
+        elif gap <= -0.35:
+            # Breite stark, Trend schwach — ungewöhnlich bullische Internals ohne Trend
+            sev = "medium"
+            _add(
+                dtype="trend_vs_breadth",
+                severity=sev,
+                score_a=round(ios_trend, 1),
+                score_b=round(ios_bread, 1),
+                delta=round(abs(gap) * 100, 1),
+                label=f"IOS-Breadth {ios_bread}/25 ↔ IOS-Trend {ios_trend}/35",
+                explanation=(
+                    f"Der IOS-Breadth-Score ({ios_bread}/25) übersteigt deutlich "
+                    f"den IOS-Trend-Score ({ios_trend}/35). Breite Marktpartizipation "
+                    f"ohne klaren Trend-Anker. Mögliches Frühzeichen einer "
+                    f"Trendwende (Akkumulations-Phase) oder Mean-Reversion-Umfeld. "
+                    f"Swing- und MR-Strategien bevorzugen, Momentum-Setups abwarten."
+                ),
+            )
+
+    # ── Paar 3: Breadth-Oszillator (McClellan) vs. Regime ────────────────────
+    # McClellan misst kurzfristige Advance/Decline-Dynamik (~19/39T EMA).
+    # Starke Divergenz zum Regime deutet auf Regime-Lag oder Trendwende hin.
+    if mcl is not None:
+        if is_stress and mcl >= 40:
+            # Regime warnt, McClellan zeigt Erholung — Post-Panic-Kandidat?
+            sev = "high" if mcl >= 80 else "medium"
+            _add(
+                dtype="breadth_vs_regime",
+                severity=sev,
+                score_a=regime_up,
+                score_b=round(mcl, 1),
+                delta=round(mcl, 1),
+                label=f"McClellan +{round(mcl,1)} ↔ Regime {regime_up}",
+                explanation=(
+                    f"Der McClellan-Breadth-Oszillator ({round(mcl,1):+.1f}) zeigt "
+                    f"starke Advance-Dominanz, während das Makro-Regime ({regime_up}) "
+                    f"noch Stress signalisiert. Mögliche Interpretation: "
+                    f"Breadth erholt sich früher als VIX-Termstruktur normalisiert — "
+                    f"klassisches POST_PANIC-Muster. Mean-Reversion-Setups prüfen, "
+                    f"Regime-Upgrade beobachten."
+                ),
+            )
+        elif is_bull and mcl <= -40:
+            # Regime bullisch, McClellan zeigt breite Schwäche
+            sev = "high" if mcl <= -80 else "medium"
+            _add(
+                dtype="breadth_vs_regime",
+                severity=sev,
+                score_a=regime_up,
+                score_b=round(mcl, 1),
+                delta=round(abs(mcl), 1),
+                label=f"McClellan {round(mcl,1):.1f} ↔ Regime {regime_up}",
+                explanation=(
+                    f"Der McClellan-Breadth-Oszillator ({round(mcl,1):+.1f}) zeigt "
+                    f"breite Marktveräußerung, während das Makro-Regime ({regime_up}) "
+                    f"noch bullisch klassifiziert. VIX-Termstruktur reagiert oft "
+                    f"verzögert auf interne Marktbewegungen. "
+                    f"Regime-Downgrade-Risiko erhöht — Positionsgrößen reduzieren, "
+                    f"Breakout-Setups pausieren."
+                ),
+            )
+
+    return divergences
+
+
 def calc_breadth_oscillator(results: list, tday: str, regime: str = None) -> dict:
     """UIQ Breadth-Oszillator nach McClellan-Methodik (27.07.2026, SUITE.md Backlog #12).
 
@@ -6408,6 +6585,15 @@ def main():
     # market_regime_str ist das korrekte globale MCM-Regime ("BULL_QUIET" etc.)
     breadth_osc = calc_breadth_oscillator(results, last_trading_day, regime=market_regime_str)
 
+    # ── Score-Paar-Divergenz-Signal (SUITE.md Backlog #11, 28.07.2026) ────────
+    # Methodisch unabhängige Sub-Scores werden auf Widersprüche geprüft.
+    # Ergebnis: master.market.scoreDivergences[] — für MCM-Panel + Morning Briefing.
+    score_divergences = calc_score_divergences(
+        market_regime_str, ios_market, breadth_osc
+    )
+    log.info(f"  [DIVERGENCE] {len(score_divergences)} Divergenz(en) erkannt: "
+             f"{[d['type'] for d in score_divergences] or 'keine'}")
+
     # 6. Master-JSON zusammenbauen
     elapsed = round(time.time() - start_time, 1)
     master  = {
@@ -6488,7 +6674,8 @@ def main():
             "fredMacro":  fred_macro,        # HY-Spread + Net Liquidity (FRED)
             "moveIndex":  move_index,        # Treasury-Volatilität (Renten-VIX)
             "sectorHoldings": sector_holdings, # ETF-Holdings-Klickthrough (Proof-of-Concept, nur XLK, 11.07.2026)
-            "breadthOsc":     breadth_osc,     # McClellan Breadth-Oszillator (27.07.2026, Backlog #12)
+            "breadthOsc":        breadth_osc,        # McClellan Breadth-Oszillator (27.07.2026, Backlog #12)
+            "scoreDivergences":  score_divergences,  # Score-Paar-Divergenzen (28.07.2026, Backlog #11)
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
