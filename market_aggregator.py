@@ -6051,7 +6051,8 @@ def calc_breadth_oscillator(results: list, tday: str, regime: str = None) -> dic
              f"Signal={signal} | {archive_days}T Archiv | Streak={regime_streak}T")
 
     return {
-        "oscillator":  oscillator,
+        "mclellan":    oscillator,   # Primär-Key für calc_score_divergences + Frontend
+        "oscillator":  oscillator,   # Alias (Rückwärtskompatibilität)
         "ema19":       ema19,
         "ema39":       ema39,
         "advances":    advances,
@@ -6796,6 +6797,47 @@ def main():
         log.info(f"  ✅ Fundamental-Enrichment: {len(_fund_cache)}/{len(_fund_candidates)} erfolgreich")
     else:
         log.info("  Fundamental-Enrichment: keine Kandidaten (alle ETF/Krypto)")
+
+    # ── Dividend + Value Leaderboards nach Enrichment neu berechnen (#13b) ───
+    # build_leaderboards() lief vor Enrichment — Fundamental-Felder waren noch None.
+    # Jetzt sind divYield/peForward/etc. in results[] → Scorer neu aufrufen.
+    _DIV_VAL_FIELDS = ["divYield", "payoutRatio", "peForward", "pb", "roe",
+                       "fcfYield", "analystUpside", "debtToEquity"]
+    _enriched_syms  = set(_fund_cache.keys()) if _fund_candidates else set()
+
+    def _rebuild_fundamental_lb(score_fn, key, min_score, extra_fields):
+        """Mini-Leaderboard aus results[] nach Enrichment."""
+        _entries = []
+        for _r in results:
+            if _r.get("error") or not _r.get("price"):
+                continue
+            _s = score_fn(_r)
+            if _s < min_score:
+                continue
+            _entry = {
+                "sym":   _r.get("sym"),
+                "score": _r.get("score"),
+                "price": _r.get("price"),
+                "grade": _r.get("grade"),
+                "rsi":   _r.get("rsi"),
+                key:     _s,
+            }
+            for _f in (extra_fields or []):
+                _entry[_f] = _r.get(_f)
+            _entries.append(_entry)
+        return sorted(_entries, key=lambda x: x[key], reverse=True)[:20]
+
+    leaderboards_obj["long_dividend"] = _rebuild_fundamental_lb(
+        score_long_dividend, "sDividend", 35,
+        ["divYield", "payoutRatio", "fcfYield", "roe", "debtToEquity"]
+    )
+    leaderboards_obj["long_value"] = _rebuild_fundamental_lb(
+        score_long_value, "sValue", 35,
+        ["peForward", "pb", "fcfYield", "roe", "analystUpside"]
+    )
+    log.info(f"  [#13b] long_dividend: {len(leaderboards_obj['long_dividend'])} | "
+             f"long_value: {len(leaderboards_obj['long_value'])} Kandidaten "
+             f"(aus {len(_enriched_syms)} angereicherten Titeln)")
 
     # Leaderboards + Shortlist in master dict einfuegen
     master["leaderboards"]     = leaderboards_obj
