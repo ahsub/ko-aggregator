@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.19.0"
+AGGREGATOR_VERSION = "5.20.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -5087,11 +5087,9 @@ _MCM_SIGNAL_RULES = {
     "bull_indicator":    [{"signal": "caution", "lte": 35}, {"signal": "ok"}],
     "treasury_stress":   [{"signal": "risk", "gte": 60}, {"signal": "caution", "gte": 35}, {"signal": "ok"}],
     "ndx_breadth":       [{"signal": "risk", "lte": 35}, {"signal": "caution", "lte": 50}, {"signal": "ok"}],
-    # ── FRED/Derived-Faktoren (MCM-Parität v5.14.0) — identisch zu ko-indicators.json ──
-    "hy_spread":         [{"signal": "risk", "zscore_gte": 1.5}, {"signal": "caution", "zscore_gte": 0.5}, {"signal": "ok"}],
-    "net_liquidity":     [{"signal": "caution", "trend4w_lte": 0}, {"signal": "ok"}],
-    "move_index":        [{"signal": "risk", "zscore_gte": 1.5}, {"signal": "caution", "zscore_gte": 0.8}, {"signal": "ok"}],
-    "skew_vvix_div":     [{"signal": "caution", "signal_eq": "WARNUNG"}, {"signal": "ok"}],
+    # net_liquidity: caution wenn 4W-Trend ≤ 0 (schrumpfend/stabil) — identisch zu
+    # ko-indicators.json signalRules (trend4w_lte: 0). Wert = trend_4w in Mrd USD.
+    "net_liquidity":     [{"signal": "caution", "lte": 0}, {"signal": "ok"}],
 }
 
 # ── Calendar-Faktoren (identische Fenster-/Karenz-Parameter wie ko-indicators.json) ──
@@ -5157,11 +5155,6 @@ _MCM_DOWNGRADE_RULES = [
     ("pcr",               ["momentum", "breakout"]),
     ("fear_greed",        ["momentum", "breakout", "ko"]),
     ("bull_indicator",    ["ko", "momentum", "breakout", "swing"]),
-    # ── FRED/Derived-Faktoren (MCM-Parität v5.14.0) ──
-    ("hy_spread",         ["ko", "momentum", "breakout", "swing", "csp_wheel", "vcp"]),
-    ("move_index",        ["ko", "breakout", "csp_wheel", "weekly_income", "atmna", "cc"]),
-    ("net_liquidity",     ["ko", "momentum", "breakout", "swing"]),
-    ("skew_vvix_div",     ["ko", "breakout", "csp_wheel"]),
     ("fed_window",        ["ko", "momentum", "breakout", "swing", "csp_wheel", "atmna", "weekly_income"]),
     ("nfp_window",        ["ko", "breakout"]),
     ("cpi_window",        ["ko", "breakout", "csp_wheel"]),
@@ -5507,13 +5500,13 @@ def calc_mcm_bull_indicator(market: dict, hist_data: dict, ios_market: dict) -> 
 
 def build_server_market_context(master):
     """market_context serverseitig — Pendant zu buildMarketContext() im JS-Port.
-    v5.14.0 (31.07.2026): Volle MCM-Parität mit dem Client erreicht.
-    Faktoren: vix, vvix, skew, pcr, fear_greed (Kern) +
-              ndx_breadth, intermarket_score, treasury_stress, bull_indicator (v5.13.0) +
-              hy_spread, net_liquidity, move_index, skew_vvix_div (v5.14.0, FRED/Derived) +
-              Calendar (FOMC/NFP/CPI).
-    Alle Daten liegen im master-Objekt vor — kein zusätzlicher API-Call.
-    fail-closed: fehlende Daten (ok=False) werden nicht simuliert.
+    Faktoren (10 + 3 Calendar):
+      vix, vvix, skew, pcr, fear_greed           — direkt aus market-Daten
+      ndx_breadth, intermarket_score,             — v5.13.0 (21.07.2026)
+      treasury_stress, bull_indicator             — server-side calc-Funktionen
+      net_liquidity                               — v5.14.0 (01.08.2026), FRED trend_4w
+      fed_window, nfp_window, cpi_window          — macro-calendar
+    MCM-Parität vollständig (alle ko-indicators.json Kern-Faktoren implementiert).
     """
     market = master.get("market", {}) or {}
     meta   = master.get("meta", {}) or {}
@@ -5560,58 +5553,11 @@ def build_server_market_context(master):
     _add("treasury_stress",   tr_s,   _MCM_SIGNAL_RULES["treasury_stress"])
     _add("bull_indicator",    bull_i, _MCM_SIGNAL_RULES["bull_indicator"])
 
-    # ── MCM-Parität: FRED/Derived-Faktoren (v5.14.0) ─────────────────────────
-    # Daten liegen bereits im master (fetch_fred_macro, fetch_move_index,
-    # fetch_zscores). Hier nur auslesen + Signal ableiten — kein neuer API-Call.
-    fred   = market.get("fredMacro") or {}
-    zsc    = market.get("zscores") or {}
-
-    def _add_fred(fid, value, zscore, trend4w, signal_str, rules):
-        """Signal-Auswertung für FRED/Derived-Faktoren mit zscore_gte / trend4w_lte / signal_eq."""
-        if value is None:
-            return
-        sig = "ok"
-        for rule in rules:
-            if "zscore_gte" in rule:
-                if zscore is not None and zscore >= rule["zscore_gte"]:
-                    sig = rule["signal"]; break
-            elif "trend4w_lte" in rule:
-                if trend4w is not None and trend4w <= rule["trend4w_lte"]:
-                    sig = rule["signal"]; break
-            elif "signal_eq" in rule:
-                if signal_str and rule["signal_eq"] in (signal_str or ""):
-                    sig = rule["signal"]; break
-            elif "signal" in rule and len(rule) == 1:
-                sig = rule["signal"]; break
-        factors[fid] = {"value": value, "signal": sig}
-        if sig == "caution":
-            caution.append(fid)
-        elif sig == "risk":
-            risk.append(fid)
-
-    # HY Credit Spread (Z-Score basiert)
-    hy = fred.get("hy_spread") or {}
-    if hy.get("ok"):
-        _add_fred("hy_spread", hy.get("current"), hy.get("zscore"),
-                  None, None, _MCM_SIGNAL_RULES["hy_spread"])
-
-    # US Net Liquidity (4W-Trend basiert)
-    nl = fred.get("net_liquidity") or {}
-    if nl.get("ok"):
-        _add_fred("net_liquidity", nl.get("current"), None,
-                  nl.get("trend_4w"), None, _MCM_SIGNAL_RULES["net_liquidity"])
-
-    # MOVE Index (Z-Score basiert) — liegt in market.moveIndex (nicht in zscores)
-    mv = market.get("moveIndex") or {}
-    if mv.get("ok"):
-        _add_fred("move_index", mv.get("current"), mv.get("zscore"),
-                  None, None, _MCM_SIGNAL_RULES["move_index"])
-
-    # SKEW/VVIX-Divergenz (Signal-String basiert)
-    svd = (zsc.get("skew_vvix_divergence") or {})
-    if svd.get("ok"):
-        _add_fred("skew_vvix_div", svd.get("value"), None,
-                  None, svd.get("signal"), _MCM_SIGNAL_RULES["skew_vvix_div"])
+    # net_liquidity: 4W-Trend aus FRED (identische Schwelle wie ko-indicators.json)
+    fred       = market.get("fredMacro", {}) or {}
+    nl         = fred.get("net_liquidity", {}) or {}
+    nl_trend4w = nl.get("trend_4w") if nl.get("ok") else None
+    _add("net_liquidity", nl_trend4w, _MCM_SIGNAL_RULES["net_liquidity"])
 
     # Calendar-Faktoren
     events = _mcm_load_macro_calendar()
