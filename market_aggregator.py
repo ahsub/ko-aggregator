@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.21.0"
+AGGREGATOR_VERSION = "5.22.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2554,6 +2554,100 @@ def compute_distribution_days(spy_hist, qqq_hist, lookback: int = 25) -> dict:
                 "dd_alert": False, "dd_severity": "None"}
 
 
+# ── ANCHORED VWAP (Zeiierman-Konzept, August 2026) ───────────────────────────
+# EWMA-basierter VWAP verankert am letzten 52W-Tief des Tickers.
+# Formel: alpha = 1 - exp(-ln(2) / apt)  →  EWMA auf kumuliertem PV/V
+# Vorteil vs. klassischem VWAP: ältere Bars werden exponentiell weniger gewichtet.
+# Ankerpunkt 52W-Tief: institutionell relevante Unterstützungszone.
+def compute_anchored_vwap(hist, apt: int = 20) -> dict:
+    """
+    Berechnet Anchored VWAP (AVWAP) ab letztem 52W-Tief.
+    hist: yfinance DataFrame mit Close/High/Low/Volume-Spalten.
+    apt:  Adaptive Price Tracking (Half-Life in Bars, Default 20 = ~14 Tage).
+    Returns dict: avwap, avwapAnchorDate, avwapAnchorPrice,
+                  distToAvwapPct, avwapAbove, avwapSlope
+    """
+    try:
+        import math as _math
+        close  = hist["Close"].dropna()
+        high   = hist["High"].dropna()
+        low    = hist["Low"].dropna()
+        volume = hist["Volume"].dropna()
+
+        if len(close) < 20:
+            return {"avwap": None, "avwapAnchorDate": None}
+
+        # HLC3 als Typischer Preis (wie im Pine Script)
+        hlc3 = (high + low + close) / 3.0
+
+        # Lookback: maximal 252 Bars (1 Handelsjahr)
+        lookback = min(252, len(close))
+        close_lb  = close.iloc[-lookback:]
+        low_lb    = low.iloc[-lookback:]
+        high_lb   = high.iloc[-lookback:]
+        hlc3_lb   = hlc3.iloc[-lookback:]
+        vol_lb    = volume.iloc[-lookback:]
+
+        # Ankerpunkt: Index des 52W-Tiefs im Lookback-Fenster
+        anchor_idx_rel = int(low_lb.values.argmin())
+        anchor_date    = low_lb.index[anchor_idx_rel]
+        anchor_price   = float(low_lb.iloc[anchor_idx_rel])
+
+        # EWMA-Alpha aus Half-Life (Zeiierman-Formel)
+        alpha = 1.0 - _math.exp(-_math.log(2.0) / max(1.0, apt))
+
+        # EWMA-VWAP ab Ankerpunkt
+        seg_hlc3 = hlc3_lb.iloc[anchor_idx_rel:]
+        seg_vol  = vol_lb.iloc[anchor_idx_rel:]
+
+        if len(seg_hlc3) < 2:
+            return {"avwap": None, "avwapAnchorDate": None}
+
+        # Initialisierung am Ankerpunkt
+        p_ewma   = float(seg_hlc3.iloc[0] * seg_vol.iloc[0])
+        vol_ewma = float(seg_vol.iloc[0])
+
+        avwap_series = []
+        for i in range(1, len(seg_hlc3)):
+            pxv      = float(seg_hlc3.iloc[i] * seg_vol.iloc[i])
+            v_i      = float(seg_vol.iloc[i])
+            p_ewma   = (1.0 - alpha) * p_ewma   + alpha * pxv
+            vol_ewma = (1.0 - alpha) * vol_ewma + alpha * v_i
+            vap      = p_ewma / vol_ewma if vol_ewma > 0 else None
+            avwap_series.append(vap)
+
+        if not avwap_series or avwap_series[-1] is None:
+            return {"avwap": None, "avwapAnchorDate": None}
+
+        avwap_now   = avwap_series[-1]
+        price_now   = float(close.iloc[-1])
+
+        # Distanz zum AVWAP
+        dist_pct    = round((price_now - avwap_now) / avwap_now * 100, 2) \
+                      if avwap_now > 0 else None
+
+        # Slope: AVWAP-Änderung über letzte 5 Bars (positiv = steigend)
+        avwap_slope = None
+        if len(avwap_series) >= 6:
+            avwap_slope = round(
+                (avwap_series[-1] - avwap_series[-6]) / avwap_series[-6] * 100, 3
+            ) if avwap_series[-6] > 0 else None
+
+        return {
+            "avwap":            round(avwap_now, 4),
+            "avwapAnchorDate":  str(anchor_date.date()),
+            "avwapAnchorPrice": round(anchor_price, 4),
+            "distToAvwapPct":   dist_pct,
+            "avwapAbove":       bool(price_now >= avwap_now),
+            "avwapSlope":       avwap_slope,   # % Änderung über 5 Bars (positiv=steigend)
+        }
+    except Exception as _e:
+        log.debug(f"compute_anchored_vwap Fehler: {_e}")
+        return {"avwap": None, "avwapAnchorDate": None,
+                "avwapAnchorPrice": None, "distToAvwapPct": None,
+                "avwapAbove": None, "avwapSlope": None}
+
+
 def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
     """
     IOS Market Score v1.0 — Python-Port für UnderlyingIQ Aggregator.
@@ -4019,6 +4113,22 @@ def process_ticker(ticker, hist_df):
         result["rsScoreIwm"]  = None   # 0-100 vs. IWM
         result["rsNewHigh"]   = None   # bool: RS-Line auf 63T-Hoch
         result["rsGrade"]     = None   # A+/A/B.../F
+
+        # ── Anchored VWAP (Zeiierman-Konzept, August 2026) ──────────────────────
+        # Berechnung in process_ticker direkt (hist_df verfügbar).
+        # Ankerpunkt: letztes 52W-Tief aus den bereits geladenen OHLCV-Daten.
+        if hist_df is not None and len(hist_df) >= 20:
+            _avwap = compute_anchored_vwap(hist_df, apt=20)
+        else:
+            _avwap = {"avwap": None, "avwapAnchorDate": None,
+                      "avwapAnchorPrice": None, "distToAvwapPct": None,
+                      "avwapAbove": None, "avwapSlope": None}
+        result["avwap"]             = _avwap.get("avwap")
+        result["avwapAnchorDate"]   = _avwap.get("avwapAnchorDate")
+        result["avwapAnchorPrice"]  = _avwap.get("avwapAnchorPrice")
+        result["distToAvwapPct"]    = _avwap.get("distToAvwapPct")
+        result["avwapAbove"]        = _avwap.get("avwapAbove")
+        result["avwapSlope"]        = _avwap.get("avwapSlope")
 
         # ── Breadth-Oszillator: Advance-Flag (27.07.2026, SUITE.md Backlog #12) ──
         # True = heute höher als gestern, False = tiefer, None = Daten fehlen
@@ -6301,6 +6411,13 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
             "rsScoreIwm":         pick(r, "rsScoreIwm"),   # 0-100 vs. IWM
             "rsNewHigh":          pick(r, "rsNewHigh"),    # bool: RS-Line auf 63T-Hoch
             "rsGrade":            pick(r, "rsGrade"),      # A+/A/B.../F
+            # -- Anchored VWAP (Zeiierman-Konzept, August 2026) -----------
+            "avwap":              pick(r, "avwap"),            # EWMA-VWAP ab 52W-Tief
+            "avwapAnchorDate":    pick(r, "avwapAnchorDate"),  # Datum des Ankerpunkts
+            "avwapAnchorPrice":   pick(r, "avwapAnchorPrice"), # Preis am Ankerpunkt (52W-Low)
+            "distToAvwapPct":     pick(r, "distToAvwapPct"),   # % Abstand Kurs zu AVWAP
+            "avwapAbove":         pick(r, "avwapAbove"),        # bool: Kurs über AVWAP
+            "avwapSlope":         pick(r, "avwapSlope"),        # % Änderung AVWAP über 5 Bars
             # Hinweis: kein "timestamp" pro Ticker — identisch fuer alle 700
             # und bereits im Header als "run". Spart ~35 KB pro Snapshot.
         })
