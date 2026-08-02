@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.20.0"
+AGGREGATOR_VERSION = "5.21.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2433,6 +2433,127 @@ def calc_last_swing_low(lows: list, lookback: int = 20) -> float | None:
 
 
 
+# ── RS-RANK SCORE (IOS Konzept-Integration, August 2026) ─────────────────────
+# Misst Relative Stärke einer Aktie vs. SPY+IWM über 3M/6M-Zeithorizonte.
+# 6 Bedingungen analog IOS Institutional Momentum Engine (rs001–rs006).
+# Benchmark: Beide SPY (Large Cap) und IWM (Small/Mid Cap) parallel.
+def compute_rs_rank_score(ticker_hist, spy_hist, iwm_hist) -> dict:
+    """
+    Berechnet RS-Rank Score (0-100) vs. SPY und IWM.
+    ticker_hist, spy_hist, iwm_hist: yfinance DataFrames mit 'Close'-Spalte.
+    Returns dict mit rs_score, rs_score_spy, rs_score_iwm, rs_new_high,
+                    ret_3m, ret_6m, rs_grade.
+    """
+    try:
+        close_t   = ticker_hist["Close"].dropna()
+        close_spy = spy_hist["Close"].dropna()
+        close_iwm = iwm_hist["Close"].dropna()
+        if len(close_t) < 63 or len(close_spy) < 63 or len(close_iwm) < 63:
+            return {"rs_score": None, "rs_grade": None}
+
+        def _score_vs_bench(close_ticker, close_bench):
+            rs_line = close_ticker / close_bench
+            rs_ma20 = rs_line.rolling(20).mean()
+            rs_ma50 = rs_line.rolling(50).mean()
+
+            ret_3m_t = (close_ticker.iloc[-1] / close_ticker.iloc[-63]  - 1) * 100
+            ret_3m_b = (close_bench.iloc[-1]  / close_bench.iloc[-63]   - 1) * 100
+            ret_6m_t = ret_6m_b = None
+            if len(close_ticker) >= 126 and len(close_bench) >= 126:
+                ret_6m_t = (close_ticker.iloc[-1] / close_ticker.iloc[-126] - 1) * 100
+                ret_6m_b = (close_bench.iloc[-1]  / close_bench.iloc[-126]  - 1) * 100
+
+            rs001 = bool(rs_line.iloc[-1] > rs_ma20.iloc[-1])                        # RS > MA20
+            rs002 = bool(rs_ma20.iloc[-1] > rs_ma50.iloc[-1])                        # MA20 > MA50
+            rs003 = bool(rs_line.iloc[-1] > rs_line.iloc[-20])                       # RS steigt 20T
+            rs004 = bool(ret_3m_t > ret_3m_b)                                        # 3M outperform
+            rs005 = bool(ret_6m_t is not None and ret_6m_b is not None
+                         and ret_6m_t > ret_6m_b)                                    # 6M outperform
+            rs006 = bool(rs_line.iloc[-1] >= rs_line.iloc[-63:].max())               # RS 63T-Hoch
+
+            score = min(
+                (15 if rs001 else 0) + (15 if rs002 else 0) +
+                (20 if rs003 else 0) + (20 if rs004 else 0) +
+                (20 if rs005 else 0) + (10 if rs006 else 0),
+                100
+            )
+            return score, rs006, ret_3m_t, ret_6m_t
+
+        score_spy, rs_new_high_spy, ret_3m, ret_6m = _score_vs_bench(close_t, close_spy)
+        score_iwm, rs_new_high_iwm, _,      _      = _score_vs_bench(close_t, close_iwm)
+
+        # Kombinierter Score: Durchschnitt beider Benchmarks
+        rs_score = round((score_spy + score_iwm) / 2)
+        rs_new_high = rs_new_high_spy or rs_new_high_iwm
+
+        grades = [(95,"A+"),(90,"A"),(85,"A-"),(80,"B+"),(75,"B"),
+                  (70,"B-"),(65,"C+"),(60,"C"),(55,"C-"),(40,"D")]
+        rs_grade = next((g for s, g in grades if rs_score >= s), "F")
+
+        return {
+            "rs_score":     rs_score,
+            "rs_score_spy": score_spy,
+            "rs_score_iwm": score_iwm,
+            "rs_new_high":  rs_new_high,
+            "ret_3m":       round(ret_3m, 1) if ret_3m is not None else None,
+            "ret_6m":       round(ret_6m, 1) if ret_6m is not None else None,
+            "rs_grade":     rs_grade,
+        }
+    except Exception as _e:
+        log.debug(f"compute_rs_rank_score Fehler: {_e}")
+        return {"rs_score": None, "rs_grade": None}
+
+
+# ── DISTRIBUTION DAYS ZÄHLER (IOS Konzept-Integration, August 2026) ──────────
+# O'Neil/IBD: Index fällt >0.2% bei höherem Volumen = institutionelles Verkaufen.
+# 4–5 DD in 25 Tagen = Watch, ≥6 DD = Danger (Long-Positionen reduzieren).
+def compute_distribution_days(spy_hist, qqq_hist, lookback: int = 25) -> dict:
+    """
+    Zählt Distribution Days für SPY und QQQ in den letzten `lookback` Handelstagen.
+    Returns dict mit dd_spy, dd_qqq, dd_score (0-100), dd_alert, dd_severity.
+    """
+    try:
+        def _count_dd(hist):
+            close = hist["Close"].dropna()
+            vol   = hist["Volume"].dropna()
+            if len(close) < lookback + 2 or len(vol) < lookback + 2:
+                return 0
+            count = 0
+            for i in range(1, lookback + 1):
+                idx = -(i)
+                try:
+                    pct_chg   = (close.iloc[idx] / close.iloc[idx - 1] - 1) * 100
+                    vol_ratio = vol.iloc[idx] / vol.iloc[idx - 1] if vol.iloc[idx - 1] > 0 else 0
+                    if pct_chg <= -0.2 and vol_ratio > 1.0:
+                        count += 1
+                except (IndexError, ZeroDivisionError):
+                    pass
+            return count
+
+        dd_spy = _count_dd(spy_hist)
+        dd_qqq = _count_dd(qqq_hist)
+        dd_max  = max(dd_spy, dd_qqq)
+
+        # Score: 100 = keine DD, sinkt mit jedem DD (6 DD = 10 Punkte)
+        dd_score = max(0, 100 - dd_max * 15)
+
+        severity = ("Danger" if dd_max >= 6 else
+                    "Watch"  if dd_max >= 4 else "None")
+
+        return {
+            "dd_spy":      dd_spy,
+            "dd_qqq":      dd_qqq,
+            "dd_score":    dd_score,
+            "dd_alert":    dd_max >= 4,
+            "dd_severity": severity,
+            "dd_lookback": lookback,
+        }
+    except Exception as _e:
+        log.warning(f"compute_distribution_days Fehler: {_e}")
+        return {"dd_spy": None, "dd_qqq": None, "dd_score": None,
+                "dd_alert": False, "dd_severity": "None"}
+
+
 def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
     """
     IOS Market Score v1.0 — Python-Port für UnderlyingIQ Aggregator.
@@ -3889,6 +4010,15 @@ def process_ticker(ticker, hist_df):
         result["perf6m"]     = round(perf_6m,  2) if perf_6m  is not None else None
         result["perf12m"]    = round(perf_12m, 2) if perf_12m is not None else None
         result["rsRating"]   = None   # wird in main() Stufe 2 befuellt
+
+        # ── RS-Rank Score (IOS Konzept-Integration, August 2026) ────────────
+        # Berechnung erfolgt in main() nach fetch_batch, wenn SPY/IWM hist_data verfügbar.
+        # Hier Platzhalter damit KV-Schema konsistent bleibt.
+        result["rsScore"]     = None   # 0-100, kombiniert SPY+IWM Benchmark
+        result["rsScoreSpy"]  = None   # 0-100 vs. SPY
+        result["rsScoreIwm"]  = None   # 0-100 vs. IWM
+        result["rsNewHigh"]   = None   # bool: RS-Line auf 63T-Hoch
+        result["rsGrade"]     = None   # A+/A/B.../F
 
         # ── Breadth-Oszillator: Advance-Flag (27.07.2026, SUITE.md Backlog #12) ──
         # True = heute höher als gestern, False = tiefer, None = Daten fehlen
@@ -6165,6 +6295,12 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
             # -- Liquiditaet -----------------------------------------------
             "volRatio":           pick(r, "volRatio", "volumeRatio", "vol_ratio"),
             "avgVol20":           pick(r, "avgVol20", "avg_vol20"),
+            # -- RS-Rank Score (IOS Konzept-Integration, August 2026) ------
+            "rsScore":            pick(r, "rsScore"),      # 0-100, kombiniert SPY+IWM
+            "rsScoreSpy":         pick(r, "rsScoreSpy"),   # 0-100 vs. SPY
+            "rsScoreIwm":         pick(r, "rsScoreIwm"),   # 0-100 vs. IWM
+            "rsNewHigh":          pick(r, "rsNewHigh"),    # bool: RS-Line auf 63T-Hoch
+            "rsGrade":            pick(r, "rsGrade"),      # A+/A/B.../F
             # Hinweis: kein "timestamp" pro Ticker — identisch fuer alle 700
             # und bereits im Header als "run". Spart ~35 KB pro Snapshot.
         })
@@ -6278,6 +6414,54 @@ def main():
     else:
         log.warning(f"   [RS-Rating] Zu wenige Ticker mit perfRsRaw ({len(_rs_eligible)}) — übersprungen")
     # ── Ende RS-Rating Stufe 2 ────────────────────────────────────────────────────────────
+
+    # ── RS-RANK SCORE (IOS Konzept-Integration, August 2026) ──────────────────────────────
+    # Berechnung nach fetch_batch, da hist_data (SPY, IWM) jetzt verfügbar.
+    # Schreibt rsScore/rsScoreSpy/rsScoreIwm/rsNewHigh/rsGrade in results[].
+    log.info(f"\n📐 RS-Rank Score berechnen (SPY + IWM Benchmark)...")
+    _spy_hist = hist_data.get("SPY")
+    _iwm_hist = hist_data.get("IWM")
+    _rs_rank_ok = 0
+    _rs_rank_skip = 0
+    if _spy_hist is not None and _iwm_hist is not None:
+        for _r in results:
+            _sym = _r.get("sym")
+            _t_hist = hist_data.get(_sym)
+            if _t_hist is None or _sym in ("SPY", "QQQ", "IWM", "RSP", "DIA", "VTI", "MDY", "IJR"):
+                _rs_rank_skip += 1
+                continue
+            _rs = compute_rs_rank_score(_t_hist, _spy_hist, _iwm_hist)
+            _r["rsScore"]    = _rs.get("rs_score")
+            _r["rsScoreSpy"] = _rs.get("rs_score_spy")
+            _r["rsScoreIwm"] = _rs.get("rs_score_iwm")
+            _r["rsNewHigh"]  = _rs.get("rs_new_high")
+            _r["rsGrade"]    = _rs.get("rs_grade")
+            if _rs.get("rs_score") is not None:
+                _rs_rank_ok += 1
+            else:
+                _rs_rank_skip += 1
+        log.info(f"   [RS-Rank] ✅ {_rs_rank_ok} Ticker berechnet, {_rs_rank_skip} übersprungen")
+    else:
+        log.warning("   [RS-Rank] SPY oder IWM hist_data fehlt — RS-Rank Score übersprungen")
+    # ── Ende RS-Rank Score ────────────────────────────────────────────────────────────────
+
+    # ── DISTRIBUTION DAYS (IOS Konzept-Integration, August 2026) ─────────────────────────
+    # O'Neil/IBD: Index fällt >0.2% bei höherem Vol = institutionelles Verkaufen.
+    # 4–5 DD in 25 Tagen = Watch, ≥6 DD = Danger.
+    log.info(f"\n📊 Distribution Days berechnen (SPY + QQQ, 25T Lookback)...")
+    _qqq_hist = hist_data.get("QQQ")
+    if _spy_hist is not None and _qqq_hist is not None:
+        distribution_days = compute_distribution_days(_spy_hist, _qqq_hist, lookback=25)
+        log.info(f"   [DD] SPY: {distribution_days['dd_spy']} | QQQ: {distribution_days['dd_qqq']} "
+                 f"| Severity: {distribution_days['dd_severity']} | Score: {distribution_days['dd_score']}")
+        if distribution_days["dd_alert"]:
+            log.warning(f"   [DD] ⚠️  DISTRIBUTION SIGNAL — {distribution_days['dd_severity'].upper()}: "
+                        f"≥4 DD in 25 Tagen erkannt!")
+    else:
+        distribution_days = {"dd_spy": None, "dd_qqq": None, "dd_score": None,
+                             "dd_alert": False, "dd_severity": "None"}
+        log.warning("   [DD] SPY oder QQQ hist_data fehlt — Distribution Days übersprungen")
+    # ── Ende Distribution Days ────────────────────────────────────────────────────────────
 
     _t(f"NACH fetch_batch — {len(results)} OK / {len(errors)} Fehler")
     log.info(f"   ✅ Erfolgreich: {len(results)} | ❌ Fehler: {len(errors)}")
@@ -6703,6 +6887,7 @@ def main():
             "sectorHoldings": sector_holdings, # ETF-Holdings-Klickthrough (Proof-of-Concept, nur XLK, 11.07.2026)
             "breadthOsc":        breadth_osc,        # McClellan Breadth-Oszillator (27.07.2026, Backlog #12)
             "scoreDivergences":  score_divergences,  # Score-Paar-Divergenzen (28.07.2026, Backlog #11)
+            "distributionDays":  distribution_days,  # O'Neil/IBD Distribution Days (IOS, August 2026)
         },
         "top40":          [{"sym": r["sym"], "score": r["score"], "grade": r["grade"],
                             "price": r["price"], "bullSignals": r["bullSignals"],
