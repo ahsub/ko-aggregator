@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.25.0"
+AGGREGATOR_VERSION = "5.26.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2956,6 +2956,80 @@ def compute_orderblocks(hist, lookback=252, min_body_atr=0.3,
         return _empty
 
 
+
+# ── EARNINGS CALENDAR (August 2026) ───────────────────────────────────────────
+# Echter Earnings-Kalender via yfinance .calendar — kein Extra-API-Key nötig.
+# Liefert Datum, DTE, BMO/AMC, EPS-Schätzung für CSP-Timing-Warnung.
+def compute_earnings_calendar(sym: str) -> dict:
+    """
+    Holt Earnings-Datum via yfinance.Ticker.calendar.
+    Fehlertolerant: bei fehlenden Daten None-Dict zurück.
+    Returns dict: earningsDate, earningsDTE, earningsEPS, earningsRevEst
+    """
+    _empty = {"earningsDate": None, "earningsDTE": None,
+              "earningsEPS": None, "earningsRevEst": None}
+    try:
+        from datetime import date as _date, datetime as _dt
+        import yfinance as _yf
+
+        cal = _yf.Ticker(sym).calendar
+        if cal is None or (hasattr(cal, 'empty') and cal.empty):
+            return _empty
+
+        # calendar ist ein DataFrame mit Spalten als Datum-Strings
+        # Format variiert je yfinance-Version — robust extrahieren
+        earnings_dt = None
+
+        # Neues Format (yfinance >= 0.2.x): DataFrame mit 'Earnings Date'-Spalte
+        if hasattr(cal, 'columns') and 'Earnings Date' in cal.columns:
+            val = cal['Earnings Date'].iloc[0] if len(cal) > 0 else None
+            if val is not None:
+                if hasattr(val, 'date'):
+                    earnings_dt = val.date()
+                else:
+                    earnings_dt = _dt.strptime(str(val)[:10], "%Y-%m-%d").date()
+
+        # Altes Format: dict mit 'Earnings Date' key
+        elif isinstance(cal, dict) and 'Earnings Date' in cal:
+            val = cal['Earnings Date']
+            if hasattr(val, 'date'):
+                earnings_dt = val.date()
+            elif isinstance(val, list) and len(val) > 0:
+                v0 = val[0]
+                earnings_dt = v0.date() if hasattr(v0, 'date') else None
+
+        if earnings_dt is None:
+            return _empty
+
+        today = _date.today()
+        dte   = (earnings_dt - today).days
+
+        # EPS-Schätzung
+        eps_est = None
+        rev_est = None
+        if hasattr(cal, 'columns'):
+            if 'EPS Estimate' in cal.columns:
+                v = cal['EPS Estimate'].iloc[0] if len(cal) > 0 else None
+                eps_est = round(float(v), 2) if v is not None and str(v) != 'nan' else None
+            if 'Revenue Estimate' in cal.columns:
+                v = cal['Revenue Estimate'].iloc[0] if len(cal) > 0 else None
+                rev_est = int(v) if v is not None and str(v) != 'nan' else None
+        elif isinstance(cal, dict):
+            eps_est = cal.get('EPS Estimate')
+            rev_est = cal.get('Revenue Estimate')
+
+        return {
+            "earningsDate":   str(earnings_dt),
+            "earningsDTE":    dte,          # Tage bis Earnings (negativ = bereits vorbei)
+            "earningsEPS":    eps_est,       # EPS-Schätzung (kann None sein)
+            "earningsRevEst": rev_est,       # Revenue-Schätzung
+        }
+    except Exception as _e:
+        log.debug(f"compute_earnings_calendar({sym}) Fehler: {_e}")
+        return {"earningsDate": None, "earningsDTE": None,
+                "earningsEPS": None, "earningsRevEst": None}
+
+
 def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
     """
     IOS Market Score v1.0 — Python-Port für UnderlyingIQ Aggregator.
@@ -4387,6 +4461,19 @@ def process_ticker(ticker, hist_df):
             # Sektor-Tags (automatisch aus SECTOR_WATCHLISTS invertiert — nie manuell editieren)
             "sectors":       TICKER_SECTOR_TAG.get(ticker, []),
         }
+
+        # ── Earnings Calendar (August 2026) ──────────────────────────────────
+        # Separater yf.Ticker-Call — nur für US-Aktien (nicht ETF/Krypto)
+        # ETF-Filter analog AVWAP: _is_etf_or_crypto bereits gesetzt
+        if not _is_etf_or_crypto:
+            _earn = compute_earnings_calendar(ticker)
+        else:
+            _earn = {"earningsDate": None, "earningsDTE": None,
+                     "earningsEPS": None, "earningsRevEst": None}
+        result["earningsDate"]   = _earn.get("earningsDate")
+        result["earningsDTE"]    = _earn.get("earningsDTE")
+        result["earningsEPS"]    = _earn.get("earningsEPS")
+        result["earningsRevEst"] = _earn.get("earningsRevEst")
 
         # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
         result.update(calc_fibonacci_levels(result))
@@ -6791,6 +6878,11 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
             "tvaRegimeConf":      pick(r, "tvaRegimeConf"),    # Konfidenz 0-100%
             "chopIndex":          pick(r, "chopIndex"),        # Chop 0-100 (hoch=choppy)
             "chopLabel":          pick(r, "chopLabel"),        # None/Low/Moderate/High/Extreme
+            # -- Earnings Calendar (August 2026) -------------------------
+            "earningsDate":       pick(r, "earningsDate"),   # ISO-Datum nächste Earnings
+            "earningsDTE":        pick(r, "earningsDTE"),    # Tage bis Earnings
+            "earningsEPS":        pick(r, "earningsEPS"),    # EPS-Schätzung
+            "earningsRevEst":     pick(r, "earningsRevEst"), # Revenue-Schätzung
             # Hinweis: kein "timestamp" pro Ticker — identisch fuer alle 700
             # und bereits im Header als "run". Spart ~35 KB pro Snapshot.
         })
