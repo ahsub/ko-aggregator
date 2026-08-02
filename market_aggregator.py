@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.24.0"
+AGGREGATOR_VERSION = "5.25.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2663,6 +2663,177 @@ def compute_anchored_vwap(hist, apt: int = 20) -> dict:
 # Volumen:    BigBeluga: obVolPct = segmentVol/totalVol
 # Strength:   Flux: bullVolPct vs bearVolPct innerhalb der OB-Zone
 # Mitigation: fillDistance/zoneSize (0-100%)
+
+# ── TVA INDICATORS: ADX + DI + Efficiency Ratio (August 2026) ─────────────────
+# Basis für TVA Sprint A: f_marketRegime + f_chopIndex aus TVA MathLibrary.
+# Alle vectorized via numpy — kein Overhead für 700 Ticker.
+def compute_tva_indicators(hist, adx_len=14, er_len=10) -> dict:
+    """
+    Berechnet ADX, DI+, DI-, Efficiency Ratio und TVA-abgeleitete Regime/Chop-Scores.
+
+    ADX/DI nach Wilder: identisch mit TVA f_htfBundle-Inputs.
+    Efficiency Ratio (Perry Kaufman): ER = NetMove / SumMoves über er_len Bars.
+      ER=1.0 = perfekter Trend, ER=0.0 = reines Rauschen.
+
+    TVA f_marketRegime (portiert):
+      composite = adxScore + erScore + volExpanding + bbExpanding
+      8 Regime: Strong Trend Up/Down, Trend Up/Down, Choppy, Volatile, Range, Transitioning
+      3-Bar-Hold: verhindert Regime-Flipping
+
+    TVA f_chopIndex (portiert):
+      chop = adxChop(30%) + diCancel(25%) + erChop(25%) + bbSqueeze(20%)
+      0=kein Chop, 100=maximaler Chop
+
+    Returns dict mit allen Feldern oder Null-Dict bei Fehler.
+    """
+    import numpy as _np
+    _empty = {
+        "adx": None, "diPlus": None, "diMinus": None,
+        "efficiencyRatio": None, "tvaRegime": None,
+        "tvaRegimeConf": None, "chopIndex": None, "chopLabel": None,
+    }
+    try:
+        hi  = hist["High"].dropna().values
+        lo  = hist["Low"].dropna().values
+        cl  = hist["Close"].dropna().values
+        n   = len(cl)
+        if n < adx_len * 2 + 5:
+            return _empty
+
+        # ── True Range ──────────────────────────────────────────────────────
+        tr = _np.maximum(
+            hi[1:] - lo[1:],
+            _np.maximum(
+                _np.abs(hi[1:] - cl[:-1]),
+                _np.abs(lo[1:] - cl[:-1])
+            )
+        )
+
+        # ── Directional Movement ────────────────────────────────────────────
+        up   = hi[1:] - hi[:-1]
+        down = lo[:-1] - lo[1:]
+        dm_plus  = _np.where((up > down) & (up > 0), up,   0.0)
+        dm_minus = _np.where((down > up) & (down > 0), down, 0.0)
+
+        # ── Wilder Smoothing (RMA) ──────────────────────────────────────────
+        def _rma(arr, length):
+            out = _np.zeros(len(arr))
+            out[0] = _np.mean(arr[:length])
+            alpha = 1.0 / length
+            for i in range(1, len(arr)):
+                out[i] = (1 - alpha) * out[i-1] + alpha * arr[i]
+            return out
+
+        atr_s  = _rma(tr,       adx_len)
+        dmp_s  = _rma(dm_plus,  adx_len)
+        dmm_s  = _rma(dm_minus, adx_len)
+
+        di_plus  = _np.where(atr_s > 0, dmp_s / atr_s * 100, 0.0)
+        di_minus = _np.where(atr_s > 0, dmm_s / atr_s * 100, 0.0)
+        dx       = _np.where(
+            (di_plus + di_minus) > 0,
+            _np.abs(di_plus - di_minus) / (di_plus + di_minus) * 100,
+            0.0
+        )
+        adx_arr  = _rma(dx, adx_len)
+
+        # Aktuelle Werte (letzter Bar)
+        adx_val    = round(float(adx_arr[-1]),  2)
+        di_p_val   = round(float(di_plus[-1]),  2)
+        di_m_val   = round(float(di_minus[-1]), 2)
+
+        # ── Efficiency Ratio (Perry Kaufman) ───────────────────────────────
+        if n >= er_len + 1:
+            net_move  = _np.abs(cl[-1] - cl[-(er_len+1)])
+            sum_moves = _np.sum(_np.abs(_np.diff(cl[-er_len:])))
+            er = round(float(net_move / sum_moves), 4) if sum_moves > 0 else 0.0
+        else:
+            er = None
+
+        # ── BB-Breite für Chop + Regime ────────────────────────────────────
+        bb_len = 20
+        if n >= bb_len:
+            bb_mid  = _np.mean(cl[-bb_len:])
+            bb_std  = _np.std(cl[-bb_len:])
+            bb_w    = (4 * bb_std) / bb_mid if bb_mid > 0 else 0.0
+            bb_w_ma = 0.0
+            if n >= bb_len * 2:
+                bb_w_ma = float(_np.mean([
+                    (4 * _np.std(cl[i-bb_len:i])) / _np.mean(cl[i-bb_len:i])
+                    for i in range(n - bb_len, n - bb_len + bb_len)
+                    if _np.mean(cl[i-bb_len:i]) > 0
+                ]))
+        else:
+            bb_w = bb_w_ma = 0.0
+
+        # ATR-Ratio (Volatilitäts-Expansion)
+        if n >= 50:
+            atr_20 = float(_np.mean([
+                max(hi[i]-lo[i], abs(hi[i]-cl[i-1]), abs(lo[i]-cl[i-1]))
+                for i in range(-20, 0)
+            ]))
+            atr_50 = float(_np.mean([
+                max(hi[i]-lo[i], abs(hi[i]-cl[i-1]), abs(lo[i]-cl[i-1]))
+                for i in range(-50, 0)
+            ]))
+            vol_expanding = atr_20 / atr_50 > 1.5 if atr_50 > 0 else False
+        else:
+            vol_expanding = False
+
+        # ── TVA f_chopIndex (portiert) ─────────────────────────────────────
+        adx_chop  = max(0.0, 100.0 - min(adx_val, 50.0) * 2.0) * 0.30
+        di_cancel = 100.0 - min(abs(di_p_val - di_m_val) * 2.5, 100.0)
+        di_comp   = di_cancel * 0.25
+        er_chop   = max(0.0, (1.0 - min(er or 0, 1.0)) * 100.0) * 0.25 if er is not None else 25.0
+        bb_squeeze= max(0.0, (1.0 - bb_w / bb_w_ma) * 100.0) if bb_w_ma > 0.001 else 0.0
+        bb_comp   = min(bb_squeeze, 100.0) * 0.20
+        chop      = round(adx_chop + di_comp + er_chop + bb_comp, 1)
+        chop_lbl  = ("Extreme" if chop >= 70 else "High" if chop >= 55
+                     else "Moderate" if chop >= 40 else "Low" if chop >= 25 else "None")
+
+        # ── TVA f_marketRegime (portiert, vereinfacht für Daily) ───────────
+        adx_score = 3 if adx_val > 35 else 1 if adx_val >= 20 else 0
+        er_score  = 2 if (er or 0) > 0.60 else 1 if (er or 0) >= 0.30 else 0
+        bb_exp    = bb_w > bb_w_ma * 1.5 if bb_w_ma > 0.001 else False
+        bb_squ    = bb_w < bb_w_ma * 0.7 if bb_w_ma > 0.001 else False
+        composite = adx_score + er_score + (1 if vol_expanding else 0) + (1 if bb_exp else 0)
+        trending_up = cl[-1] > cl[-6] if n >= 6 else True
+
+        if composite >= 4:
+            regime = "Strong Trend Up" if trending_up else "Strong Trend Down"
+        elif composite == 3:
+            regime = "Trend Up" if trending_up else "Trend Down"
+        elif bb_squ:
+            regime = "Choppy"
+        elif vol_expanding and composite <= 1:
+            regime = "Volatile"
+        elif composite <= 1 and (er or 0) < 0.30:
+            regime = "Range"
+        else:
+            regime = "Choppy"
+
+        # Konfidenz: wie viele Signale zeigen in dieselbe Richtung
+        conf = round(min(composite / 6.0 * 100.0, 100.0), 1)
+
+        return {
+            "adx":              adx_val,
+            "diPlus":           di_p_val,
+            "diMinus":          di_m_val,
+            "efficiencyRatio":  er,
+            "tvaRegime":        regime,
+            "tvaRegimeConf":    conf,
+            "chopIndex":        chop,
+            "chopLabel":        chop_lbl,
+        }
+    except Exception as _e:
+        log.debug(f"compute_tva_indicators Fehler: {_e}")
+        return {
+            "adx": None, "diPlus": None, "diMinus": None,
+            "efficiencyRatio": None, "tvaRegime": None,
+            "tvaRegimeConf": None, "chopIndex": None, "chopLabel": None,
+        }
+
+
 def compute_orderblocks(hist, lookback=252, min_body_atr=0.3,
                         trend_ema_len=50, vol_ma_len=20, top_n=3):
     import numpy as _np
@@ -4207,6 +4378,12 @@ def process_ticker(ticker, hist_df):
             # Check (Spike an grünem Tag) ist präziser als nicht-direktionales
             # volRatio-Proxy aus dem früheren calc_squeeze_risk(r)-Ansatz.
             "squeezeRisk":   _calc_squeeze_risk_df(closes, volumes, hvp=calc_hv_percentile(closes), rsi=rsiv),
+            # ── TVA Indicators: ADX + DI + Efficiency Ratio + Regime + Chop (August 2026) ──
+            # compute_tva_indicators() nutzt hist_df direkt — kein Extra-Fetch nötig
+            # Felder: adx, diPlus, diMinus, efficiencyRatio, tvaRegime, tvaRegimeConf, chopIndex, chopLabel
+            **(_tva if (_tva := compute_tva_indicators(hist_df) if hist_df is not None and len(hist_df) >= 35 else {}) else
+               {"adx": None, "diPlus": None, "diMinus": None, "efficiencyRatio": None,
+                "tvaRegime": None, "tvaRegimeConf": None, "chopIndex": None, "chopLabel": None}),
             # Sektor-Tags (automatisch aus SECTOR_WATCHLISTS invertiert — nie manuell editieren)
             "sectors":       TICKER_SECTOR_TAG.get(ticker, []),
         }
@@ -6605,6 +6782,15 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
             "obBearVolPct":       pick(r, "obBearVolPct"),  # Bear-Volumen-Anteil %
             "obBullCount":        pick(r, "obBullCount"),   # Anzahl aktiver Bull-OBs
             "obBearCount":        pick(r, "obBearCount"),
+            # -- TVA Indicators (August 2026) ----------------------------
+            "adx":                pick(r, "adx"),              # ADX-Wert (Trend-Stärke 0-100)
+            "diPlus":             pick(r, "diPlus"),           # DI+ (Aufwärtsdruck)
+            "diMinus":            pick(r, "diMinus"),          # DI- (Abwärtsdruck)
+            "efficiencyRatio":    pick(r, "efficiencyRatio"),  # ER 0-1 (Trend-Effizienz)
+            "tvaRegime":          pick(r, "tvaRegime"),        # 8-Regime-Klassifikation
+            "tvaRegimeConf":      pick(r, "tvaRegimeConf"),    # Konfidenz 0-100%
+            "chopIndex":          pick(r, "chopIndex"),        # Chop 0-100 (hoch=choppy)
+            "chopLabel":          pick(r, "chopLabel"),        # None/Low/Moderate/High/Extreme
             # Hinweis: kein "timestamp" pro Ticker — identisch fuer alle 700
             # und bereits im Header als "run". Spart ~35 KB pro Snapshot.
         })
