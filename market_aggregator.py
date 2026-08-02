@@ -2958,45 +2958,42 @@ def compute_orderblocks(hist, lookback=252, min_body_atr=0.3,
 
 
 # ── EARNINGS CALENDAR (August 2026) ───────────────────────────────────────────
-# Echter Earnings-Kalender via yfinance .calendar — kein Extra-API-Key nötig.
-# Liefert Datum, DTE, BMO/AMC, EPS-Schätzung für CSP-Timing-Warnung.
+# Robust via yfinance .info['earningsTimestamp'] — stabiler als .calendar
+# (Yahoo Finance hat /v7/finance/calendar Endpoint mehrfach geändert)
 def compute_earnings_calendar(sym: str) -> dict:
     """
-    Holt Earnings-Datum via yfinance.Ticker.calendar.
-    Fehlertolerant: bei fehlenden Daten None-Dict zurück.
-    Returns dict: earningsDate, earningsDTE, earningsEPS, earningsRevEst
+    Holt Earnings-Datum via yfinance.Ticker.info (earningsTimestamp).
+    Fallback: get_earnings_dates() für nächste 90 Tage.
     """
     _empty = {"earningsDate": None, "earningsDTE": None,
               "earningsEPS": None, "earningsRevEst": None}
     try:
-        from datetime import date as _date, datetime as _dt
+        from datetime import date as _date, datetime as _dt, timezone as _tz
         import yfinance as _yf
 
-        cal = _yf.Ticker(sym).calendar
-        if cal is None or (hasattr(cal, 'empty') and cal.empty):
-            return _empty
+        ticker_obj = _yf.Ticker(sym)
 
-        # calendar ist ein DataFrame mit Spalten als Datum-Strings
-        # Format variiert je yfinance-Version — robust extrahieren
+        # Methode 1: earningsTimestamp aus .info (stabiler Endpoint)
+        info = ticker_obj.info
+        ts = info.get("earningsTimestamp") or info.get("earningsTimestampStart")
         earnings_dt = None
 
-        # Neues Format (yfinance >= 0.2.x): DataFrame mit 'Earnings Date'-Spalte
-        if hasattr(cal, 'columns') and 'Earnings Date' in cal.columns:
-            val = cal['Earnings Date'].iloc[0] if len(cal) > 0 else None
-            if val is not None:
-                if hasattr(val, 'date'):
-                    earnings_dt = val.date()
-                else:
-                    earnings_dt = _dt.strptime(str(val)[:10], "%Y-%m-%d").date()
+        if ts:
+            earnings_dt = _dt.fromtimestamp(ts, tz=_tz.utc).date()
 
-        # Altes Format: dict mit 'Earnings Date' key
-        elif isinstance(cal, dict) and 'Earnings Date' in cal:
-            val = cal['Earnings Date']
-            if hasattr(val, 'date'):
-                earnings_dt = val.date()
-            elif isinstance(val, list) and len(val) > 0:
-                v0 = val[0]
-                earnings_dt = v0.date() if hasattr(v0, 'date') else None
+        # Methode 2: get_earnings_dates() als Fallback
+        if earnings_dt is None:
+            try:
+                dates_df = ticker_obj.get_earnings_dates(limit=4)
+                if dates_df is not None and not dates_df.empty:
+                    today = _date.today()
+                    for idx in dates_df.index:
+                        d = idx.date() if hasattr(idx, 'date') else None
+                        if d and d >= today:
+                            earnings_dt = d
+                            break
+            except Exception:
+                pass
 
         if earnings_dt is None:
             return _empty
@@ -3004,25 +3001,15 @@ def compute_earnings_calendar(sym: str) -> dict:
         today = _date.today()
         dte   = (earnings_dt - today).days
 
-        # EPS-Schätzung
-        eps_est = None
-        rev_est = None
-        if hasattr(cal, 'columns'):
-            if 'EPS Estimate' in cal.columns:
-                v = cal['EPS Estimate'].iloc[0] if len(cal) > 0 else None
-                eps_est = round(float(v), 2) if v is not None and str(v) != 'nan' else None
-            if 'Revenue Estimate' in cal.columns:
-                v = cal['Revenue Estimate'].iloc[0] if len(cal) > 0 else None
-                rev_est = int(v) if v is not None and str(v) != 'nan' else None
-        elif isinstance(cal, dict):
-            eps_est = cal.get('EPS Estimate')
-            rev_est = cal.get('Revenue Estimate')
+        # EPS-Schätzung aus .info
+        eps_est = info.get("epsForward") or info.get("epsCurrentYear")
+        eps_est = round(float(eps_est), 2) if eps_est else None
 
         return {
             "earningsDate":   str(earnings_dt),
-            "earningsDTE":    dte,          # Tage bis Earnings (negativ = bereits vorbei)
-            "earningsEPS":    eps_est,       # EPS-Schätzung (kann None sein)
-            "earningsRevEst": rev_est,       # Revenue-Schätzung
+            "earningsDTE":    dte,
+            "earningsEPS":    eps_est,
+            "earningsRevEst": None,  # nicht zuverlässig via .info
         }
     except Exception as _e:
         log.debug(f"compute_earnings_calendar({sym}) Fehler: {_e}")
