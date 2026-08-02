@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.23.0"
+AGGREGATOR_VERSION = "5.24.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2656,6 +2656,135 @@ def compute_anchored_vwap(hist, apt: int = 20) -> dict:
                 "avwapAbove": None, "avwapSlope": None}
 
 
+# ── ORDER BLOCK DETECTOR (Hybrid: Zeiierman + BigBeluga + Flux, August 2026) ─
+# Detection:  Zeiierman Candle-Flip + ATR-Body-Filter
+# Ranking:    qualityScore = size*100 + volScore*10 + trendScore*20
+#                            - mitigation*50 - age*0.1
+# Volumen:    BigBeluga: obVolPct = segmentVol/totalVol
+# Strength:   Flux: bullVolPct vs bearVolPct innerhalb der OB-Zone
+# Mitigation: fillDistance/zoneSize (0-100%)
+def compute_orderblocks(hist, lookback=252, min_body_atr=0.3,
+                        trend_ema_len=50, vol_ma_len=20, top_n=3):
+    import numpy as _np
+    _empty = {"obBull": [], "obBear": [], "obBullBest": None,
+              "obBearBest": None, "obBullCount": 0, "obBearCount": 0}
+    try:
+        op  = hist["Open"].dropna()
+        hi  = hist["High"].dropna()
+        lo  = hist["Low"].dropna()
+        cl  = hist["Close"].dropna()
+        vol = hist["Volume"].dropna()
+        n   = len(cl)
+        if n < 30:
+            return _empty
+        start = max(0, n - lookback)
+        op  = op.iloc[start:]; hi = hi.iloc[start:]
+        lo  = lo.iloc[start:]; cl = cl.iloc[start:]
+        vol = vol.iloc[start:]; n = len(cl)
+
+        # ATR-14 vectorized
+        tr1  = hi.values - lo.values
+        tr2  = _np.abs(hi.values - _np.roll(cl.values, 1))
+        tr3  = _np.abs(lo.values - _np.roll(cl.values, 1))
+        tr   = _np.maximum(tr1, _np.maximum(tr2, tr3)); tr[0] = tr1[0]
+        atr_arr = _np.convolve(tr, _np.ones(14)/14, mode='full')[:n]
+        atr_arr[:13] = atr_arr[13]
+
+        # EMA für Trend-Score
+        ema = float(cl.iloc[0]); alpha = 2.0 / (trend_ema_len + 1)
+        ema_arr = []
+        for c in cl.values:
+            ema = alpha * c + (1 - alpha) * ema; ema_arr.append(ema)
+        ema_arr = _np.array(ema_arr)
+
+        # Volumen-MA
+        vol_ma = _np.convolve(vol.values, _np.ones(vol_ma_len)/vol_ma_len,
+                              mode='full')[:n]
+        vol_ma[:vol_ma_len-1] = vol_ma[vol_ma_len-1]
+
+        price_now = float(cl.iloc[-1])
+        dates     = cl.index
+        bull_obs  = []
+        bear_obs  = []
+
+        for i in range(1, n):
+            body_i  = abs(cl.iloc[i]   - op.iloc[i])
+            atr_i   = atr_arr[i]
+            if atr_i <= 0 or body_i < atr_i * min_body_atr:
+                continue
+
+            ob_h = float(hi.iloc[i-1])
+            ob_l = float(lo.iloc[i-1])
+            sz   = ob_h - ob_l
+            vs   = float(vol.iloc[i-1]) / float(vol_ma[i-1]) if vol_ma[i-1] > 0 else 1.0
+            age  = n - 1 - i
+
+            # ── BULLISH OB: bärische Vorkerze vor bullischer Flip-Kerze ──────
+            if cl.iloc[i-1] < op.iloc[i-1] and cl.iloc[i] > op.iloc[i]:
+                ts = 1.0 if float(cl.iloc[i]) > ema_arr[i] else 0.0
+                lows_s   = lo.iloc[i:].values
+                fill_d   = ob_h - float(_np.min(lows_s)) if len(lows_s) else 0
+                mit_pct  = round(min(max(fill_d / max(sz, 1e-8) * 100, 0), 100), 1)
+                bvol     = float(vol.iloc[i]);   svol = float(vol.iloc[i-1])
+                tvol     = bvol + svol
+                q = sz*100 + vs*10 + ts*20 - (mit_pct/100)*50 - age*0.1
+                d = round((price_now - ob_h) / ob_h * 100, 2) if ob_h > 0 else None
+                bull_obs.append({
+                    "high": round(ob_h, 4), "low": round(ob_l, 4),
+                    "date": str(dates[i-1].date()),
+                    "qualityScore": round(q, 2), "mitPct": mit_pct,
+                    "volPct": round(vs * 50, 1),
+                    "bullVolPct": round(bvol/tvol*100, 1) if tvol > 0 else 50.0,
+                    "bearVolPct": round(svol/tvol*100, 1) if tvol > 0 else 50.0,
+                    "distPct": d, "ageBars": age,
+                    "mitigated": mit_pct >= 100,
+                })
+
+            # ── BEARISH OB: bullische Vorkerze vor bärischer Flip-Kerze ──────
+            elif cl.iloc[i-1] > op.iloc[i-1] and cl.iloc[i] < op.iloc[i]:
+                ts = 1.0 if float(cl.iloc[i]) < ema_arr[i] else 0.0
+                highs_s  = hi.iloc[i:].values
+                fill_d   = float(_np.max(highs_s)) - ob_l if len(highs_s) else 0
+                mit_pct  = round(min(max(fill_d / max(sz, 1e-8) * 100, 0), 100), 1)
+                bvol     = float(vol.iloc[i-1]); svol = float(vol.iloc[i])
+                tvol     = bvol + svol
+                q = sz*100 + vs*10 + ts*20 - (mit_pct/100)*50 - age*0.1
+                d = round((ob_l - price_now) / price_now * 100, 2) if price_now > 0 else None
+                bear_obs.append({
+                    "high": round(ob_h, 4), "low": round(ob_l, 4),
+                    "date": str(dates[i-1].date()),
+                    "qualityScore": round(q, 2), "mitPct": mit_pct,
+                    "volPct": round(vs * 50, 1),
+                    "bullVolPct": round(bvol/tvol*100, 1) if tvol > 0 else 50.0,
+                    "bearVolPct": round(svol/tvol*100, 1) if tvol > 0 else 50.0,
+                    "distPct": d, "ageBars": age,
+                    "mitigated": mit_pct >= 100,
+                })
+
+        bull_active = sorted([o for o in bull_obs if not o["mitigated"]],
+                             key=lambda x: x["qualityScore"], reverse=True)
+        bear_active = sorted([o for o in bear_obs if not o["mitigated"]],
+                             key=lambda x: x["qualityScore"], reverse=True)
+        top_bull = bull_active[:top_n]
+        top_bear = bear_active[:top_n]
+
+        # Nächster aktiver Bullish OB unter aktuellem Kurs
+        ob_bull_best = None
+        cands = [o for o in top_bull if o.get("distPct") is not None and o["distPct"] <= 0]
+        ob_bull_best = min(cands, key=lambda x: abs(x["distPct"])) if cands else (top_bull[0] if top_bull else None)
+
+        ob_bear_best = None
+        cands = [o for o in top_bear if o.get("distPct") is not None and o["distPct"] >= 0]
+        ob_bear_best = min(cands, key=lambda x: x["distPct"]) if cands else (top_bear[0] if top_bear else None)
+
+        return {"obBull": top_bull, "obBear": top_bear,
+                "obBullBest": ob_bull_best, "obBearBest": ob_bear_best,
+                "obBullCount": len(bull_active), "obBearCount": len(bear_active)}
+    except Exception as _e:
+        log.debug(f"compute_orderblocks Fehler: {_e}")
+        return _empty
+
+
 def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
     """
     IOS Market Score v1.0 — Python-Port für UnderlyingIQ Aggregator.
@@ -4143,6 +4272,33 @@ def process_ticker(ticker, hist_df):
         result["distToAvwapPct"]    = _avwap.get("distToAvwapPct")
         result["avwapAbove"]        = _avwap.get("avwapAbove")
         result["avwapSlope"]        = _avwap.get("avwapSlope")
+
+        # ── Order Blocks (Hybrid OB-Detector, August 2026) ───────────────────
+        # ETF/Krypto-Filter wie bei AVWAP: OBs nur für Einzel-Aktien sinnvoll
+        if hist_df is not None and len(hist_df) >= 30 and not _is_etf_or_crypto:
+            _ob = compute_orderblocks(hist_df, lookback=252,
+                                      min_body_atr=0.3, top_n=3)
+        else:
+            _ob = {"obBullBest": None, "obBearBest": None,
+                   "obBullCount": 0,  "obBearCount": 0}
+        _obb = _ob.get("obBullBest") or {}
+        _obbe= _ob.get("obBearBest") or {}
+        result["obBullHigh"]    = _obb.get("high")
+        result["obBullLow"]     = _obb.get("low")
+        result["obBullDate"]    = _obb.get("date")
+        result["obBullScore"]   = _obb.get("qualityScore")
+        result["obBullDistPct"] = _obb.get("distPct")
+        result["obBullMitPct"]  = _obb.get("mitPct")
+        result["obBullVolPct"]  = _obb.get("bullVolPct")
+        result["obBearHigh"]    = _obbe.get("high")
+        result["obBearLow"]     = _obbe.get("low")
+        result["obBearDate"]    = _obbe.get("date")
+        result["obBearScore"]   = _obbe.get("qualityScore")
+        result["obBearDistPct"] = _obbe.get("distPct")
+        result["obBearMitPct"]  = _obbe.get("mitPct")
+        result["obBearVolPct"]  = _obbe.get("bearVolPct")
+        result["obBullCount"]   = _ob.get("obBullCount", 0)
+        result["obBearCount"]   = _ob.get("obBearCount", 0)
 
         # ── Breadth-Oszillator: Advance-Flag (27.07.2026, SUITE.md Backlog #12) ──
         # True = heute höher als gestern, False = tiefer, None = Daten fehlen
@@ -6432,6 +6588,23 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
             "distToAvwapPct":     pick(r, "distToAvwapPct"),   # % Abstand Kurs zu AVWAP
             "avwapAbove":         pick(r, "avwapAbove"),        # bool: Kurs über AVWAP
             "avwapSlope":         pick(r, "avwapSlope"),        # % Änderung AVWAP über 5 Bars
+            # -- Order Blocks (Hybrid Detector, August 2026) ---------------
+            "obBullHigh":         pick(r, "obBullHigh"),    # Oberkante bester Bullish OB
+            "obBullLow":          pick(r, "obBullLow"),     # Unterkante
+            "obBullDate":         pick(r, "obBullDate"),    # Datum der OB-Entstehung
+            "obBullScore":        pick(r, "obBullScore"),   # qualityScore
+            "obBullDistPct":      pick(r, "obBullDistPct"), # % Abstand Kurs zu OB
+            "obBullMitPct":       pick(r, "obBullMitPct"),  # % Mitigation 0-100
+            "obBullVolPct":       pick(r, "obBullVolPct"),  # Bull-Volumen-Anteil %
+            "obBearHigh":         pick(r, "obBearHigh"),
+            "obBearLow":          pick(r, "obBearLow"),
+            "obBearDate":         pick(r, "obBearDate"),
+            "obBearScore":        pick(r, "obBearScore"),
+            "obBearDistPct":      pick(r, "obBearDistPct"),
+            "obBearMitPct":       pick(r, "obBearMitPct"),
+            "obBearVolPct":       pick(r, "obBearVolPct"),  # Bear-Volumen-Anteil %
+            "obBullCount":        pick(r, "obBullCount"),   # Anzahl aktiver Bull-OBs
+            "obBearCount":        pick(r, "obBearCount"),
             # Hinweis: kein "timestamp" pro Ticker — identisch fuer alle 700
             # und bereits im Header als "run". Spart ~35 KB pro Snapshot.
         })
