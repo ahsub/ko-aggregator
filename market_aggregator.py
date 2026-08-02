@@ -4463,17 +4463,12 @@ def process_ticker(ticker, hist_df):
         }
 
         # ── Earnings Calendar (August 2026) ──────────────────────────────────
-        # Separater yf.Ticker-Call — nur für US-Aktien (nicht ETF/Krypto)
-        # ETF-Filter analog AVWAP: _is_etf_or_crypto bereits gesetzt
-        if not _is_etf_or_crypto:
-            _earn = compute_earnings_calendar(ticker)
-        else:
-            _earn = {"earningsDate": None, "earningsDTE": None,
-                     "earningsEPS": None, "earningsRevEst": None}
-        result["earningsDate"]   = _earn.get("earningsDate")
-        result["earningsDTE"]    = _earn.get("earningsDTE")
-        result["earningsEPS"]    = _earn.get("earningsEPS")
-        result["earningsRevEst"] = _earn.get("earningsRevEst")
+        # Platzhalter — Berechnung erfolgt NACH fetch_batch in main()
+        # (separater Batch-Call vermeidet 700+ einzelne yf.Ticker()-Requests)
+        result["earningsDate"]   = None
+        result["earningsDTE"]    = None
+        result["earningsEPS"]    = None
+        result["earningsRevEst"] = None
 
         # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
         result.update(calc_fibonacci_levels(result))
@@ -7026,6 +7021,34 @@ def main():
     else:
         log.warning("   [RS-Rank] SPY oder IWM hist_data fehlt — RS-Rank Score übersprungen")
     # ── Ende RS-Rank Score ────────────────────────────────────────────────────────────────
+
+    # ── EARNINGS CALENDAR (August 2026) ──────────────────────────────────────────────────────
+    # Nach fetch_batch: Earnings für alle nicht-ETF/Krypto Ticker abrufen.
+    # Ein yf.Ticker()-Call pro Ticker aber sequenziell — kein paralleler Overhead.
+    # Batch-Size-Limit: max 200 Ticker um GHA-Timeout zu vermeiden.
+    log.info(f"\n📅 Earnings Calendar abrufen (max 200 US-Aktien)...")
+    _AVWAP_SKIP_SET_EARN = set(SECTOR_ETFS + CRYPTO_TICKERS)
+    _earn_candidates = [
+        r for r in results
+        if r.get("sym") not in _AVWAP_SKIP_SET_EARN
+        and not (r.get("sym") or "").endswith("-USD")
+    ][:200]  # Limit auf 200 um Timeout zu vermeiden
+
+    _earn_ok = 0
+    _earn_skip = 0
+    for _r in _earn_candidates:
+        _sym = _r.get("sym")
+        _earn = compute_earnings_calendar(_sym)
+        _r["earningsDate"]   = _earn.get("earningsDate")
+        _r["earningsDTE"]    = _earn.get("earningsDTE")
+        _r["earningsEPS"]    = _earn.get("earningsEPS")
+        _r["earningsRevEst"] = _earn.get("earningsRevEst")
+        if _earn.get("earningsDate"):
+            _earn_ok += 1
+        else:
+            _earn_skip += 1
+    log.info(f"   [Earnings] ✅ {_earn_ok} Dates gefunden, {_earn_skip} ohne Datum")
+    # ── Ende Earnings Calendar ────────────────────────────────────────────────────────────────
 
     # ── DISTRIBUTION DAYS (IOS Konzept-Integration, August 2026) ─────────────────────────
     # O'Neil/IBD: Index fällt >0.2% bei höherem Vol = institutionelles Verkaufen.
