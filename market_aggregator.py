@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.22.0"
+AGGREGATOR_VERSION = "5.23.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -1859,7 +1859,15 @@ def score_long_minervini(r: dict) -> int:
     # Gate 8: RSI — Gemini: Schwelle von 85 auf 80 gesenkt
     if rsi and rsi > 80: s -= 15
 
-    return max(0, min(100, s))
+    # ── TVA Sigmoid-Glättung (August 2026, nach f_buyProbability-Konzept) ────
+    # Rohscore wird durch Sigmoid geglättet: verhindert extreme Sprünge
+    # durch einzelne starke Signale, belohnt konsistente Signalhäufung.
+    # Formel: 100 / (1 + e^(-0.06 * (raw - 50)))
+    # Kalibrierung: raw=50 → sigmoid=50, raw=80 → ~82, raw=20 → ~18
+    # Faktor 0.06 (vs. TVA 0.08): etwas weicher für Daily-Zeitreihen.
+    import math as _math
+    s_sigmoid = round(100.0 / (1.0 + _math.exp(-0.06 * (s - 50))))
+    return max(0, min(100, s_sigmoid))
 
 
 def score_long_breakout(r: dict) -> int:
@@ -4116,8 +4124,14 @@ def process_ticker(ticker, hist_df):
 
         # ── Anchored VWAP (Zeiierman-Konzept, August 2026) ──────────────────────
         # Berechnung in process_ticker direkt (hist_df verfügbar).
-        # Ankerpunkt: letztes 52W-Tief aus den bereits geladenen OHLCV-Daten.
-        if hist_df is not None and len(hist_df) >= 20:
+        # ETF/Krypto-Filter: AVWAP ist für Einzel-Aktien konzipiert —
+        # ETF-NAV hat keinen institutionellen Anker; Krypto zu volatil.
+        _AVWAP_SKIP_SET = set(SECTOR_ETFS + CRYPTO_TICKERS)
+        _is_etf_or_crypto = (
+            ticker in _AVWAP_SKIP_SET or
+            ticker.endswith("-USD")
+        )
+        if hist_df is not None and len(hist_df) >= 20 and not _is_etf_or_crypto:
             _avwap = compute_anchored_vwap(hist_df, apt=20)
         else:
             _avwap = {"avwap": None, "avwapAnchorDate": None,
