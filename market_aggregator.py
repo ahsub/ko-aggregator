@@ -1859,6 +1859,18 @@ def score_long_minervini(r: dict) -> int:
     # Gate 8: RSI — Gemini: Schwelle von 85 auf 80 gesenkt
     if rsi and rsi > 80: s -= 15
 
+    # Gate 9: AVWAP-Support-Distanz (TVA f_buyProbability Faktor 5, Sprint A Aug 2026)
+    # distToAvwapPct: positiv = über AVWAP (Stärke), nahe AVWAP = optimale Kaufzone
+    dist_avwap = r.get("distToAvwapPct")
+    avwap_above = r.get("avwapAbove")
+    if dist_avwap is not None and avwap_above is not None:
+        if avwap_above:
+            if   dist_avwap <= 2:   s += 15   # Direkt an AVWAP: idealer Einstieg (TVA: +15)
+            elif dist_avwap <= 5:   s += 8    # Nahe AVWAP: gutes Setup
+            elif dist_avwap <= 10:  s += 3    # Etwas über AVWAP: OK
+            # >10% über AVWAP: kein Bonus (überdehnt)
+        # Unter AVWAP: kein Malus hier (Gate 1 hat bereits EMA-Struktur gesichert)
+
     # ── TVA Sigmoid-Glättung (August 2026, nach f_buyProbability-Konzept) ────
     # Rohscore wird durch Sigmoid geglättet: verhindert extreme Sprünge
     # durch einzelne starke Signale, belohnt konsistente Signalhäufung.
@@ -2276,7 +2288,11 @@ def score_short_breakdown(r: dict) -> int:
     # HVP-Integration (Gemini): steigende Vola = Short-Dynamik
     if hvp is not None and hvp >= 65: s += 10
 
-    return max(0, min(100, s))
+    # TVA f_sellProbability: Sigmoid-Glättung analog score_long_minervini (v5.25.0)
+    # Verhindert extreme Sprünge, belohnt Signalhäufung — k=0.06 (Daily-Standard TVA)
+    import math as _math
+    s_sigmoid = round(100.0 / (1.0 + _math.exp(-0.06 * (s - 50))))
+    return max(0, min(100, s_sigmoid))
 
 
 def calc_squeeze_risk(r: dict) -> int:
@@ -2832,6 +2848,116 @@ def compute_tva_indicators(hist, adx_len=14, er_len=10) -> dict:
             "efficiencyRatio": None, "tvaRegime": None,
             "tvaRegimeConf": None, "chopIndex": None, "chopLabel": None,
         }
+
+
+# ── TVA f_stdTrendScore (Sprint A, August 2026) ──────────────────────────────
+# Portiert aus TVA MathLibrary. Einheitlich skalierter Trend-Score −100..+100.
+# ADX als Konviktions-Multiplikator: schwacher ADX dämpft extremes Ergebnis.
+def calc_std_trend_score(price, ema20, ema50, ema200, rsi, adx) -> float | None:
+    """
+    TVA f_stdTrendScore: Trend Score −100..+100.
+    Formel: (emaPart*0.6 + rsiPart*0.4) * (0.5 + 0.5*adxWeight)
+    ema20  = EMA20 (kurzfristiger Trend-Proxy)
+    ema50  = EMA50
+    ema200 = EMA200
+    rsi    = RSI14
+    adx    = ADX14 (aus compute_tva_indicators)
+    """
+    if any(v is None for v in (price, ema50, ema200, rsi, adx)):
+        return None
+    ema20_v = ema20 if ema20 is not None else ema50  # Fallback: EMA50 wenn EMA20 fehlt
+    ema_dir = (
+        (1 if price   > ema20_v else -1) +
+        (1 if price   > ema50   else -1) +
+        (1 if ema20_v > ema50   else -1) +
+        (1 if price   > ema200  else -1)
+    )
+    ema_part   = ema_dir / 4.0 * 50.0
+    rsi_part   = max(-50.0, min(50.0, float(rsi) - 50.0))
+    adx_weight = min(float(adx), 50.0) / 50.0
+    raw        = (ema_part * 0.6 + rsi_part * 0.4) * (0.5 + 0.5 * adx_weight)
+    return round(max(-100.0, min(100.0, raw)), 1)
+
+
+# ── TVA f_confluenceScore (Sprint A, August 2026) ────────────────────────────
+# 5-Faktor Confluence Score 0–100. Misst Überlagerung von Trend-, Momentum-,
+# Volumen-, Struktur- und AVWAP-Support-Signalen.
+def calc_confluence_score(r: dict) -> int | None:
+    """
+    TVA f_confluenceScore: Confluence Score 0–100 (5 Faktoren à max. 20 Punkte).
+    Faktoren:
+      1. Trend-Struktur    (EMA-Stack + trendScore)
+      2. Momentum          (RSI + MACD)
+      3. Volumen           (volRatio + OBV-Trend)
+      4. AVWAP-Support     (distToAvwapPct — neu aus Sprint v5.22.0)
+      5. Order Block Zone  (obBullDistPct — neu aus Sprint v5.24.0)
+    Returns int 0-100 oder None bei fehlenden Daten.
+    """
+    import math as _m
+    price      = r.get("price", 0) or 0
+    ema50      = r.get("ema50")
+    ema200     = r.get("ema200")
+    rsi        = r.get("rsi")
+    macd_h     = r.get("macdHist")
+    obv        = r.get("obvTrend")
+    vol_ratio  = r.get("volRatio") or 1.0
+    trend_score= r.get("trendScore")  # aus calc_std_trend_score (gerade berechnet)
+    dist_avwap = r.get("distToAvwapPct")   # % Abstand AVWAP (positiv = über AVWAP)
+    avwap_above= r.get("avwapAbove")
+    ob_dist    = r.get("obBullDistPct")    # % Abstand nächster Bull-OB (negativ = OB unter Kurs)
+
+    if not price or not ema50 or not ema200:
+        return None
+
+    score = 0
+
+    # ── Faktor 1: Trend-Struktur (0–20 Punkte) ─────────────────────────────
+    f1 = 0
+    if price > ema50:                   f1 += 8
+    if price > ema200:                  f1 += 7
+    if ema50 > ema200:                  f1 += 5
+    if trend_score is not None:
+        if   trend_score >= 50:         f1 = min(20, f1 + 5)
+        elif trend_score >= 20:         f1 = min(20, f1 + 2)
+        elif trend_score <= -20:        f1 = max(0, f1 - 5)
+
+    # ── Faktor 2: Momentum (0–20 Punkte) ───────────────────────────────────
+    f2 = 0
+    if rsi is not None:
+        if   50 <= rsi <= 70:           f2 += 12   # Bullischer Sweet-Spot
+        elif 40 <= rsi <  50:           f2 += 6    # Neutral-Bullisch
+        elif rsi > 70:                  f2 += 6    # Überhitzt (weniger ideal)
+    if macd_h is not None and macd_h > 0: f2 += 8
+
+    # ── Faktor 3: Volumen (0–20 Punkte) ────────────────────────────────────
+    f3 = 0
+    if   vol_ratio >= 2.0:             f3 += 12
+    elif vol_ratio >= 1.5:             f3 += 8
+    elif vol_ratio >= 1.2:             f3 += 4
+    if obv is not None and obv > 0:    f3 += 8
+
+    # ── Faktor 4: AVWAP-Support (0–20 Punkte) ──────────────────────────────
+    f4 = 0
+    if dist_avwap is not None and avwap_above is not None:
+        if avwap_above:
+            # Über AVWAP: Nähe zur AVWAP = beste Kaufzone
+            if   0 <= dist_avwap <= 2:   f4 += 20   # Direkt an AVWAP (optimale Zone)
+            elif 0 <= dist_avwap <= 5:   f4 += 14
+            elif 0 <= dist_avwap <= 10:  f4 += 8
+            else:                         f4 += 3   # Weit über AVWAP
+        # Unter AVWAP: kein Bonus (schwache Struktur)
+
+    # ── Faktor 5: Order Block Zone (0–20 Punkte) ────────────────────────────
+    f5 = 0
+    if ob_dist is not None:
+        # ob_dist ist % Abstand zum Bull-OB (negativ = OB unter Kurs = Unterstützung)
+        if   -3  <= ob_dist <= 0:       f5 += 20   # Im OB oder direkt darüber
+        elif -8  <= ob_dist < -3:       f5 += 12
+        elif -15 <= ob_dist < -8:       f5 += 6
+        elif ob_dist > 0:               f5 += 2    # Über dem OB (Momentum ohne Basis)
+
+    score = f1 + f2 + f3 + f4 + f5
+    return max(0, min(100, score))
 
 
 def compute_orderblocks(hist, lookback=252, min_body_atr=0.3,
@@ -4259,6 +4385,7 @@ def process_ticker(ticker, hist_df):
             return {"sym": ticker, "error": "insufficient_data", "bars": len(closes)}
 
         price   = round(closes[-1], 4)
+        ema20v  = ema(closes, 20)[-1] if len(closes) >= 20 else None
         ema50v  = ema(closes, 50)[-1]
         ema200_series = ema(closes, 200) if len(closes) >= 200 else []
         ema200v = ema200_series[-1] if ema200_series else None
@@ -4519,6 +4646,19 @@ def process_ticker(ticker, hist_df):
         result["avwapAbove"]        = _avwap.get("avwapAbove")
         result["avwapSlope"]        = _avwap.get("avwapSlope")
 
+        # ── TVA f_stdTrendScore (Sprint A, August 2026) ──────────────────────
+        # Berechnung nach AVWAP (distToAvwapPct verfügbar) und TVA-Indikatoren (adx).
+        # EMA20 lokal berechnet (ema20v), ADX aus compute_tva_indicators (_tva).
+        _adx_for_ts = result.get("adx")
+        result["trendScore"] = calc_std_trend_score(
+            price, ema20v, ema50v, ema200v, rsiv, _adx_for_ts
+        )
+
+        # ── TVA f_confluenceScore (Sprint A, August 2026) ─────────────────────
+        # Aggregiert 5 Signalschichten: Trend, Momentum, Volumen, AVWAP, OB.
+        # Reihenfolge: nach OB-Feldern berechnen (obBullDistPct bereits in result).
+        result["confluenceScore"] = None  # Platzhalter — befüllt nach OB-Block unten
+
         # ── Order Blocks (Hybrid OB-Detector, August 2026) ───────────────────
         # ETF/Krypto-Filter wie bei AVWAP: OBs nur für Einzel-Aktien sinnvoll
         if hist_df is not None and len(hist_df) >= 30 and not _is_etf_or_crypto:
@@ -4545,6 +4685,10 @@ def process_ticker(ticker, hist_df):
         result["obBearVolPct"]  = _obbe.get("bearVolPct")
         result["obBullCount"]   = _ob.get("obBullCount", 0)
         result["obBearCount"]   = _ob.get("obBearCount", 0)
+
+        # ── TVA f_confluenceScore — finale Berechnung nach OB-Block ──────────
+        # Alle 5 Faktoren (inkl. obBullDistPct + distToAvwapPct) jetzt verfügbar.
+        result["confluenceScore"] = calc_confluence_score(result)
 
         # ── Breadth-Oszillator: Advance-Flag (27.07.2026, SUITE.md Backlog #12) ──
         # True = heute höher als gestern, False = tiefer, None = Daten fehlen
@@ -6860,6 +7004,9 @@ def _write_market_snapshot(results: list, tday: str) -> bool:
             "tvaRegimeConf":      pick(r, "tvaRegimeConf"),    # Konfidenz 0-100%
             "chopIndex":          pick(r, "chopIndex"),        # Chop 0-100 (hoch=choppy)
             "chopLabel":          pick(r, "chopLabel"),        # None/Low/Moderate/High/Extreme
+            # -- TVA Sprint A (August 2026) --------------------------------
+            "trendScore":         pick(r, "trendScore"),       # f_stdTrendScore −100..+100
+            "confluenceScore":    pick(r, "confluenceScore"),  # f_confluenceScore 0-100 (5 Faktoren)
             # -- Earnings Calendar (August 2026) -------------------------
             "earningsDate":       pick(r, "earningsDate"),   # ISO-Datum nächste Earnings
             "earningsDTE":        pick(r, "earningsDTE"),    # Tage bis Earnings
@@ -7865,3 +8012,4 @@ if __name__ == "__main__":
         print(f"[ABORT] Unbehandelte Exception: {type(_e).__name__}: {_e}", flush=True)
         import traceback; traceback.print_exc()
         raise
+
