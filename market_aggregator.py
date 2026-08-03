@@ -3764,6 +3764,19 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "koShortLev":    ko_short_lev,      # Empfohlener Hebel (3-8) oder None
             # IOS Foundation Rating (Club-Integration)
             **ios_data,
+            # TVA Sprint A (August 2026) — für masterShortlist Alpha Desk
+            "trendScore":     r.get("trendScore"),
+            "confluenceScore": r.get("confluenceScore"),
+            "adx":            r.get("adx"),
+            "tvaRegime":      r.get("tvaRegime"),
+            "chopIndex":      r.get("chopIndex"),
+            "chopLabel":      r.get("chopLabel"),
+            "distToAvwapPct": r.get("distToAvwapPct"),
+            "avwapAbove":     r.get("avwapAbove"),
+            "obBullDistPct":  r.get("obBullDistPct"),
+            "rsScore":        r.get("rsScore"),
+            "rsGrade":        r.get("rsGrade"),
+            "rsNewHigh":      r.get("rsNewHigh"),
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
