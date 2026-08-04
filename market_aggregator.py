@@ -7828,6 +7828,66 @@ def main():
     # sucht aber in meta["regimeUsed"] (existierte dort nie -> immer "-" -> immer "n/v" im Briefing).
     master["meta"]["regimeUsed"] = strategy_data["regimeUsed"]
 
+    # ── DECISION CONFIDENCE ENGINE (DCE v1.0, August 2026) ───────────────────
+    # Meta-Instanz über allen Signalquellen: fusioniert MCM-Makro, Ticker-Konsens,
+    # CUSUM und EVT-VaR zu einem kalibrierten Vertrauensmaß (0-100) + Ampel.
+    # Fehlerisoliert: kein Absturz des Hauptlaufs möglich.
+    log.info(f"\n🎯 Decision Confidence Engine (DCE v1.0)...")
+    try:
+        from dce_layer import run_dce
+
+        # SPY-Returns für EVT-VaR (letzte 60 Handelstage, Dezimalwerte)
+        _spy_returns_60d = []
+        _spy_df = hist_data.get("SPY")
+        if _spy_df is not None:
+            _spy_closes = list(_spy_df["Close"].dropna())
+            if len(_spy_closes) > 1:
+                _spy_returns_60d = [
+                    (_spy_closes[i] / _spy_closes[i-1] - 1)
+                    for i in range(1, len(_spy_closes))
+                ][-60:]
+
+        # CUSUM-Buffer aus vorherigem Run (Persistenz via master["meta"])
+        _cusum_buffer = []
+        try:
+            _cusum_raw = master.get("meta", {}).get("dce_cusum_buffer", [])
+            if isinstance(_cusum_raw, list):
+                _cusum_buffer = [float(v) for v in _cusum_raw]
+        except Exception:
+            pass
+
+        dce_result = run_dce(
+            market_data={
+                "regime":          market_regime_str,
+                "regimeUsed":      market_regime_str,
+                "vix_term":        vix_term or {},
+                "spy_returns_60d": _spy_returns_60d,
+                "snapshot":        market_snapshot or {},
+            },
+            ticker_results=results,
+            cusum_buffer=_cusum_buffer,
+        )
+
+        master["dce"] = dce_result
+        master["meta"]["dce_cusum_buffer"] = dce_result.get("cusum_buffer", [])
+
+        log.info(f"   ✅ DCE: Confidence={dce_result['confidence']}/100 | "
+                 f"Mode={dce_result['mode']} | "
+                 f"Richtung={dce_result['direction']}")
+        for w in dce_result.get("warnings", []):
+            log.warning(f"   {w}")
+
+    except Exception as _dce_err:
+        log.warning(f"   DCE übersprungen (nicht kritisch): {_dce_err}")
+        master["dce"] = {
+            "confidence": 50, "mode": "YELLOW",
+            "position_size": 0.5, "direction": "HOLD",
+            "regime": market_regime_str,
+            "warnings": [f"DCE-Fehler: {str(_dce_err)}"],
+        }
+
+
+
     # ── TRACK-RECORD-LAYER Phase A (v4.4, Spez: docs/TRACK_RECORD_SPEC.md) ──
     # Snapshot der heutigen Empfehlungen nach tr:snap:<Handelstag> + tr:index.
     # Fehlerisoliert: Ein Fehler hier darf den Hauptlauf NIEMALS brechen (§4).
