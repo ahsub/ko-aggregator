@@ -40,6 +40,11 @@ jobs:
       - name: Clear yfinance cache
         run: rm -rf ~/.cache/py-yfinance/ || true
 
+      - name: DCE Unit Tests
+        run: |
+          pip install pytest scipy numpy --break-system-packages -q
+          pytest tests/test_dce_layer.py -v --tb=short
+
       - name: Run Market Aggregator
         env:
           CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
