@@ -2,11 +2,11 @@
 """
 UIQ Track-Record-Backup (RUNBOOK §7.3)
 =======================================
-Version 1.0 (03.07.2026)
+Version 1.1 (05.08.2026)
 
-Exportiert alle tr:*-Keys aus Cloudflare KV nach backups/tr_backup_latest.json.
-Die tr:*-Keys sind die EINZIGEN nicht regenerierbaren Daten des Systems
-(Track Record = kommerzielles Kernasset) — dieses Script ist die Versicherung.
+Exportiert alle tr:*, market:*, fin:*-Keys aus Cloudflare KV nach backups/tr_backup_latest.json.
+Die tr:*- und fin:*-Keys sind nicht regenerierbare Daten des Systems
+(Track Record + Russell3000-Fundamentals = kommerzielles Kernasset) — dieses Script ist die Versicherung.
 
 Läuft im Nachtlauf-Workflow, aktiv nur samstags (UTC) oder mit
 TR_BACKUP_FORCE=1. Der Workflow committet die Datei anschließend ins Repo:
@@ -44,7 +44,7 @@ def main():
         # Kein URL-Encoding: rohe Doppelpunkte funktionieren, die tr:*-Keys
         # werden so seit Wochen erfolgreich gelistet und gesichert.
         all_keys = []
-        for prefix in ("tr:", "market:"):
+        for prefix in ("tr:", "market:", "fin:"):
             keys, cursor = [], None
             while True:
                 url = f"{base}/keys?prefix={prefix}&limit=1000"
@@ -85,9 +85,12 @@ def main():
             json.dump(out, f, ensure_ascii=False)
         size_kb = os.path.getsize("backups/tr_backup_latest.json") / 1024
         mkt_keys = [k for k in data if k.startswith('market')]
+        fin_keys = [k for k in data if k.startswith('fin:')]
+        fin_shards = [k for k in fin_keys if 'shard' in k]
         print(f"[TR-BACKUP] ✅ {len(data)} Keys exportiert ({size_kb:.0f} KB)"
               + (f" | ⚠ {len(failed)} fehlgeschlagen: {failed[:5]}" if failed else "")
-              + f" | market-* Keys: {len(mkt_keys)}: {mkt_keys[:5]}")
+              + f" | market-* Keys: {len(mkt_keys)}"
+              + f" | fin:* Keys: {len(fin_keys)} (Shards: {fin_shards})")
     except Exception as e:
         print(f"[TR-BACKUP] ⚠ Fehler (nicht kritisch): {e}")
     return 0

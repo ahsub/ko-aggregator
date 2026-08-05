@@ -6609,6 +6609,8 @@ def generate_daily_snapshot(master):
             "model":            "claude-sonnet-4-6",
             "marketContext":    ctx,     # MCM: fuer Frontend/Konsistenz-Checks verfuegbar
             "strategyGates":    gates,   # MCM: deterministische Ampel, identisch zur Client-Berechnung
+            "finArchive":       master.get("finArchive", {}),   # Russell3000-Shard-Status (fin_layer)
+            "ivArchive":        master.get("ivArchive",  {}),   # IV-Archiv-Status (iv_layer)
         }
     except Exception as e:
         log.warning(f"  [SNAPSHOT] Fehler: {e}")
