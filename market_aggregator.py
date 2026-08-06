@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.26.0"
+AGGREGATOR_VERSION = "5.29.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -5793,6 +5793,139 @@ def fetch_vix_term():
 # ── CLOUDFLARE KV UPLOAD ──────────────────────────────────────────────────────
 
 
+def calc_regime_history_flag(mse_history: dict, current_regime: str) -> dict:
+    """Regime-History-Flag (Backlog №29, 07.08.2026) — Übergangsvektor für den MSE.
+
+    Löst das Zustandslosigkeits-Problem: zwei Tage mit gleichem VIX3M/VIX-Ratio
+    können fundamental verschiedene Marktphasen sein (Erholung aus Stress vs.
+    Abschwächung aus Bull). Dieser Flag macht den Übergangsvektor explizit.
+
+    Architektur (ML_KONZEPT.md §3b): Brücke bis MCM-HMM ab ~01.10.2026.
+    Dann: regelbasierter vector wird durch P(state_0..3) aus GaussianHMM ersetzt.
+
+    Input:
+        mse_history   : Ausgabe von fetch_mse_history() — enthält vixRatio + dates
+        current_regime: heutiger market_regime_str (BULL_QUIET / BULL_FRAGILE /
+                        POST_PANIC_REVERSION / STRESS_UNSTABLE)
+
+    Output-Schema:
+        {
+          "current":        str,   # aktuelles MSE-Regime
+          "vector":         str,   # RECOVERING | DETERIORATING | STABLE | UNKNOWN
+          "consecutive":    int,   # Tage im aktuellen Regime in Folge
+          "stressDaysAgo":  int|None,  # Handelstage seit letztem STRESS_UNSTABLE
+          "prevRegimes":    list,  # letzten 5 Regime-Labels (historisch, ältestes zuerst)
+          "ratioTrend":     str,   # RISING | FALLING | FLAT (VIX3M/VIX-Ratio-Trend, 5T)
+          "method":         str,   # "rule_based_v1" (ab HMM: "hmm_v1")
+        }
+    """
+    unknown = {
+        "current": current_regime, "vector": "UNKNOWN", "consecutive": 1,
+        "stressDaysAgo": None, "prevRegimes": [], "ratioTrend": "UNKNOWN",
+        "method": "rule_based_v1",
+    }
+
+    if not mse_history or not current_regime:
+        return unknown
+
+    ratios = mse_history.get("vixRatio") or []
+    dates  = mse_history.get("dates") or []
+
+    if len(ratios) < 3 or len(dates) < 3:
+        return unknown
+
+    # ── Regime-Labels aus vixRatio-Historie rekonstruieren ──────────────────
+    # Gleiche Logik wie in main() (Z.7363-7389): VIX-Niveau nicht verfügbar
+    # in mse_history → Vereinfachung: BULL_QUIET/BULL_FRAGILE nicht unterschieden,
+    # beide als BULL zusammengefasst für den Übergangsvektor (ausreichend für vector)
+    def _ratio_to_regime(r):
+        if r is None:         return None
+        if r < 0.98:          return "STRESS_UNSTABLE"
+        if r < 1.05:          return "POST_PANIC_REVERSION"
+        return "BULL"  # BULL_QUIET oder BULL_FRAGILE — für Vektor-Zwecke äquivalent
+
+    hist_labels = [_ratio_to_regime(r) for r in ratios]
+    hist_labels = [l for l in hist_labels if l is not None]
+
+    if not hist_labels:
+        return unknown
+
+    # Aktuelles Regime für Vergleich normalisieren (BULL_QUIET/BULL_FRAGILE → BULL)
+    cur_norm = "BULL" if current_regime in ("BULL_QUIET", "BULL_FRAGILE") else current_regime
+
+    # ── consecutive: wie viele Tage schon im aktuellen Regime? ──────────────
+    consecutive = 1
+    for label in reversed(hist_labels[:-1]):  # rückwärts, ohne heute
+        if label == cur_norm:
+            consecutive += 1
+        else:
+            break
+
+    # ── prevRegimes: letzten 5 Labels vor heute (für Kontext) ───────────────
+    prev_regimes = hist_labels[-6:-1] if len(hist_labels) >= 6 else hist_labels[:-1]
+
+    # ── stressDaysAgo: Handelstage seit letztem STRESS_UNSTABLE ─────────────
+    stress_days_ago = None
+    for i, label in enumerate(reversed(hist_labels[:-1])):
+        if label == "STRESS_UNSTABLE":
+            stress_days_ago = i + 1
+            break
+
+    # ── ratioTrend: Steigung des VIX3M/VIX-Ratio über letzte 5 Tage ────────
+    recent_ratios = [r for r in ratios[-5:] if r is not None]
+    if len(recent_ratios) >= 3:
+        delta = recent_ratios[-1] - recent_ratios[0]
+        if   delta >  0.02: ratio_trend = "RISING"
+        elif delta < -0.02: ratio_trend = "FALLING"
+        else:               ratio_trend = "FLAT"
+    else:
+        ratio_trend = "UNKNOWN"
+
+    # ── vector: Übergangsvektor ──────────────────────────────────────────────
+    # Kernlogik: woher kommt das aktuelle Regime?
+    #
+    # RECOVERING:    Vorher STRESS_UNSTABLE, jetzt POST_PANIC/BULL, Ratio steigt
+    # DETERIORATING: Vorher BULL, jetzt POST_PANIC/STRESS, Ratio fällt
+    # STABLE:        Schon ≥5 Tage im gleichen Regime, keine klare Richtung
+    # UNKNOWN:       Nicht eindeutig klassifizierbar
+
+    vector = "UNKNOWN"
+
+    recent_prev = hist_labels[-4:-1] if len(hist_labels) >= 4 else hist_labels[:-1]
+    had_stress_recently = any(l == "STRESS_UNSTABLE" for l in recent_prev[-3:])
+    had_bull_recently   = any(l == "BULL" for l in recent_prev[-3:])
+
+    if consecutive >= 5:
+        vector = "STABLE"
+    elif cur_norm in ("POST_PANIC_REVERSION", "BULL") and had_stress_recently:
+        # Markt erholt sich aus Stress
+        vector = "RECOVERING"
+    elif cur_norm in ("POST_PANIC_REVERSION", "STRESS_UNSTABLE") and had_bull_recently:
+        # Markt schwächt sich ab aus Bull
+        vector = "DETERIORATING"
+    elif ratio_trend == "RISING" and cur_norm in ("POST_PANIC_REVERSION", "BULL"):
+        vector = "RECOVERING"
+    elif ratio_trend == "FALLING" and cur_norm in ("POST_PANIC_REVERSION", "STRESS_UNSTABLE"):
+        vector = "DETERIORATING"
+    elif ratio_trend == "FLAT" and consecutive >= 3:
+        vector = "STABLE"
+
+    result = {
+        "current":       current_regime,
+        "vector":        vector,
+        "consecutive":   consecutive,
+        "stressDaysAgo": stress_days_ago,
+        "prevRegimes":   prev_regimes,
+        "ratioTrend":    ratio_trend,
+        "method":        "rule_based_v1",
+    }
+    log.info(
+        f"  Regime-History-Flag: vector={vector} | consecutive={consecutive}T "
+        f"| ratioTrend={ratio_trend} | stressDaysAgo={stress_days_ago}"
+    )
+    return result
+
+
 def fetch_mse_history(days: int = 30) -> dict:
     """Laedt 30-Tage-History fuer VVIX, SKEW, VIX, VIX3M fuer MSE Z-Score Normalisierung."""
     period = f"{days + 5}d"
@@ -7389,6 +7522,10 @@ def main():
                 market_regime_str = 'BULL_QUIET'
     log.info(f'  Markt-Regime: {market_regime_str} | Ratio: {_regime_ratio} (v5.12: vor Options-Loop verschoben fuer score_options_collar)')
 
+    # Regime-History-Flag (Backlog №29, v5.29.0): Übergangsvektor aus mse_history
+    # Brücke bis MCM-HMM ab ~01.10.2026 (ML_KONZEPT.md §3b)
+    regime_context = calc_regime_history_flag(mse_history, market_regime_str)
+
     # 5a. Options-Watchlist (Top-50, Gemini-Architektur) ────────────────────────
     log.info(f"\n🎯 Options-Watchlist berechnen (3 Strategien)...")
 
@@ -7644,7 +7781,8 @@ def main():
             "dixGex":     dix_gex,
             "pcr":        pcr,
             "vixTerm":    vix_term,
-            "mseHistory": mse_history,
+            "mseHistory":    mse_history,
+            "regimeContext": regime_context,  # Backlog №29: Übergangsvektor RECOVERING/DETERIORATING/STABLE
             "iosMarket":  ios_market,
             "fearGreed":  fear_greed,
             "snapshot":   market_snapshot,   # Single Source of Truth: alle Live-Preise
