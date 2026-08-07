@@ -35,15 +35,22 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install yfinance requests numpy pandas openpyxl
+          # yfinance GEPINNT (SWOT №35, 07.08.2026): Breaking-Changes schlagen sonst
+          # ungefiltert auf den Produktionslauf durch. Update nur nach explizitem Test.
+          # Aktuelle stabile Version: 1.5.2 (07.08.2026)
+          pip install "yfinance==1.5.2" requests numpy pandas openpyxl
 
       - name: Clear yfinance cache
         run: rm -rf ~/.cache/py-yfinance/ || true
 
-      - name: DCE Unit Tests
+      - name: Unit Tests (DCE + Regime)
         run: |
           pip install pytest scipy numpy --break-system-packages -q
+          # DCE-Tests (Brier Score, Konfidenz-Engine)
           pytest tests/test_dce_layer.py -v --tb=short
+          # Regime-Tests (SWOT №32, 07.08.2026): schützt Track-Record vor Scoring-Bugs
+          # Testet: Ratio-Konventionen, MSE-Klassifikation, History-Flag, v4.3-Regression
+          pytest tests/test_regime.py -v --tb=short
 
       - name: Run Market Aggregator
         env:

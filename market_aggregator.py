@@ -5778,13 +5778,18 @@ def fetch_vix_term():
         contango = spread > 0
         log.info(f"  VIX: {vix_val:.2f} | VIX3M: {vix3m_val:.2f} | Spread: {spread:+.2f} | {'CONTANGO' if contango else 'BACKWARDATION'}")
         return {
-            "vix":       round(vix_val, 2),
-            "vix3m":     round(vix3m_val, 2),
-            "spread":    spread,
-            "ratio":     round(vix_val / vix3m_val, 3),
-            "structure": "CONTANGO" if contango else "BACKWARDATION",
-            "signal":    "NORMAL" if contango and vix_val / vix3m_val < 0.90 else
-                         "ERHÖHT" if contango else "STRESS",
+            "vix":          round(vix_val, 2),
+            "vix3m":        round(vix3m_val, 2),
+            "spread":       spread,
+            # KONVENTION-KLARHEIT (SWOT №33, 07.08.2026):
+            # ratio         = VIX/VIX3M  (<1 = Contango = gesund) — Legacy-Feld, bleibt für Kompatibilität
+            # ratio_3m_spot = VIX3M/VIX  (>1 = Contango = gesund) — MSE-Konvention (Regime-Klassifikation)
+            # NIEMALS ratio direkt für Regime-Schwellen verwenden → immer ratio_3m_spot
+            "ratio":        round(vix_val / vix3m_val, 3),
+            "ratio_3m_spot": round(vix3m_val / vix_val, 3),
+            "structure":    "CONTANGO" if contango else "BACKWARDATION",
+            "signal":       "NORMAL" if contango and vix_val / vix3m_val < 0.90 else
+                            "ERHÖHT" if contango else "STRESS",
         }
     except Exception as e:
         log.warning(f"  VIX Term nicht verfügbar: {e}")
@@ -7250,6 +7255,22 @@ def main():
     log.info(f"\n📥 Lade Marktdaten...")
     hist_data = fetch_batch(stock_tickers, period="1y", max_workers=12)  # OOM-Fix
 
+    # Degradations-Check (SWOT №35, 07.08.2026): zu wenig valide Daten = yfinance-Problem
+    # → Vortages-KV weiterverwenden statt Totalabbruch
+    _valid_count = sum(1 for df in hist_data.values() if df is not None and len(df) >= 20)
+    _total_count = len(stock_tickers)
+    _valid_pct   = _valid_count / _total_count if _total_count > 0 else 0
+    log.info(f"  Valide Ticker: {_valid_count}/{_total_count} ({_valid_pct:.0%})")
+
+    if _valid_pct < 0.50:
+        # Weniger als 50% valide = yfinance-Ausfall, nicht normale Datenlücken
+        log.error(
+            f"  ⚠️  DEGRADED MODE: Nur {_valid_pct:.0%} der Ticker valide — "            f"yfinance-Problem vermutet. Vortages-KV wird beibehalten (kein Upload)."        )
+        # master['meta']['degraded'] = True wird weiter unten gesetzt
+        # sodass das Frontend einen Hinweis anzeigen kann
+        import sys
+        sys.exit(0)   # Sauberer Exit: kein KV-Überschreiben, GHA-Run grün
+
     # Krypto mit 6 Monaten
     if crypto_tickers:
         log.info(f"   Lade Krypto-Daten ({len(crypto_tickers)} Ticker)...")
@@ -7504,7 +7525,9 @@ def main():
     # + 7 Shorts). Fix: Ratio aus vix/vix3m-Rohwerten in VIX3M/VIX-Konvention bilden.
     _regime_ratio = None
     if vix_term and vix_term.get('vix') and vix_term.get('vix3m'):
-        _regime_ratio = round(vix_term['vix3m'] / vix_term['vix'], 3)
+        # KONVENTION: ratio_3m_spot = VIX3M/VIX (>1 = Contango). Primär aus
+        # explizitem Feld; Fallback berechnet für ältere KV-Snapshots ohne das Feld.
+        _regime_ratio = vix_term.get('ratio_3m_spot') or round(vix_term['vix3m'] / vix_term['vix'], 3)
     elif mse_history and mse_history.get('vixRatio') and mse_history['vixRatio']:
         _regime_ratio = mse_history['vixRatio'][-1]   # bereits VIX3M/VIX
 
