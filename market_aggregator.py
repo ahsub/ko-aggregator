@@ -1126,6 +1126,36 @@ def calc_hv_percentile(closes, window=30, lookback=252):
         return None
 
 
+
+def _earnings_gate(r: dict, dte_window: int = 14) -> tuple:
+    """Earnings-Gate für Options-Scorer (SWOT/Backlog, 07.08.2026).
+
+    Gibt (blocked: bool, reason: str, severity: str) zurück.
+
+    Logik:
+      - earningsDTE ≤ 0:  Earnings bereits vergangen oder heute → kein Block
+      - earningsDTE 1–7:  HARTE Sperre (return 0 in Scorer)
+      - earningsDTE 8–14: WEICHE Warnung (Malus -20 Pkt, kein Hard-Stop)
+      - earningsDTE > dte_window: kein Einfluss
+
+    Begründung: Earnings innerhalb DTE einer Option erzeugen massives IV-Crush-
+    Risiko (CSP/CC) oder Gap-Risk (alle Strategien). Bei Short-Optionen mit
+    Earnings im DTE-Fenster ist der Erwartungswert negativ — unabhängig vom
+    technischen Setup. Dies ist die häufigste Fehlerquelle bei Optionsanfängern.
+
+    dte_window: Fenstergröße in Tagen (default 14 = 2 Wochen).
+    """
+    dte = r.get("earningsDTE")
+    if dte is None or dte <= 0:
+        return False, "", "none"
+
+    if dte <= 7:
+        return True, f"Earnings in {dte}T — Sperre (IV-Crush/Gap-Risk)", "hard"
+    if dte <= dte_window:
+        return False, f"Earnings in {dte}T — Malus", "soft"
+    return False, "", "none"
+
+
 def score_options_csp(r: dict) -> int:
     """
     Cash-Secured Put Score 0-100 — Unleashed v2 (Gemini-Blueprint).
@@ -1134,6 +1164,9 @@ def score_options_csp(r: dict) -> int:
     Kernänderung: Ema200-Gate aufgeweicht auf 5%-Puffer (Bodenbildungsphase
     erlaubt), damit hohe Prämien in Pullback-Phasen nicht gefiltert werden.
     Seitwärtsregime wird stärker belohnt als Bull (Theta-Decay-Paradisziplin).
+
+    v5.35: Earnings-Gate (07.08.2026) — Sperre bei Earnings ≤7T, Malus ≤14T.
+    Earnings im DTE-Fenster = negativer Erwartungswert (IV-Crush + Gap-Risk).
     """
     price  = r.get("price", 0) or 0
     ema200 = r.get("ema200")
@@ -1142,6 +1175,10 @@ def score_options_csp(r: dict) -> int:
     rsi    = r.get("rsi", 50) or 50
     bbpos  = r.get("bbPos")
     regime = (r.get("regime") or "").lower()
+
+    # Gate 0: Earnings-Gate (HARTE Sperre bei Earnings ≤7T)
+    _eg_blocked, _eg_reason, _eg_sev = _earnings_gate(r, dte_window=14)
+    if _eg_blocked: return 0
 
     # Gate 1 (Gemini Fix: aufgeweicht auf 15% für Bear/MR-Setups)
     if not ema200: return 0
@@ -1181,6 +1218,10 @@ def score_options_csp(r: dict) -> int:
     # Skaliert mit Confluence-Score (0-100), max +15 Pkt bei Score>=75.
     if r.get("f_setup") == "CSP_ZONE":
         s += min(int((r.get("f_score", 0) or 0) * 0.20), 15)
+
+    # Earnings-Malus (weich, 8-14T): -20 Pkt Vorsichtsabschlag
+    if _eg_sev == "soft":
+        s = max(0, s - 20)
 
     return max(0, min(100, s))
 
@@ -1258,6 +1299,10 @@ def score_options_covered_call(r: dict) -> int:
     overheat   = r.get("overheat", 0) or 0
     bbpos      = r.get("bbPos")
 
+    # Gate 0: Earnings-Gate (v5.35) — CC bei Earnings riskant (Assignment bei Gap-Up)
+    _eg_blocked, _eg_reason, _eg_sev = _earnings_gate(r, dte_window=14)
+    if _eg_blocked: return 0
+
     # Gate 1: Mindestqualität
     if comp_score < 45: return 0
 
@@ -1306,6 +1351,10 @@ def score_options_covered_call(r: dict) -> int:
     if r.get("f_setup") == "RETRACEMENT":
         s += min(int((r.get("f_score", 0) or 0) * 0.15), 12)
 
+    # Earnings-Malus (weich, 8-14T)
+    if _eg_sev == "soft":
+        s = max(0, s - 20)
+
     return max(0, min(100, s))
 
 
@@ -1322,6 +1371,10 @@ def score_options_credit_spread(r: dict) -> int:
     bbpos  = r.get("bbPos")
     hvp    = r.get("hvp", 0) or 0
     regime = (r.get("regime") or "").lower()
+
+    # Gate 0: Earnings-Gate (v5.35) — Gap überschreitet typisch die Strike-Distanz
+    _eg_blocked, _eg_reason, _eg_sev = _earnings_gate(r, dte_window=7)
+    if _eg_blocked: return 0
 
     # Minimale Vola für überhaupt eine handelbare Prämie
     if hvp < 25:   return 0
@@ -1375,6 +1428,11 @@ def score_options_collar(r: dict, market_regime: str = "NEUTRAL") -> int:
     dist200 = r.get("dist200", 0) or 0
     atr    = r.get("atr")
     regime = (r.get("regime") or "").lower()
+
+    # Gate 0: Earnings-Gate (v5.35) — Collar kann bei Earnings sinnvoll sein
+    # (Put schützt vor Gap-Down), aber Score-Malus für Unsicherheit
+    _eg_blocked, _eg_reason, _eg_sev = _earnings_gate(r, dte_window=21)
+    if _eg_blocked: return 0  # Sehr kurzfristig (<7T): kein Collar mehr sinnvoll
 
     # Gate 1: Bestandsposition muss im Uptrend sein
     if not ema200 or price < ema200:
