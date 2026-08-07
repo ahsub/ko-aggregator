@@ -170,9 +170,31 @@ def load_smart_picks(path=SMART_PICKS_PATH):
         return []
 
 
+def _load_ex_iwv_for_fin() -> list:
+    """Ex-IWV Ticker für FIN-Shard-Runs (Survivorship-Fix, SWOT T3, 07.08.2026).
+    Identisch zu market_aggregator._load_ex_iwv_tickers() — bewusste Kopie
+    um Import-Coupling zu vermeiden (fin_layer ist eigenständig)."""
+    import csv as _csv
+    ex_path = os.path.join(os.path.dirname(__file__), "data", "ex_iwv_tickers.csv")
+    if not os.path.exists(ex_path):
+        return []
+    ex = []
+    try:
+        with open(ex_path, newline="", encoding="utf-8") as fh:
+            reader = _csv.DictReader(fh)
+            for row in reader:
+                t = (row.get("Ticker") or "").strip()
+                if t:
+                    ex.append(t)
+    except Exception as e:
+        log.warning(f"  [FIN] ex_iwv laden fehlgeschlagen: {e}")
+    return ex
+
+
 def build_fin_universe(uiq_universe):
-    """IWV ∪ Smart-Picks ∪ UIQ. Liefert (universum, meta).
-    IWV-Fallback: KV-Cache fin:universe der Vorwoche."""
+    """IWV ∪ Ex-IWV ∪ Smart-Picks ∪ UIQ. Liefert (universum, meta).
+    IWV-Fallback: KV-Cache fin:universe der Vorwoche.
+    Ex-IWV: herausgefallene Ticker weiter sammeln (Survivorship-Ehrlichkeit)."""
     iwv = fetch_iwv_tickers()
     iwv_source = "local_csv"
     if iwv is None:
@@ -182,10 +204,14 @@ def build_fin_universe(uiq_universe):
     else:
         kv_put("fin:universe", {"v": FIN_SCHEMA_VERSION, "week": _iso_week(),
                                 "iwv": iwv})
+    # Ex-IWV: herausgefallene Ticker weiter sammeln (SWOT T3)
+    ex_iwv = _load_ex_iwv_for_fin()
+    if ex_iwv:
+        log.info(f"  [FIN] Ex-IWV: {len(ex_iwv)} herausgefallene Ticker weiter gesammelt")
     picks = load_smart_picks()
     uiq = [t for t in (uiq_universe or []) if not t.endswith("-USD")]
-    uni = sorted(set(iwv) | set(picks) | set(uiq))
-    meta = {"iwv": len(iwv), "iwvSource": iwv_source,
+    uni = sorted(set(iwv) | set(ex_iwv) | set(picks) | set(uiq))
+    meta = {"iwv": len(iwv), "iwvSource": iwv_source, "exIwv": len(ex_iwv),
             "smartPicks": picks, "uiq": len(uiq), "total": len(uni)}
     return uni, meta
 
