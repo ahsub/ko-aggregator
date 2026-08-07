@@ -720,9 +720,35 @@ def fetch_approved_extra_tickers():
         return []
 
 
+def _load_ex_iwv_tickers() -> list:
+    """Lädt herausgefallene IWV-Ticker aus data/ex_iwv_tickers.csv.
+    Diese werden weiter getracked (Survivorship-Bias-Fix, SWOT T3, 07.08.2026).
+    Gibt Liste von Ticker-Strings zurück.
+    """
+    import csv as _csv
+    ex_path = Path(__file__).parent.parent / 'data' / 'ex_iwv_tickers.csv'
+    if not ex_path.exists():
+        return []
+    ex_tickers = []
+    try:
+        with open(ex_path, newline='', encoding='utf-8') as fh:
+            reader = _csv.DictReader(fh)
+            for row in reader:
+                t = (row.get('Ticker') or '').strip()
+                if t:
+                    ex_tickers.append(t)
+    except Exception as e:
+        log.warning(f'[ex_iwv] Fehler beim Laden: {e}')
+    return ex_tickers
+
+
 def build_ticker_universe():
     seen = set()
     result = []
+    # Ex-IWV Ticker laden (Survivorship-Bias-Fix, SWOT T3, 07.08.2026)
+    ex_iwv = _load_ex_iwv_tickers()
+    if ex_iwv:
+        log.info(f'  [ex_iwv] {len(ex_iwv)} herausgefallene IWV-Ticker weiter getracked')
     # Alle Quellen zusammenführen
     all_sources = (
         SP500_TICKERS + NASDAQ100_EXTRA +
@@ -733,7 +759,9 @@ def build_ticker_universe():
         INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
         [t for wl in SECTOR_WATCHLISTS.values() for t in wl] +
         # NEU (30.06.2026): per Fibo-Tab vorgeschlagene + admin-freigegebene Ticker
-        fetch_approved_extra_tickers()
+        fetch_approved_extra_tickers() +
+        # SWOT T3 (07.08.2026): ex-IWV Ticker weiter tracken
+        ex_iwv
     )
     # Filter: keine leeren Strings, keine bekannt ungueltige Symbole
     # Fix Gemini: Doppelte BAD_SYMS zusammengeführt (zweite Zeile überschrieb erste)
