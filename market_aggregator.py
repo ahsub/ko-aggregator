@@ -7991,6 +7991,24 @@ def main():
     # sucht aber in meta["regimeUsed"] (existierte dort nie -> immer "-" -> immer "n/v" im Briefing).
     master["meta"]["regimeUsed"] = strategy_data["regimeUsed"]
 
+    # W3-Transparenz (SWOT W3, 07.08.2026): Beide Klassifikatoren explizit dokumentieren.
+    # Server-Regime (VIX3M/VIX-Ratio, täglich per GHA) ist der Track-Record-Wert.
+    # Client-Regime (VVIX/SKEW/GEX live) kann davon abweichen — das ist by design,
+    # nicht ein Bug. Nutzer sieht Client-Regime; Track-Record loggt Server-Regime.
+    # regimeMeta macht die Herkunft transparent für Validierung + Debugging.
+    master["meta"]["regimeMeta"] = {
+        "serverRegime":  market_regime_str,         # VIX3M/VIX-Ratio-basiert (dieser Lauf)
+        "serverRatio":   _regime_ratio,              # ratio_3m_spot zum Klassifikationszeitpunkt
+        "clientRegime":  "client_mse_live",          # Placeholder: Client klassifiziert live via VVIX/SKEW
+        "divergenceNote": (
+            "Server: VIX3M/VIX-Ratio-Schwellen (0.98/1.05). "
+            "Client: VVIX-Z-Score + SKEW-Percentile + GEX/DIX (live Yahoo). "
+            "Divergenz ist by design — beide Klassifikatoren messen verschiedene Dimensionen. "
+            "Track-Record verwendet immer serverRegime."
+        ),
+        "method": "rule_based_v1",  # ab HMM: hmm_v1
+    }
+
     # ── DECISION CONFIDENCE ENGINE (DCE v1.0, August 2026) ───────────────────
     # Meta-Instanz über allen Signalquellen: fusioniert MCM-Makro, Ticker-Konsens,
     # CUSUM und EVT-VaR zu einem kalibrierten Vertrauensmaß (0-100) + Ampel.
@@ -8064,7 +8082,8 @@ def main():
             regime=market_regime_str,
             tday=master["meta"].get("last_trading_day"),
             agg_version=AGGREGATOR_VERSION,
-            regime_context=regime_context,  # v5.30.0: Validierung Ebene 1 (Backlog №29)
+            regime_context=regime_context,           # v5.30.0: Validierung Ebene 1 (Backlog №29)
+            regime_meta=master["meta"].get("regimeMeta"),  # v5.31.0: W3-Transparenz
         )
         # Phase B (v4.5): fällige Horizonte bewerten + tr:stats aggregieren.
         # Nutzt das bereits geladene hist_data — keine zusätzlichen Downloads.
