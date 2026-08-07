@@ -119,7 +119,7 @@ def _ki_params(c):
 
 
 def build_snapshot(shortlist, leaderboards, tickers, regime, tday,
-                   agg_version, prev_pairs, run_iso):
+                   agg_version, prev_pairs, run_iso, regime_context=None):
     """Baut den Tages-Snapshot (Spez §3.1) aus Shortlist + Leaderboard-Top-N.
 
     prev_pairs: set[(sym, strat)] des vorherigen Handelstags-Snapshots
@@ -176,18 +176,20 @@ def build_snapshot(shortlist, leaderboards, tickers, regime, tday,
             })
 
     return {
-        "v":          TR_SCHEMA_VERSION,
-        "tday":       tday,
-        "run":        run_iso,
-        "regime":     regime,
-        "aggVersion": agg_version,
-        "recs":       recs,
+        "v":            TR_SCHEMA_VERSION,
+        "tday":         tday,
+        "run":          run_iso,
+        "regime":       regime,
+        "regimeContext": regime_context or {},  # Backlog №29/Validierung: vector+consecutive+stressDaysAgo
+        "aggVersion":   agg_version,
+        "recs":         recs,
     }
 
 
 # ── Orchestrierung (Nachtlauf-Einhängepunkt, Spez §4 Schritt 1) ──────────────
 
-def run_snapshot(shortlist, leaderboards, tickers, regime, tday, agg_version):
+def run_snapshot(shortlist, leaderboards, tickers, regime, tday, agg_version,
+                 regime_context=None):
     """Schreibt den Tages-Snapshot + Index. Gibt Status-Dict zurück
     (landet als master["trackRecord"] im Output — Verifikationspfad).
     Wirft keine Exceptions im Normalpfad; Aufrufer kapselt zusätzlich."""
@@ -216,7 +218,8 @@ def run_snapshot(shortlist, leaderboards, tickers, regime, tday, agg_version):
 
     run_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     snap = build_snapshot(shortlist, leaderboards, tickers, regime, tday,
-                          agg_version, prev_pairs, run_iso)
+                          agg_version, prev_pairs, run_iso,
+                          regime_context=regime_context)
     if not snap["recs"]:
         log.warning("  [TR] Leerer Snapshot — nichts geschrieben.")
         return {"written": False, "reason": "empty", "tday": tday}

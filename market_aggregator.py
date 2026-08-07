@@ -151,7 +151,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Einzige Quelle der Wahrheit für die Versionsnummer (NEU 30.06.2026 — vorher war
 # meta["version"] unten hartcodiert "3.0" und lief seit der Fibo-Erweiterung (v3.1)
 # unbemerkt aus dem Gleichschritt mit dem Docstring-Header oben in der Datei).
-AGGREGATOR_VERSION = "5.29.0"
+AGGREGATOR_VERSION = "5.30.0"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -8041,6 +8041,7 @@ def main():
             regime=market_regime_str,
             tday=master["meta"].get("last_trading_day"),
             agg_version=AGGREGATOR_VERSION,
+            regime_context=regime_context,  # v5.30.0: Validierung Ebene 1 (Backlog №29)
         )
         # Phase B (v4.5): fällige Horizonte bewerten + tr:stats aggregieren.
         # Nutzt das bereits geladene hist_data — keine zusätzlichen Downloads.
