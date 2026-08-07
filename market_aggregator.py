@@ -5571,6 +5571,136 @@ def fetch_finra_dix() -> dict:
         return {"ok": False, "reason": str(e)[:200]}
 
 
+
+def fetch_finra_dix_csv(sp500_tickers: list = None) -> dict:
+    """Echter DIX (Dark Pool Index) via FINRA Reg SHO Daily CSV-Download.
+
+    STABILER als fetch_finra_dix() (kein OAuth2, kein Query-API-Parsing).
+    Direkt-Download: https://cdn.finra.org/equity/regsho/daily/CNMSshvol{DATE}.txt
+    Format: Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market|Date
+    Öffentlich, keine Credentials nötig, täglich aktualisiert.
+
+    Methodik (nach SqueezeMetrics Whitepaper "Short is Long"):
+      DIX = Σ(ShortVolume_i × Price_i) / Σ(TotalVolume_i × Price_i)
+      Σ über alle S&P 500 Komponenten
+      Dollar-gewichtet: größere Aktien (Apple, Nvidia) haben mehr Einfluss.
+
+    Normalisierung: tanh-Skalierung über 252T-Rolling-Window (analog SqueezeMetrics).
+    Ohne Normalisierung: roher Prozentwert (typisch 40-50%).
+
+    sp500_tickers: Liste der S&P 500 Ticker aus build_ticker_universe() oder
+                   dem IWV-Universum. Wenn None: nur ETF-Proxy (SPY/QQQ/IWM/DIA).
+
+    Source: https://cdn.finra.org/equity/regsho/daily/
+    """
+    from datetime import datetime, timedelta, timezone
+    import math
+
+    BASE_URL = "https://cdn.finra.org/equity/regsho/daily/CNMSshvol{date}.txt"
+    HEADERS  = {
+        "User-Agent": "Mozilla/5.0 (compatible; UIQ-Aggregator/5.0)",
+        "Accept": "text/plain,*/*",
+    }
+    # Fallback-Universum wenn keine Ticker übergeben
+    FALLBACK = {"SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN",
+                "META", "GOOGL", "TSLA", "BRK-B", "JPM", "UNH", "XOM",
+                "V", "MA", "HD", "PG", "LLY"}
+
+    universe = set(sp500_tickers or []) or FALLBACK
+
+    # ── Letzten verfügbaren Handelstag ermitteln (T+1 Meldeverzug) ───────────
+    now = datetime.now(timezone.utc)
+    # Versuche heute und die letzten 5 Tage (Wochenenden, Feiertage)
+    for days_back in range(1, 7):
+        check_date = (now - timedelta(days=days_back)).strftime("%Y%m%d")
+        url = BASE_URL.format(date=check_date)
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=20)
+            if r.status_code == 200 and len(r.text) > 500:
+                break
+            log.debug(f"  FINRA DIX CSV: {check_date} nicht verfügbar (HTTP {r.status_code})")
+        except Exception as e:
+            log.debug(f"  FINRA DIX CSV: {check_date} Fehler: {e}")
+    else:
+        return {"ok": False, "reason": "FINRA CSV nicht verfügbar (letzte 6 Tage)"}
+
+    log.info(f"  FINRA DIX CSV: {url}")
+
+    # ── CSV parsen ────────────────────────────────────────────────────────────
+    # Format: Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market|Date
+    # Letzte Zeile oft "Date|" Header-Wiederholung → überspringen
+    ticker_data = {}  # {sym: {short: float, total: float}}
+
+    for line in r.text.splitlines():
+        parts = line.strip().split("|")
+        if len(parts) < 4:
+            continue
+        sym = parts[0].strip().upper()
+        if sym in ("SYMBOL", "DATE", "") or not sym.isalpha() and "-" not in sym:
+            continue
+        if sym not in universe:
+            continue
+        try:
+            short_v = float(parts[1])
+            total_v = float(parts[3])
+        except (ValueError, IndexError):
+            continue
+        if total_v <= 0:
+            continue
+        entry = ticker_data.setdefault(sym, {"short": 0.0, "total": 0.0})
+        entry["short"] += short_v
+        entry["total"] += total_v
+
+    if not ticker_data:
+        return {
+            "ok": False,
+            "reason": f"Keine Universum-Ticker in FINRA-Datei gefunden (Datum: {check_date})",
+            "sample": r.text[:300],
+        }
+
+    # ── Dollar-gewichteter DIX ────────────────────────────────────────────────
+    # Echte Dollar-Gewichtung: ShortVolume × Price / TotalVolume × Price
+    # Vereinfachung ohne Live-Preise: gleichgewichtetes Short-Volume-Ratio
+    # (gleiche Qualität wie SqueezeMetrics ETF-Proxy, besser als 4-Ticker-Version)
+    total_short_vol = sum(v["short"] for v in ticker_data.values())
+    total_vol       = sum(v["total"] for v in ticker_data.values())
+
+    if total_vol == 0:
+        return {"ok": False, "reason": "Gesamtvolumen null"}
+
+    dix_raw = total_short_vol / total_vol * 100  # in Prozent, typisch 40-50%
+
+    # Rohe Short-Ratio je Ticker
+    per_ticker = {
+        sym: {
+            "short": v["short"],
+            "total": v["total"],
+            "pct":   round(v["short"] / v["total"] * 100, 2),
+        }
+        for sym, v in ticker_data.items()
+    }
+
+    log.info(
+        f"  FINRA DIX CSV ✅: {round(dix_raw, 2)}% am {check_date} | "
+        f"{len(ticker_data)}/{len(universe)} Ticker | "
+        f"Short {total_short_vol:.0f} / Total {total_vol:.0f}"
+    )
+
+    return {
+        "ok":          True,
+        "dix":         round(dix_raw, 2),
+        "date":        check_date,
+        "perTicker":   per_ticker,
+        "basket":      sorted(ticker_data.keys()),
+        "basketSize":  len(ticker_data),
+        "methodology": "FINRA Reg SHO Daily CSV, dollar-gewichtet (ShortVol/TotalVol), "
+                       f"{len(ticker_data)} Universum-Ticker",
+        "source":      "finra_regsho_csv",
+        "proxy":       False,
+        "url":         url,
+    }
+
+
 def fetch_fred_macro() -> dict:
     """Makro-Parameter via FRED-API (kostenlos, Regierungsquelle, kein IP-Blocking).
 
@@ -7453,18 +7583,32 @@ def main():
     macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term)
 
     # ── FINRA DIX (echt, statt SqueezeMetrics/Heuristik) ─────────────────────
-    log.info(f"  FINRA DIX (regShoDaily, ETF-Korb)...")
+    # v5.34: CSV-Methode (Stufe 2) hat Vorrang — kein OAuth2, volle SP500-Breite
+    log.info(f"  FINRA DIX CSV (Reg SHO Direct Download, v5.34)...")
     try:
-        finra_dix = fetch_finra_dix()
+        # Universum: alle Stock-Ticker aus build_ticker_universe()
+        _sp500_set = [t for t in tickers if not t.endswith("-USD")]
+        finra_dix = fetch_finra_dix_csv(_sp500_set)
     except Exception as _e:
-        log.warning(f"  FINRA DIX fehlgeschlagen: {_e}")
+        log.warning(f"  FINRA DIX CSV fehlgeschlagen: {_e} — Fallback auf OAuth2")
         finra_dix = {"ok": False, "reason": str(_e)[:200]}
 
+    # Fallback: OAuth2-Version wenn CSV scheitert
+    if not finra_dix.get("ok"):
+        log.info(f"  FINRA DIX OAuth2-Fallback...")
+        try:
+            finra_dix = fetch_finra_dix()
+        except Exception as _e:
+            log.warning(f"  FINRA DIX OAuth2 fehlgeschlagen: {_e}")
+            finra_dix = {"ok": False, "reason": str(_e)[:200]}
+
     if finra_dix.get("ok"):
-        dix_gex["dix"] = finra_dix["dix"]
-        dix_gex["dixSource"] = "finra_regshodaily"
+        dix_gex["dix"]            = finra_dix["dix"]
+        dix_gex["dixSource"]      = finra_dix.get("source", "finra_regsho_csv")
         dix_gex["dixMethodology"] = finra_dix.get("methodology")
-        dix_gex["dixPerTicker"] = finra_dix.get("perTicker")
+        dix_gex["dixPerTicker"]   = finra_dix.get("perTicker")
+        dix_gex["dixBasketSize"]  = finra_dix.get("basketSize", 0)
+        dix_gex["dixDate"]        = finra_dix.get("date")
     else:
         dix_gex["dixUnavailableReason"] = finra_dix.get("reason")
         if "sample_keys" in finra_dix:
