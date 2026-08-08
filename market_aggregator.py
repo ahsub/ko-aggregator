@@ -6863,8 +6863,17 @@ def generate_daily_snapshot(master):
         # BUGFIX: PCR-Schema hat nur einen Blended-Wert (pcr["pcr"]), keine Equity/Index-Trennung
         if pcr_d.get("pcr") is not None:
             mlines.append(f"Put/Call-Ratio: {_fmt(pcr_d.get('pcr'))} ({pcr_d.get('signal', '—')})")
-        if fg:
-            mlines.append(f"Fear & Greed: {fg.get('score', '-')}/100 ({fg.get('rating', '-')})")
+        # Fear & Greed — robuster Check: score muss vorhanden und eine Zahl sein
+        fg_score = fg.get('score') if fg else None
+        if fg_score is not None:
+            mlines.append(f"Fear & Greed: {fg_score}/100 ({fg.get('rating', '-')})")
+        # IOS Market Score — war bisher nicht in mlines! KI erfand ihn aus Training.
+        ios_mkt = market.get("iosMarket") or {}
+        ios_score = ios_mkt.get("iosMarketScore")
+        if ios_score is not None:
+            ios_rating = ios_mkt.get("iosMarketRating", "-")
+            ios_decision = ios_mkt.get("iosMarketDecision", "-")
+            mlines.append(f"IOS Market Score: {ios_score}/100 ({ios_rating} — {ios_decision})")
 
         mlines += ["", "--- MAKRO ---"]
         fred = market.get("fredMacro", {})
@@ -6925,7 +6934,7 @@ def generate_daily_snapshot(master):
             "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
             "STRUKTUR (immer diese Reihenfolge):\n"
             "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
-            "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, Fear&Greed.\n"
+            "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, Fear&Greed, IOS Market Score (falls in Messwerten vorhanden).\n"
             "3. MAKRO-KONDENSAT (2 Saetze): HY-Spread + Net Liquidity.\n"
             "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert, Ampel-Farbe aus den berechneten Gates uebernehmen):\n"
             "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
