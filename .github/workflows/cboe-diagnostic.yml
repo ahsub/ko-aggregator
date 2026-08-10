@@ -1,12 +1,5 @@
 name: "DIAGNOSE - CBOE-Erreichbarkeit von GitHub Actions"
 
-# Einmaliger Diagnose-Workflow (10.08.2026, Axel-Anfrage via Claude-Session).
-# Zweck: klaeren, ob der in GEX-SCHEMA.md dokumentierte CBOE-403 ein
-# grundsaetzlicher Block ist oder IP-Range-/Bot-spezifisch fuer GitHub-Actions-
-# Runner. Nur manuell ausloesbar (workflow_dispatch), kein Schedule, keine
-# Schreibrechte, kein Seiteneffekt auf Produktionsdaten. Nach Auswertung
-# loeschenswert.
-
 on:
   workflow_dispatch:
 
@@ -15,56 +8,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: "Test 1 - curl ohne User-Agent"
+      - name: "Test 7 - squeezemetrics.com Inhalt pruefen"
         run: |
-          echo "=== Test 1: curl Standard, kein User-Agent ==="
-          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
-            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv" || echo "curl fehlgeschlagen"
-
-      - name: "Test 2 - curl mit Browser-User-Agent"
-        run: |
-          echo "=== Test 2: curl mit Chrome-User-Agent ==="
-          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
+          echo "=== Test 7: Inhalt und Content-Type von squeezemetrics.com ==="
+          curl -sS -D - -o /tmp/sqz_body.txt \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv" || echo "curl fehlgeschlagen"
+            "https://squeezemetrics.com/monitor/static/DIX.csv"
+          echo "--- Body: erste 500 Zeichen ---"
+          head -c 500 /tmp/sqz_body.txt
+          echo ""
+          echo "--- Body: Dateigroesse ---"
+          wc -c /tmp/sqz_body.txt
+          echo "--- Body: letzte 300 Zeichen ---"
+          tail -c 300 /tmp/sqz_body.txt
 
-      - name: "Test 3 - curl mit vollen Browser-Headern"
+      - name: "Test 8 - erneuter Direktvergleich beide Quellen"
         run: |
-          echo "=== Test 3: curl mit vollstaendigen Headern ==="
-          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
-            -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            -H "Accept: text/csv,application/csv,text/plain,*/*" \
-            -H "Accept-Language: en-US,en;q=0.9" \
-            -H "Referer: https://www.cboe.com/" \
-            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv" || echo "curl fehlgeschlagen"
-
-      - name: "Test 4 - Oeffentliche Runner-IP ermitteln"
-        run: |
-          echo "=== Test 4: Oeffentliche IP dieses Runners ==="
-          curl -sS "https://api.ipify.org?format=json" || echo "IP-Abfrage fehlgeschlagen"
-
-      - name: "Test 5 - Python urllib statt curl"
-        run: |
-          echo "=== Test 5: Python urllib ==="
-          python3 << 'PYEOF'
-          import urllib.request
-          req = urllib.request.Request(
-              "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv",
-              headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-          )
-          try:
-              with urllib.request.urlopen(req, timeout=15) as resp:
-                  print("Status:", resp.status)
-                  print("Erste 100 Zeichen:", resp.read(100))
-          except urllib.error.HTTPError as e:
-              print("HTTPError:", e.code, e.reason)
-          except Exception as e:
-              print("Fehler:", type(e).__name__, str(e))
-          PYEOF
-
-      - name: "Test 6 - Vergleich squeezemetrics.com"
-        run: |
-          echo "=== Test 6: squeezemetrics.com Bulk-CSV, erwartet 503 ==="
-          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            "https://squeezemetrics.com/monitor/static/DIX.csv" || echo "curl fehlgeschlagen"
+          echo "=== CBOE nochmal ==="
+          curl -sS -o /dev/null -w "CBOE HTTP Status: %{http_code}\n" \
+            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
+          echo "=== SqueezeMetrics nochmal ==="
+          curl -sS -o /dev/null -w "SqueezeMetrics HTTP Status: %{http_code}\n" \
+            "https://squeezemetrics.com/monitor/static/DIX.csv"
