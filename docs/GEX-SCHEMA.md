@@ -1,7 +1,7 @@
 # GEX-SCHEMA.md — UIQ GEX/Options-Struktur Datenschema
 
-**Version:** v0.5
-**Status:** Brainstorming-Ergebnis + Context-Inventur verifiziert, NOCH NICHT implementiert. Datenquellen-Status 10.08.2026 live nachgeprüft (s. 3.1).
+**Version:** v0.6
+**Status:** Brainstorming-Ergebnis + Context-Inventur verifiziert, NOCH NICHT implementiert. Datenquellen-Status 10.08.2026 aus echter GitHub-Actions-Umgebung verifiziert (s. 3.1/3.2) — BEIDE Quellen (SqueezeMetrics, CBOE) funktionieren, entgegen bisheriger Annahme.
 **Datum:** 2026-07-10 (Update 10.08.2026)
 **Ablageort:** `ahsub/ko-aggregator/docs/GEX-SCHEMA.md`
 
@@ -137,46 +137,69 @@ Ohne `pcrSource`-Flag würde das GEX-Schema denselben Fehler wiederholen,
 den die Woche an anderer Stelle bereits aufgedeckt hat: eine Proxy-Zahl,
 die wie eine echte Kennzahl aussieht.
 
-### 3.1 Live-Verifikation 10.08.2026 — SqueezeMetrics endgültig tot, CBOE-Block vermutlich Infrastruktur-spezifisch
+### 3.1 Live-Verifikation 10.08.2026 — KORREKTUR: Beide Quellen funktionieren, aus GitHub Actions bestätigt
 
-Auf Axel-Anfrage im Rahmen der Refundex-Session live geprüft (Browser,
-Netzwerk-Requests direkt ausgelesen, nicht nur behauptet):
+**Wichtiger Hinweis zur Historie dieses Abschnitts:** Eine erste Version
+dieses Abschnitts (selbe Session, wenige Minuten zuvor) kam fälschlich zum
+Schluss, SqueezeMetrics sei "endgültig geschlossen" — basierend auf einem
+503-Fehler über einen Browser-Test. Das war falsch und wurde durch einen
+echten Test aus einer GitHub-Actions-Umgebung heraus widerlegt (s. u.).
+**Stehen gelassen als Beispiel, warum "einmal geprüft" nicht "verifiziert"
+ist — der Browser-Test war einmalig und nicht repräsentativ.**
 
-**SqueezeMetrics — bestätigt endgültig geschlossen, kein Reaktivierungspfad:**
-- `squeezemetrics.com/monitor/static/DIX.csv` (der früher freie
-  Bulk-CSV-Export) liefert aktuell **HTTP 503** (nicht 403 wie hier
-  dokumentiert — Statuscode korrigiert), konsistent bei 3 Versuchen.
-- Die Domain selbst und `/monitor` sind aber vollständig erreichbar
-  (alle Assets HTTP 200) — `/monitor` zeigt jedoch nur noch eine
-  Marketing-/Login-Seite ("sqzme" von Prior Analytics LLC, mit
-  Signup/Login/Plans). SqueezeMetrics hat sich vollständig zu einem
-  Paid-Only-Produkt entwickelt, keine Public-API/Bulk-Export-Lücke mehr.
-- Nebenbefund: öffentliche GitHub-Repos (z. B. `marcusdrewry/gex-forward-
-  returns`) haben die Historie bis 2011-2026 noch VOR dieser Abschottung
-  gezogen (letzter erfolgreicher Live-Pull laut deren Metadaten:
-  05.06.2026) — nutzbar als **statischer, einmaliger Snapshot** für
-  Backtests (s. `docs/REGIME-BACKTEST-VALIDIERUNG.md`), aber **keine
-  Grundlage für einen laufenden Live-Feed**.
-- **Fazit: Die Interims-/Mittelfrist-Strategie (VIX/VVIX-Proxy jetzt,
-  Quiver Quant API ~$20/Monat später) bleibt der richtige Weg. Kein
-  Grund, hier weiter Zeit zu investieren.**
+**Methodik (diesmal belastbar):** Ein Diagnose-Workflow
+(`.github/workflows/cboe-diagnostic.yml`, zwei unabhängige Läufe, zwei
+verschiedene Runner-IPs/Azure-Regionen) hat beide Quellen direkt aus der
+echten GitHub-Actions-Umgebung getestet — genau der Kontext, aus dem der
+Aggregator tatsächlich läuft. Workflow nach Auswertung wieder gelöscht.
 
-**CBOE — möglicherweise KEIN grundsätzliches Zugriffsproblem, sondern
-GitHub-Actions-IP-spezifisch:**
-- Volle historische CBOE-Reihen (VIX, VIX3M, VVIX, SKEW, sowie die
-  Strategie-Benchmark-Indizes PUT/BXM/CLL) wurden heute **erfolgreich
-  und vollständig** von `cdn.cboe.com` abgerufen — allerdings über einen
-  echten Browser (Chrome-Extension-Session), nicht von GitHub Actions aus.
-- Das deutet darauf hin, dass der hier dokumentierte 403 spezifisch
-  Rechenzentrums-/Bot-Traffic (GitHub-Actions-Runner-IP-Ranges) betrifft,
-  nicht CBOE-Daten grundsätzlich blockiert. **Nicht abschließend
-  verifiziert** — echte Bestätigung bräuchte einen Test direkt aus einer
-  GitHub-Actions-Runner-Umgebung heraus (z. B. anderer User-Agent, andere
-  Route, oder ein Proxy/Cache-Layer zwischen Actions und CBOE).
-- Falls sich das bestätigt: CBOE-Daten (kostenlos, keine Paywall, tief
-  historisch) wären eine deutlich bessere PCR-Quelle als der aktuelle
-  VIX/VVIX-Proxy — **lohnt eine eigene, gezielte Prüfung**, aber nicht Teil
-  dieser Session.
+**SqueezeMetrics — funktioniert, kostenlos, live, vollständige Historie:**
+- `squeezemetrics.com/monitor/static/DIX.csv`: **HTTP 200**, reproduzierbar
+  in 2 von 2 Actions-Läufen (unterschiedliche Runner-IPs).
+- Content-Verifikation: `Content-Length: 220353`, **`Last-Modified: Fri, 07
+  Aug 2026 21:52:12 GMT`** (3 Tage vor diesem Test) — echter, aktiv
+  gepflegter Live-Feed, keine verwaiste/gecachte Datei.
+- Inhalt bestätigt: `date,price,dix,gex`, lückenlos von 2011-05-02 bis
+  **2026-08-07** — 15 Jahre Historie, täglich fortgeschrieben.
+- Kein Auth, kein API-Key, keine speziellen Header nötig — ein einfacher
+  `curl` reicht.
+- Der einmalige 503 beim Browser-Test war vermutlich ein transientes/
+  Client-spezifisches Problem (z. B. eigene wiederholte Anfragen kurz
+  hintereinander), nicht der tatsächliche Zustand des Dienstes.
+- **`/monitor` selbst ist inzwischen ein Paid-Signup-Produkt ("sqzme",
+  Prior Analytics LLC) — das bleibt zutreffend. Aber der historische
+  Bulk-CSV-Export unter `/monitor/static/` ist davon offenbar unberührt
+  und weiterhin frei zugänglich.**
+
+**CBOE — ebenfalls bestätigt funktionsfähig, der dokumentierte 403 ist
+nicht (mehr) reproduzierbar:**
+- `cdn.cboe.com/.../VIX_History.csv`: **HTTP 200** in beiden Läufen, allen
+  3 Methoden (curl ohne Header, curl mit Chrome-UA, Python `urllib`).
+- Inhalt bestätigt: echte VIX-Daten ab 1990 zurückgeliefert.
+- Der hier vormals dokumentierte 403 lässt sich mit dem aktuellen,
+  einfachen Zugriffsmuster nicht reproduzieren — Ursache unklar (evtl.
+  war der alte Code-Pfad anders, oder CBOE hat eine WAF-Regel geändert).
+
+### 3.2 Empfehlung — konkrete Handlungsoption für UIQ
+
+**Beide Quellen sind aktuell nutzbar und sollten die Interims-Proxy-Lösung
+(VIX/VVIX-Proxy für PCR, approximiertes GEX) ablösen können:**
+
+- **DIX/GEX:** `squeezemetrics.com/monitor/static/DIX.csv` direkt statt
+  Approximation — echte SqueezeMetrics-Werte, kein Proxy mehr nötig.
+- **PCR/Vola-Terminstruktur:** `cdn.cboe.com` (VIX, VIX3M, VVIX, SKEW-Serien
+  alle unter demselben Muster `.../daily_prices/{SYMBOL}_History.csv`
+  verfügbar) statt `vix_proxy`.
+- Beide sind einfache tägliche CSV-Dumps — geeignet für einen simplen
+  täglichen Cron-Fetch in den bestehenden Aggregator-Lauf, kein
+  API-Key-Management nötig.
+- **Empfehlung:** vor produktivem Einbau einen mehrtägigen
+  Stabilitäts-Check laufen lassen (z. B. denselben Diagnose-Workflow
+  1x täglich für eine Woche, dann erst fest verdrahten) — ein einzelner
+  erfolgreicher Test ist noch keine Verlässlichkeitsgarantie, siehe
+  Warnung oben zum eigenen Fehlschluss in dieser Session.
+- **`pcrSource`-Flag (s. o.) bleibt trotzdem sinnvoll** — jetzt als
+  Kennzeichnung "cboe_live" vs. "vix_proxy" für die Übergangsphase.
 
 ## 4. Feldbeschreibungen
 
