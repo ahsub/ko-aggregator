@@ -1,0 +1,70 @@
+name: DIAGNOSE - CBOE-Erreichbarkeit von GitHub Actions
+
+# Einmaliger Diagnose-Workflow (10.08.2026, Axel-Anfrage via Claude-Session).
+# Zweck: klaeren, ob der in GEX-SCHEMA.md dokumentierte CBOE-403 ein
+# grundsaetzlicher Block ist oder IP-Range-/Bot-spezifisch fuer GitHub-Actions-
+# Runner. Nur manuell ausloesbar (workflow_dispatch), kein Schedule, keine
+# Schreibrechte, kein Seiteneffekt auf Produktionsdaten. Nach Auswertung
+# loeschenswert.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-cboe-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test 1 - curl ohne User-Agent (Standard)
+        run: |
+          echo "=== Test 1: curl Standard (kein User-Agent) ==="
+          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv" || echo "curl fehlgeschlagen (Exit code $?)"
+
+      - name: Test 2 - curl mit Browser-User-Agent
+        run: |
+          echo "=== Test 2: curl mit Chrome-User-Agent ==="
+          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv" || echo "curl fehlgeschlagen (Exit code $?)"
+
+      - name: Test 3 - curl mit vollen Headern (Accept, Referer)
+        run: |
+          echo "=== Test 3: curl mit vollstaendigen Browser-Headern ==="
+          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -H "Accept: text/csv,application/csv,text/plain,*/*" \
+            -H "Accept-Language: en-US,en;q=0.9" \
+            -H "Referer: https://www.cboe.com/" \
+            "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv" || echo "curl fehlgeschlagen (Exit code $?)"
+
+      - name: Test 4 - Runner-IP ermitteln (fuer Kontext)
+        run: |
+          echo "=== Test 4: Oeffentliche IP dieses Runners ==="
+          curl -sS "https://api.ipify.org?format=json" || echo "IP-Abfrage fehlgeschlagen"
+
+      - name: Test 5 - Python requests (andere HTTP-Lib als curl)
+        run: |
+          echo "=== Test 5: Python requests ==="
+          python3 -c "
+          import urllib.request
+          req = urllib.request.Request(
+              'https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv',
+              headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                  print('Status:', resp.status)
+                  print('Erste 100 Zeichen:', resp.read(100))
+          except urllib.error.HTTPError as e:
+              print('HTTPError:', e.code, e.reason)
+          except Exception as e:
+              print('Fehler:', type(e).__name__, str(e))
+          "
+
+      - name: Test 6 - Vergleich squeezemetrics.com (erwartet: 503)
+        run: |
+          echo "=== Test 6: squeezemetrics.com Bulk-CSV (Vergleich, erwartet 503) ==="
+          curl -sS -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "https://squeezemetrics.com/monitor/static/DIX.csv" || echo "curl fehlgeschlagen (Exit code $?)"
