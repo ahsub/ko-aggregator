@@ -37,6 +37,13 @@ TR_SCHEMA_VERSION = 1
 LB_TOP_N = 10          # Top-N je Leaderboard, die geloggt werden (Spez §2)
 _KV_TIMEOUT = 15
 
+# Commit-SHA des laufenden Codestands. Wird von GitHub Actions gesetzt und
+# kann — anders als AGGREGATOR_VERSION — nicht vergessen werden. Grund:
+# die Commits v5.32.0–v5.36.0 (07./08.08.2026) haben Snapshot-Struktur und
+# Options-Scorer geaendert, ohne AGGREGATOR_VERSION mitzuziehen; alle
+# Snapshots seit 07.08. tragen faelschlich "5.30.0".
+AGG_SHA = (os.environ.get("GITHUB_SHA") or "local")[:12]
+
 
 # ── KV-I/O (gleiche Credential-Konvention wie market_aggregator.py) ──────────
 
@@ -184,6 +191,7 @@ def build_snapshot(shortlist, leaderboards, tickers, regime, tday,
         "regimeContext": regime_context or {},   # Backlog №29: vector+consecutive+stressDaysAgo
         "regimeMeta":   regime_meta or {},       # W3: Transparenz Server vs. Client
         "aggVersion":   agg_version,
+        "aggSha":       AGG_SHA,      
         "recs":         recs,
     }
 
