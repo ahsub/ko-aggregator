@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v5.36.1
+UnderlyingIQ Market Aggregator v5.36.2
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -148,7 +148,38 @@ erhalten (gamma_flip/call_wall/put_wall, falls Basic-Tier spaeter
 aktiviert wird). Begleitfix axel-scanner/index.html v461: GEX-
 Textbaustein im KI-Prompt-Kontext pruefte hartcodiert nur auf
 source==='flashalpha_free' — neuer Zweig fuer 'squeezemetrics' ergaenzt.
- 
+
+Version 5.36.2 (14.08.2026): Zwei Nachbesserungen zum DIX/GEX-Fix aus
+v5.36.1, beide noch am selben Tag entdeckt:
+1. CRLF-Parsing-Bug in fetch_dix_gex(): squeezemetrics' DIX.csv nutzt
+   Windows-Zeilenumbrueche (\r\n). r.text.strip().split("\n") liess ein
+   unsichtbares \r am Ende jeder Zeile stehen — betraf nur die LETZTE
+   CSV-Spalte ("gex\r" statt "gex"), daher lieferte gex durchgehend 0.0
+   trotz korrekter Quelle (source="squeezemetrics" war schon richtig).
+   Per Nutzer-Screenshot der echten squeezemetrics-Rohdaten verifiziert
+   (Kopfzeile UND aktuellste Zeile enthalten echte, plausible gex-Werte,
+   keine Platzhalter). Fix: splitlines() statt split("\n") + zusaetzliches
+   .strip() auf Header-/Datenzeile. Offline mit simuliertem CRLF-Datensatz
+   gegengeprueft (9180506464.63999 → korrekt 9.181 Mrd geparst), danach
+   live in Run #214 bestaetigt (dixGex.gex=9.181, vorher 0.0).
+2. DIX-Feld-Kollision aufgeloest: dix_gex["dix"] wurde bisher IMMER vom
+   FINRA-ETF-Korb-Wert ueberschrieben (SPY/QQQ/IWM/DIA-Proxy, strukturell
+   hoeher als klassischer S&P-500-DIX), auch nachdem squeezemetrics seit
+   diesem Tag zuverlaessig den "echten" DIX liefert. Auf Axel-Entscheidung:
+   beide Werte parallel fuehren statt einen zu verwerfen — "dix" bleibt
+   squeezemetrics (S&P-500-Basis), FINRA-Wert + Metadaten jetzt unter
+   dixEtfBasket* (dixEtfBasket, dixEtfBasketSource, dixEtfBasketMethodology,
+   dixEtfBasketPerTicker, dixEtfBasketSize, dixEtfBasketDate). Fallback
+   erhalten: falls squeezemetrics komplett ausfaellt, dix_gex["dix"] wird
+   aus dem ETF-Korb-Wert befuellt (source-Suffix "_fallback" zur
+   Kennzeichnung). BEKANNTE LUECKE, BEWUSST ZURUECKGESTELLT: axel-scanner/
+   index.html prueft an 8 Stellen weiterhin dixSource==='finra_regshodaily'
+   fuer die ETF-Korb-Anzeige (UI-Widgets, KI-Prompt-Kontext, bedingte
+   Fragen) — diese Stellen zeigen die ETF-Korb-DIX-Zeile bis zur naechsten
+   Session NICHT mehr an, obwohl die Daten weiterhin korrekt im Backend
+   vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
+   unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
+   dixEtfBasketSource/dixEtfBasket ummuenzen. 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
   2. Berechnet technische Indikatoren (EMA, RSI, MACD, OBV, ATR, BB, HVP, hv10)
@@ -184,7 +215,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.1"
+AGGREGATOR_VERSION = "5.36.2"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -7714,20 +7745,31 @@ def main():
             finra_dix = {"ok": False, "reason": str(_e)[:200]}
 
     if finra_dix.get("ok"):
-        dix_gex["dix"]            = finra_dix["dix"]
-        dix_gex["dixSource"]      = finra_dix.get("source", "finra_regsho_csv")
-        dix_gex["dixMethodology"] = finra_dix.get("methodology")
-        dix_gex["dixPerTicker"]   = finra_dix.get("perTicker")
-        dix_gex["dixBasketSize"]  = finra_dix.get("basketSize", 0)
-        dix_gex["dixDate"]        = finra_dix.get("date")
+        # Nicht mehr ueberschreiben: dix_gex["dix"] bleibt der squeezemetrics-
+        # Wert (klassische S&P-500-Methodik, seit 14.08.2026 zuverlaessig). Der
+        # FINRA-ETF-Korb-Wert (strukturell hoeher, andere Basis) wird separat
+        # unter dixEtfBasket* gefuehrt statt "dix" zu ersetzen.
+        # ACHTUNG (14.08.2026): Frontend (axel-scanner/index.html, 8 Stellen)
+        # prueft noch auf dixSource==='finra_regshodaily' fuer die alte ETF-
+        # Korb-Anzeige — Frontend-Anpassung bewusst als eigener Punkt fuer
+        # naechste Session zurueckgestellt, s. Uebergabeprotokoll.
+        dix_gex["dixEtfBasket"]            = finra_dix["dix"]
+        dix_gex["dixEtfBasketSource"]      = finra_dix.get("source", "finra_regsho_csv")
+        dix_gex["dixEtfBasketMethodology"] = finra_dix.get("methodology")
+        dix_gex["dixEtfBasketPerTicker"]   = finra_dix.get("perTicker")
+        dix_gex["dixEtfBasketSize"]        = finra_dix.get("basketSize", 0)
+        dix_gex["dixEtfBasketDate"]        = finra_dix.get("date")
+        if dix_gex.get("dix") is None:
+            dix_gex["dix"] = finra_dix["dix"]
+            dix_gex["dixSource"] = finra_dix.get("source", "finra_regsho_csv") + "_fallback"
     else:
-        dix_gex["dixUnavailableReason"] = finra_dix.get("reason")
+        dix_gex["dixEtfBasketUnavailableReason"] = finra_dix.get("reason")
         if "sample_keys" in finra_dix:
-            dix_gex["dixDebugSampleKeys"] = finra_dix["sample_keys"]
+            dix_gex["dixEtfBasketDebugSampleKeys"] = finra_dix["sample_keys"]
         if "n_rows" in finra_dix:
-            dix_gex["dixDebugNRows"] = finra_dix["n_rows"]
+            dix_gex["dixEtfBasketDebugNRows"] = finra_dix["n_rows"]
         if "raw_sample" in finra_dix:
-            dix_gex["dixDebugRawSample"] = finra_dix["raw_sample"]
+            dix_gex["dixEtfBasketDebugRawSample"] = finra_dix["raw_sample"]
 
     # BUGFIX (16.07.2026, Axel-Anfrage): "ETF-Modul-Lösung" statt Einzelfall —
     # vorher nur XLK als Proof-of-Concept. Liste identisch zur bereits
