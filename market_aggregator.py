@@ -4905,7 +4905,7 @@ def fetch_dix_gex() -> dict:
 
     # ── PRIMAER: squeezemetrics (SPY-marktweit, DIX+GEX) ──────────────────
     try:
-        url = "https://squeezemetrics.com/monitor/static/dix.csv"
+        url = "https://squeezemetrics.com/monitor/static/DIX.csv"
         r = requests.get(url, timeout=10, headers={"User-Agent": "curl/8.5.0"})
         if r.status_code == 200 and len(r.text) > 100:
             lines = r.text.strip().split("\n")
