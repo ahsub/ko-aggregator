@@ -4879,19 +4879,58 @@ def fetch_batch(tickers, period="1y", max_workers=12):
 # ── EXTERNE DATENQUELLEN ──────────────────────────────────────────────────────
 
 def fetch_dix_gex() -> dict:
-    """GEX via FlashAlpha API (lab.flashalpha.com).
+    """DIX/GEX von squeezemetrics (SPY-marktweit, taeglich).
 
-    Free Tier:  5 Req/Tag, nur Individual Stocks (kein SPY/QQQ).
-                → AAPL als Connectivity-Test + GEX-Signal.
-    Basic Tier: SPY/QQQ + alle Exposure-Endpoints (nach Beta aktivieren).
-    Fallback:   squeezemetrics (historisch, meist 403 von GitHub Actions).
+    PRIORITAET GETAUSCHT (14.08.2026): squeezemetrics wurde am 09.07.2026
+    (v4.8) faelschlich als "historisch, meist 403" eingestuft und deshalb
+    hinter FlashAlpha zurueckgestellt. Stability-Check 10.-13.08.2026
+    (s. docs/GEX-SCHEMA.md v0.6, data/datasource_stability/log.jsonl):
+    16/16 Requests HTTP 200, 100% Erfolgsquote, kostenlos, kein Auth.
+    Liefert ECHTES SPY-marktweites DIX+GEX (Squeezemetrics-Originalmethodik).
 
-    Endpoint (v1): GET /v1/exposure/gex/{ticker}?expiration=YYYY-MM-DD
-    Auth:          X-Api-Key Header
+    Primaer:  squeezemetrics.com (DIX + GEX, SPY-Aggregat, kostenlos, stabil).
+    Sekundaer (bewusst erhalten, s.u.): FlashAlpha API (lab.flashalpha.com) —
+    liefert Werte, die squeezemetrics NICHT hat: gamma_flip, call_wall,
+    put_wall (echte Optionsketten-basierte Gamma-Levels statt nur ein
+    DIX/GEX-Aggregatwert). Free-Tier kann aber nur Einzeltitel (AAPL-Test,
+    kein SPY/QQQ) — Basic-Tier (SPY/QQQ + alle Exposure-Endpoints) bisher
+    NICHT aktiviert. Bis zur Aktivierung liefert dieser Pfad praktisch keine
+    marktweit nutzbaren Daten, bleibt aber im Code fuer die spaetere
+    Basic-Tier-Option.
+
+    Endpoint (FlashAlpha v1): GET /v1/exposure/gex/{ticker}?expiration=YYYY-MM-DD
+    Auth: X-Api-Key Header
     """
     import os
-    from datetime import date, timedelta
 
+    # ── PRIMAER: squeezemetrics (SPY-marktweit, DIX+GEX) ──────────────────
+    try:
+        url = "https://squeezemetrics.com/monitor/static/dix.csv"
+        r = requests.get(url, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://squeezemetrics.com/monitor/"
+        })
+        if r.status_code == 200 and len(r.text) > 100:
+            lines = r.text.strip().split("\n")
+            headers = lines[0].lower().split(",")
+            last    = lines[-1].split(",")
+            row     = dict(zip(headers, last))
+            dix_val = float(row.get("dix", 0)) * 100
+            gex_val = float(row.get("gex", 0))
+            log.info(f"  DIX (squeezemetrics): {dix_val:.1f}% | GEX: {gex_val/1e9:.2f} Mrd")
+            return {
+                "dix":    round(dix_val, 2),
+                "gex":    round(gex_val / 1e9, 3),
+                "date":   row.get("date", ""),
+                "source": "squeezemetrics",
+                "proxy":  False,
+            }
+    except Exception as e:
+        log.warning(f"  squeezemetrics nicht verfuegbar: {e}")
+
+  # ── SEKUNDAER: FlashAlpha (nur gamma_flip/call_wall/put_wall, kein
+    #    marktweites DIX/GEX solange Basic-Tier nicht aktiviert) ──────────
+    from datetime import date, timedelta
     fa_key = os.environ.get("FLASHALPHA_API_KEY", "")
     if fa_key:
         try:
@@ -4906,12 +4945,10 @@ def fetch_dix_gex() -> dict:
             url = f"https://lab.flashalpha.com/v1/exposure/gex/{test_ticker}"
             r = requests.get(url, headers={"X-Api-Key": fa_key},
                              params={"expiration": expiry}, timeout=15)
-
             remaining = r.headers.get("X-RateLimit-Remaining", "?")
             limit     = r.headers.get("X-RateLimit-Limit", "?")
             log.info(f"  FlashAlpha API: HTTP {r.status_code} | "
                      f"Quota: {remaining}/{limit} | Expiry: {expiry}")
-
             if r.status_code == 200:
                 data = r.json()
                 net_gex    = data.get("net_gex") or data.get("total_gex") or data.get("gex")
@@ -4947,31 +4984,6 @@ def fetch_dix_gex() -> dict:
         except Exception as e:
             log.warning(f"  FlashAlpha GEX nicht verfügbar: {e}")
 
-
-    # Fallback: squeezemetrics (oft 403 von GitHub Actions)
-    try:
-        url = "https://squeezemetrics.com/monitor/static/dix.csv"
-        r = requests.get(url, timeout=10, headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://squeezemetrics.com/monitor/"
-        })
-        if r.status_code == 200 and len(r.text) > 100:
-            lines = r.text.strip().split("\n")
-            headers = lines[0].lower().split(",")
-            last    = lines[-1].split(",")
-            row     = dict(zip(headers, last))
-            dix_val = float(row.get("dix", 0)) * 100
-            gex_val = float(row.get("gex", 0))
-            log.info(f"  DIX (squeezemetrics): {dix_val:.1f}% | GEX: {gex_val/1e9:.2f} Mrd")
-            return {
-                "dix":    round(dix_val, 2),
-                "gex":    round(gex_val / 1e9, 3),
-                "date":   row.get("date", ""),
-                "source": "squeezemetrics",
-                "proxy":  False,
-            }
-    except Exception as e:
-        log.warning(f"  squeezemetrics nicht verfügbar: {e}")
     return None
 
 
