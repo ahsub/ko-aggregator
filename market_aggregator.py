@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UnderlyingIQ Market Aggregator v5.36.0
+UnderlyingIQ Market Aggregator v5.36.1
 =====================================
 Single-Source-of-Truth Aggregator für Alpha Desk + Scanner Tab.
 Läuft als GitHub Actions Cron-Job (täglich 04:00 UTC nach US-Schluss).
@@ -113,14 +113,42 @@ mit-archiviert → survivorship-frei) ∪ Smart-Picks (data/value_smart_picks
 fin:shard:<1-5>; Samstag Merge → data/fundamentals/<YYYY-WW>.json.gz per
 Workflow-Commit (Git-History = Archiv). Implementiert nebenbei die VAL-MOD-
 Layer-1-Sharding-Infrastruktur. Status in master["finArchive"].
-
+ 
 Version 4.7 (05.07.2026): Supercycle-Sektoren (Gemini-Brainstorm, Claude-
 Audit: ~15% der Vorschläge waren tote/falsche Ticker — aussortiert): 5 neue
 Watchlists GRID_ELECTRIFICATION, PRECIOUS_METALS, AGRICULTURE, WATER sowie
 PICKS_SHOVELS (vom Frontend-Index-Slot zum getaggten Sektor befördert);
 NUCLEAR_ENERGY +Fuel-Cycle (LEU/UEC/UUUU/NXE), MATERIALS +HBM/ERO/LAC.
 Demografie-Titel als Value-Thema ins VAL-MOD-Register (kein Scan-Sektor).
-
+ 
+Version 5.36.1 (14.08.2026): DIX/GEX-Datenquellen-Prioritaet korrigiert
+(fetch_dix_gex()) — squeezemetrics wurde am 09.07.2026 (v4.8, Commit
+7c7140d) faelschlich als "historisch, meist 403 von GitHub Actions"
+eingestuft und FlashAlpha (Free-Tier, nur AAPL-Proxy, kein echtes SPY/QQQ)
+vorgezogen. Ein am 10.08.2026 eingerichteter Stability-Check
+(data/datasource_stability/log.jsonl, 2x/Tag) zeigte seither 100%
+Erfolgsquote fuer squeezemetrics — die "meist 403"-Einschaetzung war
+veraltet, nie nach der Korrektur zurueckgespielt. Nach Prioritaetsumkehr
+traten zwei Folgefehler auf, beide durch Log-Diagnose (nicht Vermutung)
+aufgeloest: (1) Custom-Header ("Mozilla/5.0"-Fake-Browser-UA, dann
+Python-requests-Default-UA) fuehrten zu stillem Fallback auf FlashAlpha
+ohne Log-Spur — behoben durch expliziten "curl/8.5.0"-UA (identisch zum
+bereits bewaehrten Stability-Check) UND ein neues else-Log fuer
+unerwartete HTTP-Antworten (vorher: non-200-Antworten liefen komplett
+ungeloggt durch). (2) Das neue Logging deckte dann den eigentlichen
+Fehler auf: URL nutzte "dix.csv" (klein), tatsaechliche Ressource ist
+"DIX.csv" (gross) — HTTP 404 auf case-sensitivem Hosting. Nach Fix
+bestaetigt source="squeezemetrics" im Live-Snapshot (Run #213,
+17:19 UTC). Bekannte Einschraenkung: squeezemetrics' oeffentliches
+DIX.csv liefert vermutlich keine gex-Spalte (gex=0.0 im Snapshot) —
+GEX-Wert dadurch moeglicherweise nicht nutzbar trotz korrekter Quelle;
+nicht abschliessend verifiziert, da squeezemetrics.com außerhalb des
+Sandbox-Netzwerkzugriffs liegt. FlashAlpha bleibt als Sekundaerquelle
+erhalten (gamma_flip/call_wall/put_wall, falls Basic-Tier spaeter
+aktiviert wird). Begleitfix axel-scanner/index.html v461: GEX-
+Textbaustein im KI-Prompt-Kontext pruefte hartcodiert nur auf
+source==='flashalpha_free' — neuer Zweig fuer 'squeezemetrics' ergaenzt.
+ 
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
   2. Berechnet technische Indikatoren (EMA, RSI, MACD, OBV, ATR, BB, HVP, hv10)
@@ -130,6 +158,7 @@ Ablauf:
   6. Lädt PCR von CBOE
   7. Wendet Macro Risk Overlay (GEX/PCR) auf Options-Kandidaten an
   8. Pusht master_market_data.json → Cloudflare KV
+
 
 Umgebungsvariablen (GitHub Secrets):
   CF_ACCOUNT_ID   — Cloudflare Account ID
