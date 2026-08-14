@@ -4937,9 +4937,9 @@ def fetch_dix_gex() -> dict:
         url = "https://squeezemetrics.com/monitor/static/DIX.csv"
         r = requests.get(url, timeout=10, headers={"User-Agent": "curl/8.5.0"})
         if r.status_code == 200 and len(r.text) > 100:
-            lines = r.text.strip().split("\n")
-            headers = lines[0].lower().split(",")
-            last    = lines[-1].split(",")
+            lines = r.text.strip().splitlines()
+            headers = lines[0].lower().strip().split(",")
+            last    = lines[-1].strip().split(",")
             row     = dict(zip(headers, last))
             dix_val = float(row.get("dix", 0)) * 100
             gex_val = float(row.get("gex", 0))
