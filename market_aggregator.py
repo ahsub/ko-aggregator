@@ -180,6 +180,13 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.4 (16.08.2026): Distribution-Days-Score-Boden-Effekt behoben —
+siehe Docstring bei compute_distribution_days() fuer vollstaendige
+Begruendung. Kurz: Score floorte bei dd_max>=7 hart auf 0 (Faktor 15),
+Skala jetzt linear bis dd_max=12. Nur der Score betroffen, dd_spy/dd_qqq/
+dd_severity/dd_alert unveraendert. NICHT LIVE VERIFIZIERT — nur inhaltlich
+gegen 4 historische Snapshots (04./07./13./16.08.) durchgerechnet.
+
 Version 5.36.3 (15.08.2026): Server-seitiger Morning-Briefing-Prompt kannte
 DIX/GEX bis hierher ueberhaupt nicht — dies war der ungeloeste Rest-Befund
 aus §5 der Uebergabe vom selben Tag: der Client-Pfad (ko-prompts.js) wurde
@@ -231,7 +238,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.3"
+AGGREGATOR_VERSION = "5.36.4"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2725,7 +2732,20 @@ def compute_distribution_days(spy_hist, qqq_hist, lookback: int = 25) -> dict:
         dd_max  = max(dd_spy, dd_qqq)
 
         # Score: 100 = keine DD, sinkt mit jedem DD (6 DD = 10 Punkte)
-        dd_score = max(0, 100 - dd_max * 15)
+        # Score: erweiterte Skala (16.08.2026-Fix, Axel-Deep-Debug-Anfrage).
+        # Vorher: dd_score = max(0, 100 - dd_max*15) — floorte bei JEDEM
+        # dd_max>=7 (100-15*7=-5) hart auf 0. QQQ lag seit Wochen konstant bei
+        # 7-9 DD, wodurch der Score wochenlang unveraendert bei 0 stand und
+        # optisch wie "eingefroren" wirkte, obwohl dd_spy/dd_qqq selbst sich
+        # taeglich aenderten (per Snapshot-Vergleich 04./07./13./16.08.
+        # verifiziert: 2/7 -> 6/9 -> 5/8 -> 5/8 — Aenderung vorhanden, nur vom
+        # gesaettigten Score nicht mehr sichtbar). Fix: lineare Skala bis
+        # dd_max=12 (realistischer Rahmen fuer ein 25-Handelstage-Fenster),
+        # dadurch bleibt der Score auch oberhalb der alten 6.67-DD-Schwelle
+        # noch differenzierend. Severity-Schwellen (Watch>=4, Danger>=6)
+        # unveraendert, nur der Score selbst betroffen.
+        DD_SCORE_MAX_DD = 12
+        dd_score = max(0, round(100 - dd_max * (100 / DD_SCORE_MAX_DD)))
 
         severity = ("Danger" if dd_max >= 6 else
                     "Watch"  if dd_max >= 4 else "None")
