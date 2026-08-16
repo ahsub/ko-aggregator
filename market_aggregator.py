@@ -180,6 +180,17 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.6 (16.08.2026): fetch_move_index() Robustheits-Fix — squeeze()
+konnte bei nur 1 verbleibendem Datenpunkt (nach dropna()) zu einem nackten
+numpy.float64-Skalar kollabieren statt einer Series, wodurch .values fehlte
+(AttributeError). War durch das try/except der Funktion bereits fehler-
+isoliert (kein Absturz des Gesamtlaufs), aber move_index blieb dadurch bei
+"ok": false, unabhaengig vom eigentlichen MOVE-Index-Datenstand. Gefunden
+waehrend der Live-Verifikation von v5.36.5 (MCM-Paritaets-Nachzug) — ohne
+diesen Fix war move_index der einzige der 4 neuen Faktoren, der sich nicht
+live bestaetigen liess. Fix: klare Diagnose-Meldung statt rohem
+AttributeError, keine Verhaltensaenderung im Erfolgsfall.
+
 Version 5.36.5 (16.08.2026): MCM-Paritaets-Nachzug — Axel-Anschlussfrage nach
 den drei DIX/GEX/F&G/DD-Fixen desselben Tages: "kann das auch bei anderen
 Metriken passiert sein?" Antwort: ja. Vier Faktoren waren im Client
@@ -260,7 +271,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.5"
+AGGREGATOR_VERSION = "5.36.6"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -6083,6 +6094,15 @@ def fetch_move_index() -> dict:
         close = raw["Close"].dropna()
         if hasattr(close, 'squeeze'):
             close = close.squeeze()
+        # BUGFIX (16.08.2026, im Rahmen der MCM-Paritaets-Verifikation gefunden):
+        # squeeze() kann bei nur 1 verbleibendem Datenpunkt zu einem nackten
+        # numpy.float64-Skalar kollabieren (kein Series/Array mehr) — .values
+        # existiert dann nicht, AttributeError. War durch das try/except der
+        # Funktion bereits fehlerisoliert (kein Absturz des Gesamtlaufs), aber
+        # mit kryptischer Fehlermeldung statt klarer Diagnose. Klarer Reason-Text
+        # statt rohem AttributeError.
+        if not hasattr(close, 'values'):
+            return {"ok": False, "reason": f"squeeze() lieferte Skalar statt Series (nur 1 Rohdatenpunkt von yfinance?) — Wert: {close}"}
         vals = [float(v) for v in close.values[-252:]]
         if len(vals) < 20:
             return {"ok": False, "reason": f"nur {len(vals)} Werte"}
