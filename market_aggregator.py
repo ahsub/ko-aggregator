@@ -180,6 +180,21 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.10 (16.08.2026): v5.36.9 live bestaetigt (KV-Direktabfrage) —
+^VIX3M lieferte im Einzel-Download 237 Tage (vorher 1 im Batch), Schnitt-
+menge jetzt 227 Tage statt 1. vvix_zscore/skew_zscore beide "ok": true
+(Z=0.35/P74 bzw. Z=0.33/P68, n_days=227). Alle 14 MCM-Faktoren (10
+bestehende + move_index/skew_vvix_div/breadth_osc/distribution_days aus
+v5.36.5) gleichzeitig im selben Lauf bestaetigt — move_index war in
+diesem Lauf zusaetzlich erfolgreich (das ^MOVE-Datenproblem aus v5.36.6
+war offenbar transient und hat sich von selbst geloest). Temporaeres
+_debug-Feld aus v5.36.8/v5.36.9 wieder entfernt (Zweck erfuellt).
+Damit ist die gesamte Fund-Kette dieser Session geschlossen: DIX/GEX
+(v5.36.3) -> Distribution-Days-Score (v5.36.4) -> Fear&Greed (ko-modules
+v2.4.0) -> MCM-Paritaets-Nachzug 4 Faktoren (v5.36.5) -> MOVE-Index-Crash
+(v5.36.6) -> mse_history Root Cause ^VIX3M-Batch-Bug (v5.36.9). Alle live
+verifiziert, keine offenen Punkte aus der heutigen Session mehr.
+
 Version 5.36.9 (16.08.2026): Echter Root-Cause-Fix (dank _debug-Feld aus
 v5.36.8 gefunden): NICHT ein Timestamp/TZ-Problem (v5.36.7-Hypothese war
 falsch) — der gebuendelte 4-Symbol-yf.download(group_by="ticker") lieferte
@@ -313,7 +328,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.9"
+AGGREGATOR_VERSION = "5.36.10"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -6386,13 +6401,6 @@ def fetch_mse_history(days: int = 30) -> dict:
             log.warning("  MSE History: VIX/VIX3M nicht verfuegbar")
             return result
 
-        # TEMP-DEBUG (16.08.2026, wird nach Live-Bestaetigung wieder entfernt):
-        # GHA-Log ist fuer Claude nicht erreichbar (Azure Blob Storage nicht in
-        # Netzwerk-Freigabe) — Diagnosedaten deshalb direkt ins Ergebnis-Dict,
-        # damit sie ueber den normalen KV-Abruf sichtbar sind.
-        _debug = {sym: (len(closes[sym]) if closes[sym] is not None else None)
-                  for sym in ["^VVIX", "^SKEW", "^VIX", "^VIX3M"]}
-
         common_idx = closes["^VIX"].index
         for sym in ["^VIX3M", "^VVIX", "^SKEW"]:
             if closes[sym] is not None:
@@ -6408,8 +6416,7 @@ def fetch_mse_history(days: int = 30) -> dict:
         vix3m  = [round(float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d],"squeeze") else closes["^VIX3M"].loc[d]), 2) for d in common_idx]
         ratio  = [round(vix3m[i] / vix[i], 3) if vix[i] and vix[i] > 0 else None for i in range(len(vix))]
 
-        result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates,
-                   "_debug": {**_debug, "intersection_len": len(common_idx)}}
+        result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates}
         log.info(f"  MSE History: {len(dates)} Tage | VVIX: {vvix[-1]} | SKEW: {skew[-1] if skew[-1] else chr(8212)} | Ratio: {ratio[-1]}")
     except Exception as e:
         log.warning(f"  MSE History nicht verfuegbar: {e}")
