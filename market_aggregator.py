@@ -180,6 +180,20 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.9 (16.08.2026): Echter Root-Cause-Fix (dank _debug-Feld aus
+v5.36.8 gefunden): NICHT ein Timestamp/TZ-Problem (v5.36.7-Hypothese war
+falsch) — der gebuendelte 4-Symbol-yf.download(group_by="ticker") lieferte
+zuverlaessig fuer ^VIX3M nur 1 Tag Historie, waehrend ^VVIX/^SKEW/^VIX
+245-254 Tage lieferten (_debug-Beweis: {"^VVIX":254,"^SKEW":254,"^VIX":245,
+"^VIX3M":1}). Die anschliessende Schnittmenge war dadurch zwangsweise auf
+maximal 1 Tag limitiert, unabhaengig von jeder Timestamp-Normalisierung.
+fetch_vix_term() (LIVE-Werte, nicht Historie) holt VIX/VIX3M bereits
+EINZELN und funktioniert zuverlaessig — dasselbe Muster jetzt fuer die
+Historie uebernommen (4 separate Einzel-Downloads statt 1 gebuendeltem
+Call). _debug-Feld bleibt vorerst drin zur Live-Bestaetigung, danach
+Cleanup. STATUS: NICHT LIVE VERIFIZIERT — naechster Schritt: GHA-Lauf +
+KV-Direktabfrage (dates_len sollte jetzt ~180-190 statt 1 sein).
+
 Version 5.36.8 (16.08.2026): fetch_mse_history()-Fix aus v5.36.7 hat das
 Problem NICHT behoben (live verifiziert: dates_len weiterhin 1 nach dem
 naechsten Lauf) — die Timestamp-Normalisierungs-Hypothese war falsch oder
@@ -299,7 +313,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.8"
+AGGREGATOR_VERSION = "5.36.9"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -6334,33 +6348,36 @@ def fetch_mse_history(days: int = 30) -> dict:
     period = f"{days + 5}d"
     result = {"vvix": [], "skew": [], "vix": [], "vixRatio": [], "dates": []}
     try:
-        raw = yf.download(
-            ["^VVIX", "^SKEW", "^VIX", "^VIX3M"],
-            period=period,
-            auto_adjust=True,
-            progress=False,
-            group_by="ticker",
-        )
+        # BUGFIX (16.08.2026, Axel-Deep-Debug-Anfrage — Root Cause nach 2
+        # fehlgeschlagenen Versuchen gefunden): Der gebuendelte 4-Symbol-
+        # yf.download(group_by="ticker") lieferte fuer ^VIX3M zuverlaessig nur
+        # 1 Tag Historie, waehrend ^VVIX/^SKEW/^VIX 245-254 Tage lieferten
+        # (per TEMP-DEBUG-Feld im Ergebnis-Dict verifiziert, da GHA-Logs fuer
+        # Claude nicht erreichbar sind). Die anschliessende Schnittmenge war
+        # dadurch zwangsweise auf 1 Tag limitiert — KEIN Timestamp/TZ-Problem
+        # wie in v5.36.7 vermutet (dieser Fix war wirkungslos, da er an der
+        # falschen Stelle ansetzte). fetch_vix_term() (VIX/VIX3M LIVE-Werte,
+        # an anderer Stelle im Code) holt beide Symbole bereits EINZELN und
+        # funktioniert zuverlaessig — dasselbe Muster hier fuer die Historie
+        # uebernommen: 4 separate Einzel-Downloads statt 1 gebuendeltem Call.
         closes = {}
         for sym in ["^VVIX", "^SKEW", "^VIX", "^VIX3M"]:
             try:
-                s = raw[sym]["Close"].dropna()
-                # BUGFIX (16.08.2026, Axel-Deep-Debug-Anfrage): .intersection()
-                # unten vergleicht komplette Timestamps (Datum+Uhrzeit+TZ). Bei
-                # Multi-Symbol-yf.download() koennen die 4 Ticker minimal
-                # abweichende Zeitstempel-Metadaten mitbringen (TZ-Handling,
-                # DST-Uebergaenge im 257-Tage-Fenster) — dann verliert die
-                # Schnittmenge fast alle Tage und behaelt nur zufaellig exakt
-                # uebereinstimmende Zeitstempel (heute gefunden: dates_len=1
-                # trotz period=257d, obwohl alle 4 Rohserien viele Tage hatten).
-                # Fix: Index auf reines Kalenderdatum normalisieren (TZ strippen,
-                # Uhrzeit auf Mitternacht) VOR der Schnittmenge.
+                raw_sym = yf.download(sym, period=period, auto_adjust=True, progress=False)
+                s = raw_sym["Close"].dropna()
+                if hasattr(s, 'squeeze'):
+                    s = s.squeeze()
+                if not hasattr(s, 'index'):
+                    # squeeze() auf Einzelwert kollabiert (analog fetch_move_index-Bug)
+                    log.warning(f"  MSE History {sym}: squeeze() lieferte Skalar, uebersprungen")
+                    closes[sym] = None
+                    continue
                 if hasattr(s.index, 'tz') and s.index.tz is not None:
                     s.index = s.index.tz_localize(None)
                 if hasattr(s.index, 'normalize'):
                     s.index = s.index.normalize()
                 closes[sym] = s
-                log.info(f"  MSE History Rohdaten {sym}: {len(s)} Tage (vor Schnittmenge)")
+                log.info(f"  MSE History Rohdaten {sym}: {len(s)} Tage (Einzel-Download)")
             except Exception as _ce:
                 log.warning(f"  MSE History {sym} Fehler: {_ce}")
                 closes[sym] = None
@@ -6369,14 +6386,12 @@ def fetch_mse_history(days: int = 30) -> dict:
             log.warning("  MSE History: VIX/VIX3M nicht verfuegbar")
             return result
 
-        # TEMP-DEBUG (16.08.2026, wird nach Root-Cause-Fund wieder entfernt):
+        # TEMP-DEBUG (16.08.2026, wird nach Live-Bestaetigung wieder entfernt):
         # GHA-Log ist fuer Claude nicht erreichbar (Azure Blob Storage nicht in
         # Netzwerk-Freigabe) — Diagnosedaten deshalb direkt ins Ergebnis-Dict,
         # damit sie ueber den normalen KV-Abruf sichtbar sind.
         _debug = {sym: (len(closes[sym]) if closes[sym] is not None else None)
                   for sym in ["^VVIX", "^SKEW", "^VIX", "^VIX3M"]}
-        _debug["sample_idx_vvix"] = [str(x) for x in (closes["^VVIX"].index[:3].tolist() if closes["^VVIX"] is not None and len(closes["^VVIX"]) > 0 else [])]
-        _debug["sample_idx_vix"]  = [str(x) for x in (closes["^VIX"].index[:3].tolist() if len(closes["^VIX"]) > 0 else [])]
 
         common_idx = closes["^VIX"].index
         for sym in ["^VIX3M", "^VVIX", "^SKEW"]:
