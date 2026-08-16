@@ -180,6 +180,24 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.11 (16.08.2026): PFLICHTREGEL ergaenzt — Axel-Anschlussfrage:
+"wird VVIX/SKEW/VIX3M von der KI gewuerdigt?" Empirische Pruefung des
+generierten Textes (v5.36.10-Lauf) zeigte: Distribution Days/McClellan/
+NDX-Breadth/Intermarket-Score/VIX3M-Termstruktur wurden trotz fehlender
+STRUKTUR-Nennung korrekt diskutiert — aber NUR weil deren Signal zufaellig
+[CAUTION]/[RISK] war und die KI das aus eigenem Ermessen fuer erwaehnens-
+wert hielt. VVIX/SKEW/MOVE Index/SKEW-VVIX-Divergenz waren an [OK] und
+wurden nicht erwaehnt — nicht unterscheidbar, ob aus Ermessen (nichts
+Auffaelliges) oder weil die STRUKTUR-Liste sie nicht vorschreibt. Neue
+PFLICHTREGEL macht das zur Vorschrift statt Kulanz: jeder [CAUTION]/[RISK]-
+Faktor aus MARKET CONTEXT MUSS explizit genannt werden, unabhaengig von
+der fixen 5-Punkte-STRUKTUR-Liste (die als Mindestanforderung, nicht
+abschliessend, markiert wurde). SENTIMENT/MAKRO-KONDENSAT duerfen bei
+Bedarf laenger als die genannten 2-3 Saetze werden. STATUS: NICHT LIVE
+VERIFIZIERT. Bekannter Folgepunkt (noch nicht umgesetzt): dieselbe Regel
+fehlt im Client-Fallback-Prompt (ko-prompts.js, _getMorningPrompt()) —
+seltener genutzter Pfad, daher niedrigere Prioritaet.
+
 Version 5.36.10 (16.08.2026): v5.36.9 live bestaetigt (KV-Direktabfrage) —
 ^VIX3M lieferte im Einzel-Download 237 Tage (vorher 1 im Batch), Schnitt-
 menge jetzt 227 Tage statt 1. vvix_zscore/skew_zscore beide "ok": true
@@ -328,7 +346,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.10"
+AGGREGATOR_VERSION = "5.36.11"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -7226,11 +7244,16 @@ def generate_daily_snapshot(master):
             "- Ausschliesslich die unten stehenden Messwerte verwenden - KEIN Trainingswissen.\n"
             "- Keine Kurse, Zahlen oder Prozente erfinden. Fehlende Werte: n/v schreiben.\n"
             "- Ampeln (gruen/gelb/rot/leer) NUR aus den bereits berechneten Gates uebernehmen, nie selbst schaetzen.\n"
+            "- JEDER Faktor aus MARKET CONTEXT mit Signal [CAUTION] oder [RISK] MUSS explizit im SENTIMENT-\n"
+            "  oder MAKRO-KONDENSAT-Abschnitt namentlich genannt werden — unabhaengig davon, ob er in der\n"
+            "  STRUKTUR-Liste unten als Pflichtinhalt aufgefuehrt ist. Diese Liste ist eine Mindestanforderung,\n"
+            "  keine abschliessende Aufzaehlung. (16.08.2026: vorher stand ohne diese Regel im Ermessen der KI,\n"
+            "  ob z.B. VVIX/SKEW/MOVE Index/Breadth-Oszillator bei caution/risk erwaehnt werden.)\n"
             "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
-            "STRUKTUR (immer diese Reihenfolge):\n"
+            "STRUKTUR (immer diese Reihenfolge, siehe PFLICHTREGEL oben zu zusaetzlichen Pflichtnennungen):\n"
             "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
-            "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, DIX/GEX, Fear&Greed, IOS Market Score (jeweils falls in Messwerten vorhanden).\n"
-            "3. MAKRO-KONDENSAT (2 Saetze): HY-Spread + Net Liquidity.\n"
+            "2. SENTIMENT (2-3 Saetze, laenger falls zusaetzliche caution/risk-Faktoren zu nennen sind): VIX-Zone, PCR, DIX/GEX, Fear&Greed, IOS Market Score (jeweils falls in Messwerten vorhanden).\n"
+            "3. MAKRO-KONDENSAT (2 Saetze, laenger falls zusaetzliche caution/risk-Faktoren zu nennen sind): HY-Spread + Net Liquidity.\n"
             "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert, Ampel-Farbe aus den berechneten Gates uebernehmen):\n"
             "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
             "5. TOP-KANDIDATEN (max 5 Ticker, 1 Zeile: Ticker - Strategie - Kernaussage)\n\n"
