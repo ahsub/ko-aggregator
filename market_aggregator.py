@@ -180,6 +180,22 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.3 (15.08.2026): Server-seitiger Morning-Briefing-Prompt kannte
+DIX/GEX bis hierher ueberhaupt nicht — dies war der ungeloeste Rest-Befund
+aus §5 der Uebergabe vom selben Tag: der Client-Pfad (ko-prompts.js) wurde
+bereits gefixt, aber generate_daily_snapshot() (server-seitig, GHA-Cron,
+Ergebnis geht per KV-Cache in den "Neu"-Button) baute mlines/den Prompt
+komplett unabhaengig davon und liess DIX/GEX an keiner Stelle einfliessen,
+obwohl master["market"]["dixGex"] laengst vollstaendig befuellt vorlag
+(dix, gex, dixEtfBasket* — s. Changelog v5.36.2 oben). Fix: dix_gex analog
+zu vix_term/pcr_d aus market extrahiert, DIX (SqueezeMetrics)/GEX (inkl.
+Gamma-Flip-Hinweis bei negativem Wert)/DIX (ETF-Korb) in den SENTIMENT-
+Block von mlines aufgenommen, STRUKTUR-Punkt 2 des Prompts um "DIX/GEX"
+ergaenzt (vorher nur VIX/PCR/Fear&Greed/IOS genannt — Daten waren zwar da,
+aber keine Aufforderung, sie zu nutzen). NICHT LIVE VERIFIZIERT — Fix ist
+nur per py_compile syntaktisch geprueft, noch kein echter GHA-Lauf
+abgewartet und kein tatsaechlich generiertes Briefing gegengelesen.
+
 Ablauf:
   1. Lädt OHLCV-Daten für ~600 Ticker via yfinance (parallel)
   2. Berechnet technische Indikatoren (EMA, RSI, MACD, OBV, ATR, BB, HVP, hv10)
@@ -215,7 +231,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.2"
+AGGREGATOR_VERSION = "5.36.3"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -6899,6 +6915,11 @@ def generate_daily_snapshot(master):
         regime    = meta.get("regimeUsed") or "-"
         vix_term  = market.get("vixTerm", {}) or {}
         pcr_d     = market.get("pcr", {}) or {}
+        # NEU (15.08.2026, Fortsetzung §5 Client-Fix vom selben Tag): dixGex lag
+        # bereits vollstaendig in master["market"]["dixGex"] vor (siehe main()-
+        # Merge), wurde aber bislang nie in mlines/den Prompt aufgenommen -
+        # server-seitiger Prompt kannte DIX/GEX bis hierher ueberhaupt nicht.
+        dix_gex   = market.get("dixGex", {}) or {}
         shortlist = master.get("masterShortlist", [])[:10]
         snap_ts   = meta.get("generated", "-")
         ltd       = meta.get("last_trading_day", "-")
@@ -6938,6 +6959,16 @@ def generate_daily_snapshot(master):
         # BUGFIX: PCR-Schema hat nur einen Blended-Wert (pcr["pcr"]), keine Equity/Index-Trennung
         if pcr_d.get("pcr") is not None:
             mlines.append(f"Put/Call-Ratio: {_fmt(pcr_d.get('pcr'))} ({pcr_d.get('signal', '—')})")
+        # NEU (15.08.2026): DIX/GEX (SqueezeMetrics, SPY-marktweit) - bisher komplett
+        # gefehlt, obwohl Rohdaten laengst im master-Dict vorlagen (§5, s.o.).
+        if dix_gex.get("dix") is not None:
+            mlines.append(f"DIX (SqueezeMetrics, SPY-marktweit): {_fmt(dix_gex.get('dix'))}%")
+        if dix_gex.get("gex") is not None:
+            mlines.append(f"GEX (SqueezeMetrics, Markt-Gamma): {_fmt(dix_gex.get('gex'), 3)} Mrd USD"
+                          + (" [negativ = Gamma-Flip-Zone, erhoehtes Gap-Risiko]" if dix_gex.get("gex", 0) < 0 else ""))
+        if dix_gex.get("dixEtfBasket") is not None:
+            mlines.append(f"DIX (ETF-Korb-Heuristik, {dix_gex.get('dixEtfBasketSource', '-')}): "
+                          f"{_fmt(dix_gex.get('dixEtfBasket'))}%")
         # Fear & Greed — robuster Check: score muss vorhanden und eine Zahl sein
         fg_score = fg.get('score') if fg else None
         if fg_score is not None:
@@ -7009,7 +7040,7 @@ def generate_daily_snapshot(master):
             "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
             "STRUKTUR (immer diese Reihenfolge):\n"
             "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
-            "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, Fear&Greed, IOS Market Score (falls in Messwerten vorhanden).\n"
+            "2. SENTIMENT (2-3 Saetze): VIX-Zone, PCR, DIX/GEX, Fear&Greed, IOS Market Score (jeweils falls in Messwerten vorhanden).\n"
             "3. MAKRO-KONDENSAT (2 Saetze): HY-Spread + Net Liquidity.\n"
             "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert, Ampel-Farbe aus den berechneten Gates uebernehmen):\n"
             "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
