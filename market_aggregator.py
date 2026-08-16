@@ -180,6 +180,17 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.8 (16.08.2026): fetch_mse_history()-Fix aus v5.36.7 hat das
+Problem NICHT behoben (live verifiziert: dates_len weiterhin 1 nach dem
+naechsten Lauf) — die Timestamp-Normalisierungs-Hypothese war falsch oder
+unvollstaendig. Da Claude keinen Zugriff auf GHA-Job-Logs hat (Azure Blob
+Storage nicht in der Netzwerk-Freigabe), wurde stattdessen ein temporaeres
+_debug-Feld direkt ins mseHistory-Ergebnis-Dict aufgenommen (Rohdaten-
+Laenge pro Ticker VOR der Schnittmenge + Schnittmengen-Laenge + Sample-
+Timestamps von ^VVIX/^VIX) — dadurch ueber den normalen KV-Abruf sichtbar,
+ohne Log-Zugriff. Wird nach Root-Cause-Fund wieder entfernt. STATUS:
+Diagnose-Lauf, noch kein Fix.
+
 Version 5.36.7 (16.08.2026): fetch_mse_history() Index-Timestamp-Mismatch-
 Fix — vvix/skew Z-Scores lieferten "nur 1 Werte" statt der erwarteten
 ~180 Handelstage (trotz period=257d), dadurch vvix/skew komplett aus dem
@@ -288,7 +299,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.7"
+AGGREGATOR_VERSION = "5.36.8"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -6358,6 +6369,15 @@ def fetch_mse_history(days: int = 30) -> dict:
             log.warning("  MSE History: VIX/VIX3M nicht verfuegbar")
             return result
 
+        # TEMP-DEBUG (16.08.2026, wird nach Root-Cause-Fund wieder entfernt):
+        # GHA-Log ist fuer Claude nicht erreichbar (Azure Blob Storage nicht in
+        # Netzwerk-Freigabe) — Diagnosedaten deshalb direkt ins Ergebnis-Dict,
+        # damit sie ueber den normalen KV-Abruf sichtbar sind.
+        _debug = {sym: (len(closes[sym]) if closes[sym] is not None else None)
+                  for sym in ["^VVIX", "^SKEW", "^VIX", "^VIX3M"]}
+        _debug["sample_idx_vvix"] = [str(x) for x in (closes["^VVIX"].index[:3].tolist() if closes["^VVIX"] is not None and len(closes["^VVIX"]) > 0 else [])]
+        _debug["sample_idx_vix"]  = [str(x) for x in (closes["^VIX"].index[:3].tolist() if len(closes["^VIX"]) > 0 else [])]
+
         common_idx = closes["^VIX"].index
         for sym in ["^VIX3M", "^VVIX", "^SKEW"]:
             if closes[sym] is not None:
@@ -6373,7 +6393,8 @@ def fetch_mse_history(days: int = 30) -> dict:
         vix3m  = [round(float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d],"squeeze") else closes["^VIX3M"].loc[d]), 2) for d in common_idx]
         ratio  = [round(vix3m[i] / vix[i], 3) if vix[i] and vix[i] > 0 else None for i in range(len(vix))]
 
-        result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates}
+        result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates,
+                   "_debug": {**_debug, "intersection_len": len(common_idx)}}
         log.info(f"  MSE History: {len(dates)} Tage | VVIX: {vvix[-1]} | SKEW: {skew[-1] if skew[-1] else chr(8212)} | Ratio: {ratio[-1]}")
     except Exception as e:
         log.warning(f"  MSE History nicht verfuegbar: {e}")
