@@ -180,6 +180,28 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.5 (16.08.2026): MCM-Paritaets-Nachzug — Axel-Anschlussfrage nach
+den drei DIX/GEX/F&G/DD-Fixen desselben Tages: "kann das auch bei anderen
+Metriken passiert sein?" Antwort: ja. Vier Faktoren waren im Client
+(ko-indicators.json v2.2.0/v2.3.0, 20./27.07.2026) laengst registriert,
+aber NIE nach build_server_market_context() portiert — der Docstring
+behauptete "MCM-Paritaet vollstaendig", das galt nur fuer den Stand vom
+21.07. (4-Faktoren-Sprint, s. MCM-PARITAET-KONZEPT.md), nicht fuer spaeter
+hinzugekommene Client-Faktoren. Betraf move_index, skew_vvix_div,
+breadth_osc, distribution_days — alle vier fehlten im server-generierten
+Morning Briefing (dem Normalfall, KV-Cache-First) komplett, unabhaengig
+von jeglichem heutigem Bug. Zusaetzlicher Fund bei der Verifikation:
+zwei der vier Faktoren waren AUCH im Client-Fallback-Pfad strukturell
+kaputt (move_index pruefte _mkt.zscores.move — existiert nie, echte Daten
+liegen unter _mkt.moveIndex; skew_vvix_div nutzte signal_eq==="WARNUNG"
+gegen einen ganzen Satz als Vergleichswert, nie exakt gleich, Caution-Flag
+feuerte nie) — beide in ko-indicators-loader.js mitgefixt. compute_
+distribution_days() liefert jetzt zusaetzlich dd_max explizit (vorher nur
+lokale Variable, nie im Output-Dict). _add()-Helper um optionales label-
+Argument erweitert (bessere KI-lesbare Prompt-Zeilen fuer die 4 neuen
+Faktoren statt nacktem "fid: wert"). NICHT LIVE VERIFIZIERT — nur
+py_compile-geprueft, naechster Schritt: GHA-Lauf + KV-Direktabfrage.
+
 Version 5.36.4 (16.08.2026): Distribution-Days-Score-Boden-Effekt behoben —
 siehe Docstring bei compute_distribution_days() fuer vollstaendige
 Begruendung. Kurz: Score floorte bei dd_max>=7 hart auf 0 (Faktor 15),
@@ -238,7 +260,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.4"
+AGGREGATOR_VERSION = "5.36.5"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -2753,6 +2775,7 @@ def compute_distribution_days(spy_hist, qqq_hist, lookback: int = 25) -> dict:
         return {
             "dd_spy":      dd_spy,
             "dd_qqq":      dd_qqq,
+            "dd_max":      dd_max,
             "dd_score":    dd_score,
             "dd_alert":    dd_max >= 4,
             "dd_severity": severity,
@@ -2760,7 +2783,7 @@ def compute_distribution_days(spy_hist, qqq_hist, lookback: int = 25) -> dict:
         }
     except Exception as _e:
         log.warning(f"compute_distribution_days Fehler: {_e}")
-        return {"dd_spy": None, "dd_qqq": None, "dd_score": None,
+        return {"dd_spy": None, "dd_qqq": None, "dd_max": None, "dd_score": None,
                 "dd_alert": False, "dd_severity": "None"}
 
 
@@ -6381,6 +6404,20 @@ _MCM_SIGNAL_RULES = {
     # net_liquidity: caution wenn 4W-Trend ≤ 0 (schrumpfend/stabil) — identisch zu
     # ko-indicators.json signalRules (trend4w_lte: 0). Wert = trend_4w in Mrd USD.
     "net_liquidity":     [{"signal": "caution", "lte": 0}, {"signal": "ok"}],
+    # NEU (16.08.2026, MCM-Paritaet-Nachzug, Axel-Deep-Debug-Anfrage): 4 Faktoren,
+    # die im Client (ko-indicators.json) schon lange registriert waren, aber nie
+    # nach Python portiert wurden — dadurch im Server-Briefing (Normalfall,
+    # KV-Cache-First) NIE erwaehnt, unabhaengig vom heutigen Fear&Greed-Fund.
+    # Werte identisch zu den Client-Schwellen (zgte/gte in ko-indicators.json).
+    "move_index":        [{"signal": "risk", "gte": 1.5}, {"signal": "caution", "gte": 0.8}, {"signal": "ok"}],
+    "skew_vvix_div":      [{"signal": "caution", "gte": 1.5}, {"signal": "ok"}],
+    # breadth_osc: McClellan-Oszillatorwert selbst (kein Z-Score) — negativ = Breite
+    # bricht weg. Schwellen an SUITE.md-Backlog-#12-Signalstufen angelehnt
+    # (SEHR_BEARISH < -50, BEARISH < -10).
+    "breadth_osc":       [{"signal": "risk", "lte": -50}, {"signal": "caution", "lte": -10}, {"signal": "ok"}],
+    # distribution_days: dd_max (hoehere von SPY/QQQ) — identisch zu den UI-
+    # Severity-Schwellen (Watch>=4, Danger>=6).
+    "distribution_days": [{"signal": "risk", "gte": 6}, {"signal": "caution", "gte": 4}, {"signal": "ok"}],
 }
 
 # ── Calendar-Faktoren (identische Fenster-/Karenz-Parameter wie ko-indicators.json) ──
@@ -6791,13 +6828,17 @@ def calc_mcm_bull_indicator(market: dict, hist_data: dict, ios_market: dict) -> 
 
 def build_server_market_context(master):
     """market_context serverseitig — Pendant zu buildMarketContext() im JS-Port.
-    Faktoren (10 + 3 Calendar):
+    Faktoren (14 + 3 Calendar):
       vix, vvix, skew, pcr, fear_greed           — direkt aus market-Daten
       ndx_breadth, intermarket_score,             — v5.13.0 (21.07.2026)
       treasury_stress, bull_indicator             — server-side calc-Funktionen
       net_liquidity                               — v5.14.0 (01.08.2026), FRED trend_4w
+      move_index, skew_vvix_div,                  — v5.36.5 (16.08.2026), MCM-
+      breadth_osc, distribution_days              — Paritaet-Nachzug (s. Changelog)
       fed_window, nfp_window, cpi_window          — macro-calendar
-    MCM-Parität vollständig (alle ko-indicators.json Kern-Faktoren implementiert).
+    ACHTUNG: "MCM-Paritaet vollstaendig" ist eine Momentaufnahme, kein
+    Dauerzustand — bei jedem neuen Client-Registry-Eintrag (ko-indicators.json)
+    hier gegenpruefen, sonst driftet es erneut (s. MCM-PARITAET-KONZEPT.md).
     """
     market = master.get("market", {}) or {}
     meta   = master.get("meta", {}) or {}
@@ -6813,11 +6854,13 @@ def build_server_market_context(master):
     factors = {}
     caution, risk = [], []
 
-    def _add(fid, value, rules):
+    def _add(fid, value, rules, label=None):
         if value is None:
             return
         sig = _mcm_eval_signal(rules, value)
         factors[fid] = {"value": value, "signal": sig}
+        if label:
+            factors[fid]["label"] = label
         if sig == "caution":
             caution.append(fid)
         elif sig == "risk":
@@ -6849,6 +6892,32 @@ def build_server_market_context(master):
     nl         = fred.get("net_liquidity", {}) or {}
     nl_trend4w = nl.get("trend_4w") if nl.get("ok") else None
     _add("net_liquidity", nl_trend4w, _MCM_SIGNAL_RULES["net_liquidity"])
+
+    # ── MCM-Paritaet-Nachzug (16.08.2026): 4 Faktoren, die im Client seit
+    # Wochen registriert waren (ko-indicators.json v2.2.0/v2.3.0), aber nie
+    # nach Python portiert wurden — dieser Docstring behauptete "vollstaendig",
+    # das war seit der ersten Client-Erweiterung nicht mehr korrekt. Siehe
+    # MCM-PARITAET-KONZEPT.md fuer die Historie des ersten (04-Faktoren-)
+    # Parity-Sprints vom 21.07. — dieser hier ist die Fortsetzung/Nachtrag.
+    mi = market.get("moveIndex", {}) or {}
+    mi_z = mi.get("zscore") if mi.get("ok") else None
+    _add("move_index", mi_z, _MCM_SIGNAL_RULES["move_index"],
+         label=(f"MOVE Index: {mi.get('current')} (Z={mi_z:+.2f}, P{mi.get('percentile')})" if mi_z is not None else None))
+
+    div = (zsc.get("skew_vvix_divergence") or {})
+    div_val = div.get("value") if div.get("ok") else None
+    _add("skew_vvix_div", div_val, _MCM_SIGNAL_RULES["skew_vvix_div"],
+         label=(f"SKEW/VVIX-Divergenz: {div_val} → {div.get('signal')}" if div_val is not None else None))
+
+    bo = market.get("breadthOsc", {}) or {}
+    bo_val = bo.get("oscillator")
+    _add("breadth_osc", bo_val, _MCM_SIGNAL_RULES["breadth_osc"],
+         label=(f"UIQ Breadth-Oszillator (McClellan): {bo_val} ({bo.get('ema19')}/{bo.get('ema39')} EMA19/39)" if bo_val is not None else None))
+
+    dd = market.get("distributionDays", {}) or {}
+    dd_max_val = dd.get("dd_max")
+    _add("distribution_days", dd_max_val, _MCM_SIGNAL_RULES["distribution_days"],
+         label=(f"Distribution Days (25T, O'Neil/IBD): SPY {dd.get('dd_spy')} / QQQ {dd.get('dd_qqq')} ({dd.get('dd_severity')})" if dd_max_val is not None else None))
 
     # Calendar-Faktoren
     events = _mcm_load_macro_calendar()
@@ -7037,8 +7106,10 @@ def generate_daily_snapshot(master):
                       + (f" | Risk: {', '.join(ctx['summary']['risk_flags'])}" if ctx['summary']['risk_flags'] else ""))
         for fid, f in ctx["factors"].items():
             sig = f" [{f['signal'].upper()}]" if f.get("signal") else ""
-            val = f.get("label", f.get("value"))
-            mlines.append(f"{fid}: {val}{sig}")
+            if f.get("label"):
+                mlines.append(f"{f['label']}{sig}")
+            else:
+                mlines.append(f"{fid}: {f.get('value')}{sig}")
         mlines += ["", "--- STRATEGIE-AMPEL (bereits berechnet, regelbasiert) ---"]
         if gates["downgrades"]:
             dg_txt = " · ".join(f"{d['strategy']} {d['from']}->{d['to']} ({d['factor']})" for d in gates["downgrades"])
