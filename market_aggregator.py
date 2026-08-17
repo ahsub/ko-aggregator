@@ -180,6 +180,26 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.12 (17.08.2026): IOS-Market-Decision-Strings imperativfrei
+umformuliert — Axel-Entscheidung im Rahmen der Rechtsgutachten-Vorbereitung
+(BaFin-Konformitaet). calc_ios_market_score() gab bisher fuenf Entscheidungs-
+Label zurueck, von denen zwei einen expliziten Kauf-Imperativ enthielten
+("KAUFEN ERLAUBT", "SELEKTIV KAUFEN") — im direkten Widerspruch zur eigenen
+STRIKTEN BaFin-REGEL andernorts im Prompt-Code ("Keine Empfehlungen zum Kauf...
+auch nicht implizit"). Alle fuenf Labels jetzt als deskriptive Zustands-
+beschreibung, gebunden an Strategie-Klassen, konsistent zum parallel schon
+existierenden "mode"-Feld (OFFENSIV/SELEKTIV/NEUTRAL/DEFENSIV/KAPITAL
+SCHUETZEN): "OFFENSIV — Trendfolge & Breakouts begünstigt" / "SELEKTIV —
+Qualitäts-Setups begünstigt" / "NEUTRAL — nur Top-Setups vertretbar" /
+"DEFENSIV — neue Breakouts zurückhaltend" / "KAPITALSCHUTZ — Absicherung im
+Fokus". apply_ios_market_overlay() nutzt dieselben Strings fuer die
+Confidence-Bonus/Daempfungs-Logik bei Options-Kandidaten (String-Vergleich,
+kein Enum) — dort mitgezogen, sonst waere die Logik nach dem Rename
+stillschweigend nie mehr getriggert worden. Reine Formulierungsaenderung,
+keine Aenderung an Schwellenwerten oder Score-Berechnung. Betrifft nur
+"iosMarketDecision" — das parallele "iosMarketMode"-Feld war schon vorher
+imperativfrei und bleibt unveraendert.
+
 Version 5.36.11 (16.08.2026): PFLICHTREGEL ergaenzt — Axel-Anschlussfrage:
 "wird VVIX/SKEW/VIX3M von der KI gewuerdigt?" Empirische Pruefung des
 generierten Textes (v5.36.10-Lauf) zeigte: Distribution Days/McClellan/
@@ -346,7 +366,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.11"
+AGGREGATOR_VERSION = "5.36.12"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -3446,8 +3466,15 @@ def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
 
     Module: Trend(35) + Breadth(25) + Risk(20) + Momentum(10) + Rotation(10)
     Knock-out: SPY<SMA200 → cap65 | Risk≤6 → cap70 | Breadth≤8 → cap72
-    Decision: KAUFEN ERLAUBT / SELEKTIV KAUFEN / NUR TOP-SETUPS /
-              KEINE NEUEN BREAKOUTS / KEINE NEUEN KAEUFE
+    Decision (17.08.2026, Axel-Entscheidung — Imperativ-Verbot fuer BaFin-
+    Konformitaet, s. UEBERGABE-Protokoll: keine Handlungsaufforderungen wie
+    "KAUFEN", ausschliesslich deskriptive Zustandsbeschreibungen gebunden an
+    Strategie-Klassen, konsistent mit dem parallelen "mode"-Feld):
+    OFFENSIV — Trendfolge & Breakouts begünstigt /
+    SELEKTIV — Qualitäts-Setups begünstigt /
+    NEUTRAL — nur Top-Setups vertretbar /
+    DEFENSIV — neue Breakouts zurückhaltend /
+    KAPITALSCHUTZ — Absicherung im Fokus
     """
     def get_closes(sym):
         df = hist_data.get(sym)
@@ -3598,15 +3625,15 @@ def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
         return "NO"
 
     if overall >= 85 and trend_score >= 28 and breadth_score >= 18 and risk_score >= 14:
-        decision = "KAUFEN ERLAUBT"
+        decision = "OFFENSIV — Trendfolge & Breakouts begünstigt"
     elif overall >= 75:
-        decision = "SELEKTIV KAUFEN"
+        decision = "SELEKTIV — Qualitäts-Setups begünstigt"
     elif overall >= 60:
-        decision = "NUR TOP-SETUPS"
+        decision = "NEUTRAL — nur Top-Setups vertretbar"
     elif overall >= 45:
-        decision = "KEINE NEUEN BREAKOUTS"
+        decision = "DEFENSIV — neue Breakouts zurückhaltend"
     else:
-        decision = "KEINE NEUEN KAEUFE"
+        decision = "KAPITALSCHUTZ — Absicherung im Fokus"
 
     if overall >= 85 and risk_score >= 14:
         mode = "OFFENSIV"
@@ -3851,8 +3878,11 @@ def apply_macro_risk_overlay(options_candidates: list, dix_gex: dict, pcr_data: 
 def apply_ios_market_overlay(options_candidates: list, ios_market: dict) -> list:
     """
     IOS Market Score Overlay auf Options-Kandidaten.
-    Bei "KEINE NEUEN KAEUFE" → CSP/CC stark gedämpft (Kapitalschutz).
-    Bei "KAUFEN ERLAUBT"  → leichter Bonus für Confidence.
+    Bei "KAPITALSCHUTZ — ..." → CSP/CC stark gedämpft (Kapitalschutz).
+    Bei "OFFENSIV — ..."      → leichter Bonus für Confidence.
+    (17.08.2026: decision-Strings auf imperativfreie Formulierungen
+    umgestellt, s. calc_ios_market_score() — String-Vergleiche hier
+    entsprechend mitgezogen.)
     """
     if not ios_market:
         return options_candidates
@@ -3860,18 +3890,18 @@ def apply_ios_market_overlay(options_candidates: list, ios_market: dict) -> list
     decision = ios_market.get("iosMarketDecision", "")
 
     for r in options_candidates:
-        if decision == "KEINE NEUEN KAEUFE":
+        if decision == "KAPITALSCHUTZ — Absicherung im Fokus":
             # Kapitalschutz: alle Long-Options-Strategien stark dämpfen
             r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.30))
             r["scoreCc"]  = max(0, int(r.get("scoreCc",  0) * 0.30))
             # Collar bewusst NICHT gedämpft — Absicherung bei Kapitalschutz sinnvoll
-            r["_macroNote"] = r.get("_macroNote","") + " | IOS: KAPITAL SCHUETZEN"
-        elif decision == "KEINE NEUEN BREAKOUTS":
+            r["_macroNote"] = r.get("_macroNote","") + " | IOS: KAPITALSCHUTZ"
+        elif decision == "DEFENSIV — neue Breakouts zurückhaltend":
             r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.55))
             r["_macroNote"] = r.get("_macroNote","") + " | IOS: DEFENSIV"
-        elif decision == "NUR TOP-SETUPS":
+        elif decision == "NEUTRAL — nur Top-Setups vertretbar":
             r["scoreCsp"] = max(0, int(r.get("scoreCsp", 0) * 0.75))
-        elif decision == "KAUFEN ERLAUBT":
+        elif decision == "OFFENSIV — Trendfolge & Breakouts begünstigt":
             # Leichter Confidence-Bonus
             r["scoreCsp"] = min(100, int(r.get("scoreCsp", 0) * 1.10))
             r["scoreCc"]  = min(100, int(r.get("scoreCc",  0) * 1.10))
@@ -7345,7 +7375,7 @@ def calc_score_divergences(regime: str, ios_market: dict, breadth_osc: dict) -> 
     ios_score = ios.get("iosMarketScore")       # 0–100
     ios_trend = ios.get("iosMarketTrend")       # 0–35
     ios_bread = ios.get("iosMarketBreadth")     # 0–25
-    ios_dec   = ios.get("iosMarketDecision", "") # "SELEKTIV KAUFEN" etc.
+    ios_dec   = ios.get("iosMarketDecision", "") # "SELEKTIV — Qualitäts-Setups begünstigt" etc.
 
     mcl       = (breadth_osc or {}).get("mclellan")  # McClellan-Wert, kann None sein
 
@@ -8849,4 +8879,3 @@ if __name__ == "__main__":
         print(f"[ABORT] Unbehandelte Exception: {type(_e).__name__}: {_e}", flush=True)
         import traceback; traceback.print_exc()
         raise
-
