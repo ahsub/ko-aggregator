@@ -180,6 +180,22 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.13 (17.08.2026): DIX/GEX-Bulk-Historie-Nebenfund verifiziert
+und genutzt (Axel-Anfrage, Fortsetzung des SUITE.md/REGIME-BACKTEST-
+VALIDIERUNG.md-Nebenfunds vom 16.08.2026). Live per Browser-Fetch
+bestaetigt: squeezemetrics.com/monitor/static/DIX.csv liefert nicht nur
+die aktuellste Zeile, sondern die volle taegliche Historie seit
+2011-05-02 (3846 Zeilen, kostenlos, kein Auth) — im Widerspruch zur
+aelteren "DIX/GEX ist tot"-Doku. fetch_dix_gex() liest jetzt zusaetzlich
+die letzten 60 Handelstage (HISTORY_DAYS, deckt sich mit dem Cap in
+KoMarketState.addDataPoint()) und legt sie unter dix_gex["history"] ab
+(dates/dix/gex/n). Zweck: clientseitiger Backfill der lokalen Z-Score-
+Historie (KoMarketState._history.gex/.dix) — vorher musste diese Historie
+erst ueber mehrere Tage/Wochen Live-Betrieb akkumuliert werden (Symptom
+vom selben Tag: "DIX Z-Score n/v - keine Historie" nach dem Wochenende).
+Client-seitige Anbindung (ko-market-state.js backfillHistory() + Aufruf-
+stelle in axel-scanner/index.html) im selben Zug ergaenzt.
+
 Version 5.36.12 (17.08.2026): IOS-Market-Decision-Strings imperativfrei
 umformuliert — Axel-Entscheidung im Rahmen der Rechtsgutachten-Vorbereitung
 (BaFin-Konformitaet). calc_ios_market_score() gab bisher fuenf Entscheidungs-
@@ -366,7 +382,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.12"
+AGGREGATOR_VERSION = "5.36.13"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -5123,6 +5139,19 @@ def fetch_dix_gex() -> dict:
     16/16 Requests HTTP 200, 100% Erfolgsquote, kostenlos, kein Auth.
     Liefert ECHTES SPY-marktweites DIX+GEX (Squeezemetrics-Originalmethodik).
 
+    NEU (17.08.2026, Axel-Deep-Debug-Anfrage — DIX/GEX-Bulk-Historie-Neben-
+    fund, urspruenglich aus REGIME-BACKTEST-VALIDIERUNG.md, 16.08.2026 noch
+    unverifiziert): Live-verifiziert per Browser-Fetch — DIX.csv liefert
+    NICHT nur die aktuellste Zeile, sondern die VOLLE taegliche Historie
+    seit 2011-05-02 (3846 Zeilen, Stand 17.08.2026), komplett kostenlos.
+    Bisher wurde ausschliesslich die letzte Zeile genutzt (dix/gex "heute").
+    Jetzt zusaetzlich: die letzten HISTORY_DAYS Handelstage als "history"-
+    Feld im Rueckgabewert, fuer clientseitigen Backfill der lokalen Z-Score-
+    Historie (KoMarketState._history.gex/.dix, s. ko-market-state.js) —
+    vorher musste diese Historie erst ueber mehrere Tage/Wochen Live-Betrieb
+    akkumuliert werden (Symptom: "DIX Z-Score n/v - keine Historie" am
+    17.08.2026 nach dem Wochenende, s. UEBERGABE-Protokoll).
+
     Primaer:  squeezemetrics.com (DIX + GEX, SPY-Aggregat, kostenlos, stabil).
     Sekundaer (bewusst erhalten, s.u.): FlashAlpha API (lab.flashalpha.com) —
     liefert Werte, die squeezemetrics NICHT hat: gamma_flip, call_wall,
@@ -5138,6 +5167,10 @@ def fetch_dix_gex() -> dict:
     """
     import os
 
+    # Anzahl Handelstage fuer den History-Backfill — deckt sich mit dem
+    # Cap in KoMarketState.addDataPoint() (Client, max 60 Punkte je Serie).
+    HISTORY_DAYS = 60
+
     # ── PRIMAER: squeezemetrics (SPY-marktweit, DIX+GEX) ──────────────────
     try:
         url = "https://squeezemetrics.com/monitor/static/DIX.csv"
@@ -5150,12 +5183,37 @@ def fetch_dix_gex() -> dict:
             dix_val = float(row.get("dix", 0)) * 100
             gex_val = float(row.get("gex", 0))
             log.info(f"  DIX (squeezemetrics): {dix_val:.1f}% | GEX: {gex_val/1e9:.2f} Mrd")
+
+            # ── History-Backfill: letzte HISTORY_DAYS Zeilen parsen ─────────
+            hist_dates, hist_dix, hist_gex = [], [], []
+            for hl in lines[1:][-HISTORY_DAYS:]:
+                parts = hl.strip().split(",")
+                if len(parts) < 4:
+                    continue
+                hrow = dict(zip(headers, parts))
+                try:
+                    h_dix = round(float(hrow.get("dix", 0)) * 100, 2)
+                    h_gex = round(float(hrow.get("gex", 0)) / 1e9, 3)
+                except (ValueError, TypeError):
+                    continue
+                hist_dates.append(hrow.get("date", ""))
+                hist_dix.append(h_dix)
+                hist_gex.append(h_gex)
+            log.info(f"  DIX/GEX History-Backfill: {len(hist_dates)} Handelstage "
+                     f"({hist_dates[0] if hist_dates else '?'} bis {hist_dates[-1] if hist_dates else '?'})")
+
             return {
                 "dix":    round(dix_val, 2),
                 "gex":    round(gex_val / 1e9, 3),
                 "date":   row.get("date", ""),
                 "source": "squeezemetrics",
                 "proxy":  False,
+                "history": {
+                    "dates": hist_dates,
+                    "dix":   hist_dix,
+                    "gex":   hist_gex,
+                    "n":     len(hist_dates),
+                },
             }
         else:
             log.warning(f"  squeezemetrics unerwartete Antwort: HTTP {r.status_code}, {len(r.text)} Bytes")
