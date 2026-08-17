@@ -180,6 +180,34 @@ v5.36.1, beide noch am selben Tag entdeckt:
    vorliegen (nur unter neuem Feldnamen). Kein Datenverlust, nur temporaer
    unsichtbar im Frontend. Naechste Session: alle 8 Stellen auf
    dixEtfBasketSource/dixEtfBasket ummuenzen. 
+Version 5.36.14 (17.08.2026): Sieben neue Konjunktur-Indikatoren (Axel-
+Anfrage — "auf diesem Auge bislang blind"): NFCI (Chicago Fed Financial
+Conditions), Core CPI YoY, Arbeitslosenrate + offizielle Sahm-Rule
+(FRED-Serie SAHMREALTIME, nicht selbst approximiert), University of
+Michigan Consumer Sentiment, Heavy Truck Sales (10M-Schnitt, Axel-
+Vorschlag), OECD Composite Leading Indicator (Quadranten-Logik), sowie
+2Y/10Y-Zinskurve um "positiv seit N Handelstagen" + 3-Monats-Bestaetigung
+erweitert. Alle FRED-Serien-IDs einzeln per Browser-Live-Check gegen die
+echte FRED-Seite verifiziert (nicht aus dem Gedaechtnis uebernommen) —
+zwei der drei von Axel vorgeschlagenen IDs waren tatsaechlich falsch:
+CPIAUCSL ist Headline- statt Core-CPI (richtig: CPILFESL), TRUCKSUSSA
+existiert nicht (404, richtig: HTRUCKSSAAR); NFCI-ID war korrekt benannt,
+aber mit der ID eines anderen Index (STLFSI = St.-Louis-Fed-Variante)
+verwechselt. Zusaetzlich zwei Sektor-Ratio-Signale (Consumer Staples vs.
+Discretionary, Growth vs. Value) — beide OHNE neue API-Calls, da
+XLP/XLY bereits im Ticker-Universum liegen und IWF/IWD (Growth/Value)
+nur als 2 weitere Ticker in den bestehenden yfinance-Batch aufgenommen
+wurden. Alle sieben Indikatoren ins MCM-Faktorsystem eingebunden
+(_MCM_SIGNAL_RULES + build_server_market_context()) — erscheinen damit
+automatisch im MARKET-CONTEXT-Block des Prompts und unterliegen der
+bestehenden PFLICHTREGEL (§4 vom 16.08.). Bewusst nur etablierte,
+dokumentierte Schwellen verwendet (Sahm-Rule 0.50 = akademischer
+Standard, NFCI-Nullpunkt = Chicago-Fed-eigene Interpretation, OECD-CLI-
+Quadranten = offizielle OECD-Methodik) statt erfundener Cutoffs.
+BEKANNTE LUECKE: Client-seitige Parity (ko-indicators.json/-loader.js)
+noch NICHT nachgezogen — analog zu frueheren MCM-Paritaets-Luecken
+bewusst offen benannt, nicht verschwiegen. NICHT LIVE VERIFIZIERT.
+
 Version 5.36.13 (17.08.2026): DIX/GEX-Bulk-Historie-Nebenfund verifiziert
 und genutzt (Axel-Anfrage, Fortsetzung des SUITE.md/REGIME-BACKTEST-
 VALIDIERUNG.md-Nebenfunds vom 16.08.2026). Live per Browser-Fetch
@@ -382,7 +410,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.13"
+AGGREGATOR_VERSION = "5.36.14"
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -761,6 +789,10 @@ SECTOR_ETFS_US = [
     "XLY","VCR","IYC",
     # Consumer Staples
     "XLP","VDC","IYK",
+    # Growth vs. Value (17.08.2026, Axel-Anfrage — Konjunktur-Indikatoren):
+    # IWF/IWD = iShares Russell 1000 Growth/Value, Standard-Paar fuer diese
+    # Rotation, hochliquide. Wird fuer calc_growth_value_signal() benoetigt.
+    "IWF","IWD",
     # Utilities
     "XLU","VPU","IDU",
     # Real Estate
@@ -6211,6 +6243,20 @@ def fetch_fred_macro() -> dict:
 
             z_curve, p_curve = _z_and_p(hist_spread) if len(hist_spread) >= 20 else (None, None)
 
+            # Axel-Anfrage (17.08.2026): "2Y/10Y Spread > 0 für 3 Monate" — eine
+            # einzelne De-Inversion ist Rauschen; die etablierte Lesart (u.a.
+            # NY-Fed-Forschung) ist, dass die Rezession haeufig NACH einer
+            # laengeren Phase der Wieder-Normalisierung eintritt. Handelstage-
+            # Konvention (63T = 3 Monate) konsistent mit den bestehenden
+            # perf3m/perf6m-Fenstern anderswo im Aggregator.
+            streak_days = 0
+            for _, sv in reversed(hist_spread):
+                if sv > 0:
+                    streak_days += 1
+                else:
+                    break
+            positive_streak_confirmed_3m = streak_days >= 63
+
             curve_entry = {
                 "label":        "US Zinskurve 10J-2J (%, FRED Constant Maturity)",
                 "y10":          y10,
@@ -6220,6 +6266,8 @@ def fetch_fred_macro() -> dict:
                 "percentile":   p_curve,
                 "date":         dgs10[-1][0],
                 "inverted":     spread_10y2y < 0,
+                "positiveStreakDays":        streak_days,
+                "positiveStreakConfirmed3m": positive_streak_confirmed_3m,
                 "signal":       ("INVERTIERT — Rezessionswarnung" if spread_10y2y < 0 else
                                  "flach (<0.25%)" if spread_10y2y < 0.25 else "normal"),
                 "source":       "fred",
@@ -6236,12 +6284,198 @@ def fetch_fred_macro() -> dict:
 
             result["yield_curve"] = curve_entry
             log.info(f"  FRED Zinskurve: 10J={y10:.2f}% 2J={y2:.2f}% → Spread {spread_10y2y:+.2f}% "
-                     f"(Z={z_curve}) — {curve_entry['signal']}")
+                     f"(Z={z_curve}) — {curve_entry['signal']} | positiv seit {streak_days}T "
+                     f"({'bestätigt (≥3M)' if curve_entry['positiveStreakConfirmed3m'] else 'noch unbestätigt'})")
         else:
             result["yield_curve"] = {"ok": False, "reason": "DGS2/DGS10 nicht verfügbar"}
     except Exception as e:
         result["yield_curve"] = {"ok": False, "reason": str(e)[:100]}
         log.warning(f"  FRED Zinskurve Fehler: {e}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # KONJUNKTUR-INDIKATOREN (17.08.2026, Axel-Anfrage — "auf diesem Auge
+    # bislang blind"). Alle IDs einzeln gegen die echte FRED-Seite verifiziert
+    # (Browser-Live-Check, nicht aus dem Gedächtnis übernommen — zwei der drei
+    # von Axel vorgeschlagenen IDs waren tatsächlich falsch: CPIAUCSL ist
+    # Headline- statt Core-CPI, TRUCKSUSSA existiert nicht/404). Bewusst nur
+    # etablierte, dokumentierte Schwellen verwendet (Sahm-Rule offizielle
+    # FRED-Serie statt Eigenkonstruktion; NFCI-Nullpunkt-Interpretation laut
+    # Chicago Fed selbst; OECD-CLI-Quadranten-Logik ist die offizielle OECD-
+    # Methodik) — keine erfundenen Cutoffs.
+    # ══════════════════════════════════════════════════════════════════════
+
+    # ── 4. NFCI (Chicago Fed National Financial Conditions Index) ───────────
+    # Offizielle Interpretation (Chicago Fed): 0 = historischer Durchschnitt,
+    # positiv = straffer als Durchschnitt, negativ = lockerer. Wöchentlich,
+    # daher deutlich aktueller als die übrigen Konjunktur-Indikatoren hier.
+    try:
+        nfci = _fred_series("NFCI", limit=260)  # ~5 Jahre wöchentlich
+        if nfci:
+            z, p = _z_and_p(nfci)
+            cur = nfci[-1][1]
+            result["nfci"] = {
+                "label":      "Chicago Fed National Financial Conditions Index (NFCI)",
+                "current":    cur,
+                "date":       nfci[-1][0],
+                "zscore":     z,
+                "percentile": p,
+                "n_obs":      len(nfci),
+                "signal":     ("STRESS" if cur > 0.5 else "erhöht" if cur > 0 else "locker"),
+                "ok":         True,
+            }
+            log.info(f"  FRED NFCI: {cur:+.3f} (Z={z}, P{p}) — {result['nfci']['signal']}")
+    except Exception as e:
+        result["nfci"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED NFCI Fehler: {e}")
+
+    # ── 5. US Core CPI YoY (ex Food & Energy) ────────────────────────────────
+    # CPILFESL ist der Index-Stand (1982-84=100) — fuer ein Inflationssignal
+    # zaehlt die Jahresveraenderung (YoY %), nicht der nackte Indexwert.
+    try:
+        cpi = _fred_series("CPILFESL", limit=36)  # 3 Jahre monatlich reichen fuer YoY
+        if len(cpi) >= 13:
+            cur_val  = cpi[-1][1]
+            yoy_val  = cpi[-13][1]  # 12 Monate zurueck
+            yoy_pct  = round((cur_val / yoy_val - 1) * 100, 2) if yoy_val else None
+            # YoY-Historie fuer Z-Score/Trend (soweit Datenpunkte reichen)
+            yoy_series = []
+            for i in range(12, len(cpi)):
+                base = cpi[i-12][1]
+                if base:
+                    yoy_series.append((cpi[i][0], round((cpi[i][1] / base - 1) * 100, 2)))
+            z, p = _z_and_p(yoy_series) if len(yoy_series) >= 20 else (None, None)
+            result["core_cpi_yoy"] = {
+                "label":      "US Core CPI YoY (ex Food & Energy, %)",
+                "current":    yoy_pct,
+                "date":       cpi[-1][0],
+                "zscore":     z,
+                "percentile": p,
+                "n_obs":      len(yoy_series),
+                # Grober, haeufig zitierter informeller Referenzbereich (kein
+                # Fed-Zielwert fuer CPI — das offizielle Fed-Ziel bezieht sich
+                # auf PCE, nicht CPI). Bewusst als "erhoeht" statt hartem
+                # Cutoff formuliert.
+                "signal":     ("erhöht" if yoy_pct and yoy_pct > 3.0 else "moderat") if yoy_pct is not None else None,
+                "ok":         yoy_pct is not None,
+            }
+            log.info(f"  FRED Core CPI YoY: {yoy_pct}% (Z={z}, P{p})")
+    except Exception as e:
+        result["core_cpi_yoy"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED Core CPI Fehler: {e}")
+
+    # ── 6. Arbeitslosenrate + Sahm-Rule (offizielle FRED-Serie) ──────────────
+    # SAHMREALTIME ist die von Claudia Sahm selbst gepflegte offizielle
+    # Berechnung (3M-Schnitt UNRATE vs. Minimum der letzten 12 Monate,
+    # Trigger bei >= 0.50 Prozentpunkten) — bewusst NICHT selbst nachgebaut,
+    # um keine eigene fehleranfaellige Naeherung einer etablierten,
+    # akademisch anerkannten Regel zu riskieren.
+    try:
+        unrate = _fred_series("UNRATE", limit=36)
+        sahm   = _fred_series("SAHMREALTIME", limit=36)
+        if unrate:
+            result["unemployment"] = {
+                "label":        "US Arbeitslosenrate (UNRATE, %)",
+                "current":      unrate[-1][1],
+                "date":         unrate[-1][0],
+                "trend_3m":     round(unrate[-1][1] - unrate[-4][1], 2) if len(unrate) >= 4 else None,
+                "sahmRule":     sahm[-1][1] if sahm else None,
+                "sahmDate":     sahm[-1][0] if sahm else None,
+                "sahmTriggered": bool(sahm and sahm[-1][1] >= 0.50),
+                "signal":       ("REZESSIONSSIGNAL (Sahm-Rule ≥0.50)" if sahm and sahm[-1][1] >= 0.50 else "kein Sahm-Trigger"),
+                "ok":           True,
+            }
+            log.info(f"  FRED Arbeitslosenrate: {unrate[-1][1]}% | Sahm-Rule: {sahm[-1][1] if sahm else 'n/v'} — {result['unemployment']['signal']}")
+    except Exception as e:
+        result["unemployment"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED Arbeitslosenrate/Sahm-Rule Fehler: {e}")
+
+    # ── 7. University of Michigan Consumer Sentiment ─────────────────────────
+    try:
+        umich = _fred_series("UMCSENT", limit=120)
+        if umich:
+            z, p = _z_and_p(umich)
+            result["consumer_sentiment"] = {
+                "label":      "University of Michigan Consumer Sentiment",
+                "current":    umich[-1][1],
+                "date":       umich[-1][0],
+                "zscore":     z,
+                "percentile": p,
+                "n_obs":      len(umich),
+                "signal":     ("sehr schwach" if p is not None and p <= 15 else
+                               "sehr stark" if p is not None and p >= 85 else "normal"),
+                "ok":         True,
+            }
+            log.info(f"  FRED UMich Consumer Sentiment: {umich[-1][1]} (Z={z}, P{p})")
+    except Exception as e:
+        result["consumer_sentiment"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED UMich Consumer Sentiment Fehler: {e}")
+
+    # ── 8. Heavy Truck Sales (10-Monats-Schnitt, Axel-Vorschlag) ─────────────
+    # HTRUCKSSAAR = Motor Vehicle Retail Sales: Heavy Weight Trucks (Mio
+    # Einheiten, SAAR). Klassischer Fruehindikator (ECRI-nahe Verwendung) —
+    # roher Monatswert ist sehr volatil, daher 10M-gleitender Durchschnitt
+    # wie von Axel vorgeschlagen; Signal ist die TREND-Richtung des
+    # Durchschnitts, nicht der Level (der schwankt stark je Marktzyklus).
+    try:
+        trucks = _fred_series("HTRUCKSSAAR", limit=36)
+        if len(trucks) >= 11:
+            ma10_series = []
+            for i in range(9, len(trucks)):
+                window = [v for _, v in trucks[i-9:i+1]]
+                ma10_series.append((trucks[i][0], round(sum(window) / 10, 3)))
+            cur_ma  = ma10_series[-1][1]
+            prev_ma = ma10_series[-4][1] if len(ma10_series) >= 4 else None  # 3 Monate zurueck
+            trend_pct = round((cur_ma / prev_ma - 1) * 100, 2) if prev_ma else None
+            result["heavy_truck"] = {
+                "label":       "Heavy Truck Sales (10M-Schnitt, Mio Einheiten SAAR)",
+                "current":     trucks[-1][1],
+                "ma10":        cur_ma,
+                "date":        trucks[-1][0],
+                "trend_3m_pct": trend_pct,
+                "signal":      ("fallend" if trend_pct is not None and trend_pct < -3 else
+                                 "steigend" if trend_pct is not None and trend_pct > 3 else "seitwärts"),
+                "ok":          True,
+            }
+            log.info(f"  FRED Heavy Truck Sales: {trucks[-1][1]} (10M-Schnitt {cur_ma}, 3M-Trend {trend_pct}%) — {result['heavy_truck']['signal']}")
+    except Exception as e:
+        result["heavy_truck"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED Heavy Truck Sales Fehler: {e}")
+
+    # ── 9. OECD Composite Leading Indicator (USA) ────────────────────────────
+    # USALOLITOAASTSAM = OECD CLI, Amplitude-Adjusted, ueber FRED gespiegelt
+    # (kein direkter OECD-Scrape noetig). Offizielle OECD-Interpretation ist
+    # eine Quadranten-Logik aus Level ggue. 100 (Baseline) UND Richtung
+    # (M/M-Aenderung) — Level allein ist nicht aussagekraeftig, deshalb beide
+    # Dimensionen im Signal.
+    try:
+        cli = _fred_series("USALOLITOAASTSAM", limit=36)
+        if len(cli) >= 2:
+            cur   = cli[-1][1]
+            prev  = cli[-2][1]
+            rising = cur > prev
+            above  = cur > 100
+            if above and rising:      quadrant = "EXPANSION (>100, steigend)"
+            elif above and not rising: quadrant = "ABSCHWAECHUNG (>100, fallend)"
+            elif not above and not rising: quadrant = "KONTRAKTION (<100, fallend)"
+            else:                     quadrant = "ERHOLUNG (<100, steigend)"
+            # Numerischer Quadranten-Score fuer MCM-Signal-Auswertung (s.
+            # _MCM_SIGNAL_RULES["oecd_cli_score"]): +1 je "gutem" Merkmal
+            # (>100, steigend), -1 je "schlechtem" — Bereich -2..+2.
+            quadrant_score = (1 if above else -1) + (1 if rising else -1)
+            result["oecd_cli"] = {
+                "label":    "OECD Composite Leading Indicator USA (Amplitude Adjusted)",
+                "current":  cur,
+                "date":     cli[-1][0],
+                "rising":   rising,
+                "above100": above,
+                "quadrantScore": quadrant_score,
+                "signal":   quadrant,
+                "ok":       True,
+            }
+            log.info(f"  FRED OECD CLI: {cur} ({'steigend' if rising else 'fallend'}) — {quadrant}")
+    except Exception as e:
+        result["oecd_cli"] = {"ok": False, "reason": str(e)[:100]}
+        log.warning(f"  FRED OECD CLI Fehler: {e}")
 
     result["ok"] = any(v.get("ok") for k, v in result.items() if isinstance(v, dict))
     return result
@@ -6329,6 +6563,56 @@ def fetch_vix_term():
     return None
 
 # ── CLOUDFLARE KV UPLOAD ──────────────────────────────────────────────────────
+
+
+def calc_ratio_signal(hist_data: dict, sym_a: str, sym_b: str, label: str) -> dict:
+    """Generisches Ratio-Rotationssignal aus zwei bereits geladenen ETF-Serien
+    (17.08.2026, Axel-Anfrage — Konjunktur-Indikatoren). Verwendet fuer:
+      - Consumer Staples (XLP) vs. Discretionary (XLY): defensiv vs. zyklisch,
+        korreliert laut Axel mit SPX-Regime (Staples-Outperformance = Risk-Off)
+      - Growth (IWF) vs. Value (IWD)
+
+    Beide Ticker liegen bereits im Ticker-Universum (yfinance-Batch), daher
+    KEIN zusaetzlicher API-Call noetig — reine Nachberechnung aus hist_data,
+    identisch im Muster zur bestehenden Sektor-RS-Berechnung (5b).
+
+    Signal ist bewusst trend-/momentumbasiert (5T vs. 20T-Ratio-Veraenderung),
+    nicht levelbasiert — ein Ratio-Level allein (z.B. "XLP/XLY = 0.42") hat
+    keine feste, allgemein anerkannte Interpretationsschwelle; die RICHTUNG
+    der Ratio-Bewegung (steigend = Rotation in a, fallend = Rotation in b)
+    ist die etablierte Lesart.
+    """
+    a_data = hist_data.get(sym_a)
+    b_data = hist_data.get(sym_b)
+    if a_data is None or b_data is None or len(a_data) < 21 or len(b_data) < 21:
+        return {"ok": False, "reason": f"{sym_a}/{sym_b} Daten fehlen oder zu kurz"}
+    try:
+        a_close = list(a_data["Close"].dropna())
+        b_close = list(b_data["Close"].dropna())
+        n = min(len(a_close), len(b_close))
+        a_close, b_close = a_close[-n:], b_close[-n:]
+
+        ratio_now = a_close[-1] / b_close[-1]
+        ratio_5   = a_close[-6]  / b_close[-6]  if n >= 6  else None
+        ratio_20  = a_close[-21] / b_close[-21] if n >= 21 else None
+        ratio_60  = a_close[-61] / b_close[-61] if n >= 61 else None
+
+        chg_5  = round((ratio_now / ratio_5  - 1) * 100, 2) if ratio_5  else None
+        chg_20 = round((ratio_now / ratio_20 - 1) * 100, 2) if ratio_20 else None
+        chg_60 = round((ratio_now / ratio_60 - 1) * 100, 2) if ratio_60 else None
+
+        trend = "steigend" if chg_5 is not None and chg_20 is not None and chg_5 > chg_20 else "fallend"
+
+        return {
+            "label":   label,
+            "symA":    sym_a, "symB": sym_b,
+            "ratio":   round(ratio_now, 4),
+            "chg5d":   chg_5, "chg20d": chg_20, "chg60d": chg_60,
+            "trend":   trend,
+            "ok":      True,
+        }
+    except Exception as e:
+        return {"ok": False, "reason": str(e)[:120]}
 
 
 def calc_regime_history_flag(mse_history: dict, current_regime: str) -> dict:
@@ -6622,6 +6906,18 @@ _MCM_SIGNAL_RULES = {
     # distribution_days: dd_max (hoehere von SPY/QQQ) — identisch zu den UI-
     # Severity-Schwellen (Watch>=4, Danger>=6).
     "distribution_days": [{"signal": "risk", "gte": 6}, {"signal": "caution", "gte": 4}, {"signal": "ok"}],
+    # NEU (17.08.2026, Axel-Anfrage — Konjunktur-Indikatoren, "auf diesem Auge
+    # bislang blind"). Schwellen s. Docstrings der jeweiligen fetch_fred_macro()-
+    # Bloecke — Sahm-Rule 0.50 ist die offizielle akademische Trigger-Schwelle,
+    # NFCI-Nullpunkt ist Chicago-Fed-eigene Interpretation, restliche Schwellen
+    # sind bewusst weich formuliert (keine erfundene Praezision vortaeuschen).
+    "nfci":              [{"signal": "risk", "gte": 0.5}, {"signal": "caution", "gte": 0}, {"signal": "ok"}],
+    "core_cpi_yoy":      [{"signal": "caution", "gte": 3.0}, {"signal": "ok"}],
+    "sahm_rule":         [{"signal": "risk", "gte": 0.5}, {"signal": "ok"}],
+    # oecd_cli_score: -2 KONTRAKTION .. +2 EXPANSION (Quadranten-Score, s.
+    # fetch_fred_macro()) — risk nur im eindeutigsten Kontraktions-Quadranten.
+    "oecd_cli_score":    [{"signal": "risk", "lte": -2}, {"signal": "caution", "lt": 0}, {"signal": "ok"}],
+    "heavy_truck_trend": [{"signal": "caution", "lte": -3}, {"signal": "ok"}],
 }
 
 # ── Calendar-Faktoren (identische Fenster-/Karenz-Parameter wie ko-indicators.json) ──
@@ -7122,6 +7418,48 @@ def build_server_market_context(master):
     dd_max_val = dd.get("dd_max")
     _add("distribution_days", dd_max_val, _MCM_SIGNAL_RULES["distribution_days"],
          label=(f"Distribution Days (25T, O'Neil/IBD): SPY {dd.get('dd_spy')} / QQQ {dd.get('dd_qqq')} ({dd.get('dd_severity')})" if dd_max_val is not None else None))
+
+    # ── Konjunktur-Indikatoren (17.08.2026, Axel-Anfrage) ────────────────────
+    nfci = fred.get("nfci", {}) or {}
+    nfci_val = nfci.get("current") if nfci.get("ok") else None
+    _add("nfci", nfci_val, _MCM_SIGNAL_RULES["nfci"],
+         label=(f"NFCI (Chicago Fed): {nfci_val:+.3f} (Z={nfci.get('zscore')})" if nfci_val is not None else None))
+
+    cpi = fred.get("core_cpi_yoy", {}) or {}
+    cpi_val = cpi.get("current") if cpi.get("ok") else None
+    _add("core_cpi_yoy", cpi_val, _MCM_SIGNAL_RULES["core_cpi_yoy"],
+         label=(f"US Core CPI YoY: {cpi_val}%" if cpi_val is not None else None))
+
+    unemp = fred.get("unemployment", {}) or {}
+    sahm_val = unemp.get("sahmRule") if unemp.get("ok") else None
+    _add("sahm_rule", sahm_val, _MCM_SIGNAL_RULES["sahm_rule"],
+         label=(f"Sahm-Rule: {sahm_val:+.2f} Pkt (Arbeitslosenrate {unemp.get('current')}%, Trigger ≥0.50)" if sahm_val is not None else None))
+
+    cli = fred.get("oecd_cli", {}) or {}
+    cli_score = cli.get("quadrantScore") if cli.get("ok") else None
+    _add("oecd_cli_score", cli_score, _MCM_SIGNAL_RULES["oecd_cli_score"],
+         label=(f"OECD Composite Leading Indicator (USA): {cli.get('current')} → {cli.get('signal')}" if cli_score is not None else None))
+
+    truck = fred.get("heavy_truck", {}) or {}
+    truck_trend = truck.get("trend_3m_pct") if truck.get("ok") else None
+    _add("heavy_truck_trend", truck_trend, _MCM_SIGNAL_RULES["heavy_truck_trend"],
+         label=(f"Heavy Truck Sales (10M-Schnitt, 3M-Trend): {truck_trend:+.1f}% → {truck.get('signal')}" if truck_trend is not None else None))
+
+    # Rein informativ, kein caution/risk-Signal (Rotationsrichtung ist nicht
+    # per se "gut" oder "schlecht" — Interpretation bleibt der KI-Prosa
+    # überlassen, analog zum bestehenden qqq_markov-Faktor).
+    sd = market.get("stapleDiscretionary", {}) or {}
+    if sd.get("ok"):
+        factors["staples_discretionary"] = {
+            "value": sd.get("trend"), "signal": None,
+            "label": f"Consumer Staples vs. Discretionary (XLP/XLY): {sd.get('ratio')} — 5T {sd.get('chg5d')}% / 20T {sd.get('chg20d')}% ({sd.get('trend')})",
+        }
+    gv = market.get("growthValue", {}) or {}
+    if gv.get("ok"):
+        factors["growth_value"] = {
+            "value": gv.get("trend"), "signal": None,
+            "label": f"Growth vs. Value (IWF/IWD): {gv.get('ratio')} — 5T {gv.get('chg5d')}% / 20T {gv.get('chg20d')}% ({gv.get('trend')})",
+        }
 
     # Calendar-Faktoren
     events = _mcm_load_macro_calendar()
@@ -8357,7 +8695,23 @@ def main():
     else:
         log.info("  Schwächste (RS5):     — (SPY-Daten fehlen, Sektor-RS übersprungen)")
 
-    # 5c. Swing-Trading Kandidaten
+    # 5c. Konjunktur-Ratio-Signale (17.08.2026, Axel-Anfrage) ─────────────────
+    # Beide Ticker-Paare sind bereits im Universum, keine neuen API-Calls.
+    log.info(f"\n📊 Konjunktur-Ratio-Signale (Staples/Discretionary, Growth/Value)...")
+    staples_discretionary = calc_ratio_signal(hist_data, "XLP", "XLY", "Consumer Staples vs. Discretionary")
+    growth_value          = calc_ratio_signal(hist_data, "IWF", "IWD", "Growth vs. Value")
+    if staples_discretionary.get("ok"):
+        log.info(f"  Staples/Discretionary: {staples_discretionary['ratio']} "
+                 f"(5T {staples_discretionary['chg5d']}% / 20T {staples_discretionary['chg20d']}%) — {staples_discretionary['trend']}")
+    else:
+        log.warning(f"  Staples/Discretionary übersprungen: {staples_discretionary.get('reason')}")
+    if growth_value.get("ok"):
+        log.info(f"  Growth/Value: {growth_value['ratio']} "
+                 f"(5T {growth_value['chg5d']}% / 20T {growth_value['chg20d']}%) — {growth_value['trend']}")
+    else:
+        log.warning(f"  Growth/Value übersprungen: {growth_value.get('reason')}")
+
+    # 5d. Swing-Trading Kandidaten
     swing_candidates = sorted(
         [r for r in valid
          if r.get("score", 0) >= 45
@@ -8367,7 +8721,7 @@ def main():
         key=lambda x: x.get("score", 0), reverse=True
     )[:20]
 
-    # 5d. Datenfreshe validieren
+    # 5e. Datenfreshe validieren
     log.info(f"\n🗓️  Validiere Datenfreshe...")
     last_trading_day = validate_data_freshness(results)
     log.info(f"  Referenz-Handelstag: {last_trading_day}")
@@ -8466,8 +8820,10 @@ def main():
             "fearGreed":  fear_greed,
             "snapshot":   market_snapshot,   # Single Source of Truth: alle Live-Preise
             "zscores":    macro_zscores,     # Z-Scores + Perzentile (252T) für Deep-Reasoning
-            "fredMacro":  fred_macro,        # HY-Spread + Net Liquidity (FRED)
+            "fredMacro":  fred_macro,        # HY-Spread + Net Liquidity + Konjunktur-Indikatoren (FRED, 17.08.2026 erweitert)
             "moveIndex":  move_index,        # Treasury-Volatilität (Renten-VIX)
+            "stapleDiscretionary": staples_discretionary,  # Konjunktur-Indikator (17.08.2026, Axel-Anfrage)
+            "growthValue":         growth_value,           # Konjunktur-Indikator (17.08.2026, Axel-Anfrage)
             "sectorHoldings": sector_holdings, # ETF-Holdings-Klickthrough (Proof-of-Concept, nur XLK, 11.07.2026)
             "breadthOsc":        breadth_osc,        # McClellan Breadth-Oszillator (27.07.2026, Backlog #12)
             "scoreDivergences":  score_divergences,  # Score-Paar-Divergenzen (28.07.2026, Backlog #11)
