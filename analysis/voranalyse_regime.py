@@ -91,22 +91,31 @@ SHORT_HISTORY_FEATURES = ["hy_spread"]  # s. Docstring oben: 3-Jahres-Limit seit
 
 
 def fetch_yf_series(ticker: str, start: str) -> pd.Series:
-    """[REKONSTRUKTION, mittlere Konfidenz -- nur Signatur/Verwendung
-    (fetch_yf_series("^VIX", start=start) -> pd.Series) im Chatverlauf
-    belegt, nicht der Funktionskoerper selbst. Naheliegende yfinance-
-    Standardimplementierung nachgebaut; vor Verwendung gegen echten
-    Output pruefen (insbesondere: Close vs. Adj Close, Zeitzonenbehandlung).]
+    """[KORRIGIERT nach echtem Fehlschlag beim ersten lokalen Testlauf,
+    18.08.2026 -- Axel: `yf.download()` lieferte fuer ^VIX3M nur 1 Zeile
+    (den aktuellen Tag) statt der vollen Historie, waehrend ^VIX mit
+    identischem Code korrekt 3845 Zeilen lieferte. Diagnose per direktem
+    Vergleichstest bestaetigt: `yf.Ticker(ticker).history(...)` liefert
+    fuer ^VIX3M die vollstaendige Historie (3826 Zeilen, 2011-2026), waehrend
+    `yf.download()` bei diesem Ticker fehlschlaegt. Ticker-spezifische
+    yfinance-Eigenart, kein Logikfehler im Backtest selbst -- daher auf
+    das Ticker-Objekt-API umgestellt, das in Axels Test zuverlaessig war.]
     """
     import yfinance as yf
 
-    data = yf.download(ticker, start=start, progress=False, auto_adjust=True)
+    data = yf.Ticker(ticker).history(start=start, auto_adjust=True)
     if data.empty:
         raise ValueError(f"Keine Daten fuer Ticker {ticker} ab {start}")
     series = data["Close"]
     if isinstance(series, pd.DataFrame):
         series = series.iloc[:, 0]
     series.name = ticker
-    series.index = pd.to_datetime(series.index).tz_localize(None)
+    # Index kann tz-aware (z.B. "-04:00" bei .history()) oder tz-naiv sein --
+    # robust auf tz-naiv normalisieren, unabhaengig vom Ausgangszustand.
+    idx = pd.to_datetime(series.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    series.index = idx
     return series
 
 
