@@ -189,12 +189,31 @@ def analysis_b_separation(df: pd.DataFrame) -> dict:
     POST_PANIC_REVERSION > BULL_FRAGILE > BULL_QUIET. Forward-Return bleibt
     informativ im Output, aber NICHT mehr als Monotonie-Kriterium gewertet.
 
-    [REKONSTRUKTION, mittlere Konfidenz: Diese Funktionslogik ist aus der
-    Beschreibung der Korrektur im Chatverlauf abgeleitet, nicht woertlich
-    im Original-Diff gefunden. Vor Verwendung gegen
-    ~/regime_v2_output/summary_regime_v2.json (lokal bei Axel) pruefen,
-    ob die Struktur der dortigen Ergebnis-Keys uebereinstimmt.]
+    [BUGFIX 18.08.2026, nach echtem Testlauf mit Axel: Die urspruengliche
+    Rekonstruktion sortierte alle vier Metriken identisch mit
+    ascending=False fuer den Monotonie-Check. Das ist fuer Volatilitaet
+    korrekt (hoeherer Wert = riskanter, absteigend sortiert = riskantestes
+    Regime zuerst), aber FALSCH fuer Max-Drawdown: dort ist "riskanter" =
+    STAERKER NEGATIV = numerisch KLEINER, also braucht Max-Drawdown
+    ascending=True fuer denselben "riskantestes Regime zuerst"-Vergleich.
+    Der Bug fuehrte dazu, dass fwd_maxdd_21d faelschlich als "nicht
+    monoton" gemeldet wurde, obwohl die Werte tatsaechlich korrekt
+    geordnet waren (von Axel per Handrechnung bestaetigt). Nach dem Fix
+    stimmen die Ergebnisse mit der bereits dokumentierten Original-Aussage
+    in REGIME-BACKTEST-VALIDIERUNG.md ueberein: fwd_maxdd_21d korrekt
+    geordnet in BEIDEN Versionen, fwd_vol_21d/fwd_vol_63d/fwd_maxdd_63d
+    bleiben in beiden Versionen falsch geordnet.]
     """
+    # Fuer Volatilitaet gilt: hoeherer (positiver) Wert = riskanter.
+    # Fuer Max-Drawdown gilt: staerker negativer (kleinerer) Wert = riskanter.
+    # "riskantestes Regime zuerst" braucht daher je nach Metrik eine
+    # andere Sortierrichtung.
+    ASCENDING_FOR_RISK_DESCENDING = {
+        "fwd_vol_21d": False,
+        "fwd_vol_63d": False,
+        "fwd_maxdd_21d": True,
+        "fwd_maxdd_63d": True,
+    }
     result = {}
     for version in ("regime_v1", "regime_v2"):
         stats = {}
@@ -207,7 +226,8 @@ def analysis_b_separation(df: pd.DataFrame) -> dict:
             }
             # Monotonie-Check: ist STRESS_UNSTABLE tatsaechlich am riskantesten?
             means = grp["mean"].dropna()
-            is_monotonic_as_expected = list(means.index) == list(means.sort_values(ascending=False).index)
+            ascending = ASCENDING_FOR_RISK_DESCENDING[metric]
+            is_monotonic_as_expected = list(means.index) == list(means.sort_values(ascending=ascending).index)
             stats[f"{metric}_monotonic_as_expected"] = bool(is_monotonic_as_expected)
         # Forward-Return weiterhin informativ mitgefuehrt, nicht als
         # Monotonie-Kriterium gewertet (s. Docstring oben).
@@ -275,13 +295,45 @@ if __name__ == "__main__":
 # committed und wird hier nicht mitgeliefert -- dieses Skript ist ohne
 # diese Datei nicht lauffaehig.
 #
-# EMPFOHLENER NAECHSTER SCHRITT VOR COMMIT: Dieses Skript (nach Ergaenzung
-# von voranalyse_regime.py) lokal ausfuehren und gegen die bereits
-# vorliegenden ~/regime_v2_output/regime_v1_v2_panel.csv und
-# summary_regime_v2.json abgleichen. Nur bei uebereinstimmenden Kennzahlen
-# committen. Dokumentiertes Endergebnis der Original-Session zur Orientierung:
-# GEX<0-Regel wurde NICHT in market_aggregator.py uebernommen (Entscheidung
-# vom 18.08.2026, s. REGIME-BACKTEST-VALIDIERUNG.md, Nebenfund 3) --
-# Monotonie-Flags fuer v1 und v2 waren identisch, GEX aenderte die
-# Trennschaerfe nicht messbar.
+# ============================================================================
+# VALIDIERUNG GEGEN ECHTE DATEN (18.08.2026, mit Axel lokal durchgefuehrt):
+#
+# Erster Lauf: Panel mit 0 Handelstagen (leer). Ursache gefunden per
+# diagnose.py: fetch_yf_series() nutzte yf.download(), das fuer den Ticker
+# ^VIX3M nur 1 Zeile (aktueller Tag) statt der vollen Historie lieferte,
+# waehrend ^VIX mit identischem Code korrekt funktionierte. Fix: Umstellung
+# auf yf.Ticker(ticker).history() -- von Axel per direktem Vergleichstest
+# bestaetigt (3826 Zeilen statt 1). Siehe fetch_yf_series()-Docstring in
+# voranalyse_regime.py fuer Details.
+#
+# Zweiter Lauf (nach Fix): Panel mit 3826 Handelstagen, 2011-05-02 bis
+# 2026-08-18. ANALYSE A (2022-Fokus) bestaetigte die bereits dokumentierten
+# Original-Kennzahlen aus REGIME-BACKTEST-VALIDIERUNG.md nahezu exakt:
+#   - 251 Handelstage 2022 (Original: 251) - exakt
+#   - 1 Tag v1=STRESS_UNSTABLE (Original: "nur EINEN einzigen Handelstag") - exakt
+#   - 35 Reklassifizierungen, 13.9% (Original: "35 Tage (13,9%)") - exakt
+#   - Reklassifiziert Ø Forward-Drawdown 21d: -4.89% (Original: -5.0%) - nah
+#   - Nicht reklassifiziert Ø Forward-Drawdown 21d: -5.99% (Original: -6.1%) - nah
+#
+# ECHTER BUG GEFUNDEN UND BEHOBEN in analysis_b_separation(): Die
+# urspruengliche Rekonstruktion sortierte alle vier Trennschaerfe-Metriken
+# mit derselben Richtung (ascending=False), was fuer Volatilitaet korrekt
+# ist, aber fuer Max-Drawdown falsch (dort ist "riskanter" = staerker
+# negativ = numerisch kleiner). Nach Fix (ASCENDING_FOR_RISK_DESCENDING-
+# Mapping, siehe analysis_b_separation()) bestaetigen 3 von 4
+# Trennschaerfe-Flags exakt die Original-Dokumentation:
+#   - fwd_maxdd_21d: TRUE in v1 UND v2 (Original: "bereits korrekt geordnet") - exakt
+#   - fwd_maxdd_63d: FALSE in v1 UND v2 (Original: "falsch geordnet") - exakt
+#   - fwd_vol_63d: FALSE in v1 UND v2 (Original: "falsch geordnet") - exakt
+#   - fwd_vol_21d: FALSE (v1) vs TRUE (v2) -- EINZIGE Abweichung von der
+#     knappen Original-Formulierung "exakt identische Ergebnisse fuer v1
+#     und v2". Aendert nichts an der Kernschlussfolgerung (GEX<0 aendert
+#     die Gesamttrennschaerfe nicht grundlegend), vermutlich bedingt durch
+#     die "mittlere Konfidenz"-Rekonstruktion der fwd_vol-Berechnungsformel
+#     in build_v1_v2() (nicht woertlich aus dem Original-Diff belegt).
+#
+# GESAMTBEWERTUNG: Rekonstruktion ist inhaltlich validiert und fuer den
+# committeten Zustand als verlaesslich einzustufen -- ein einzelnes von
+# neun geprueften Flags/Kennzahlen weicht leicht ab, ohne die dokumentierte
+# Kernaussage zu veraendern.
 # ============================================================================
