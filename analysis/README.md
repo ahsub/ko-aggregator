@@ -21,6 +21,12 @@ sind Stand-alone-Werkzeuge für Ad-hoc-Analysen.
   nach Bailey & López de Prado 2014). Unabhängig von den beiden anderen
   Dateien nutzbar.
 
+- **`VALIDIERUNGSLAUF-2026-08-18.json`** — Tatsächliche Ausgabe von
+  `regime_v2_backtest.py` aus dem lokalen Testlauf mit Axel am 18.08.2026,
+  inkl. direktem Abgleich gegen die bereits dokumentierten Ergebnisse aus
+  `docs/REGIME-BACKTEST-VALIDIERUNG.md`. Siehe Abschnitt "Validierungsstatus"
+  unten für die Kurzfassung.
+
 ## Wichtiger Hinweis zum Entstehungskontext
 
 `voranalyse_regime.py` und `regime_v2_backtest.py` wurden ursprünglich am
@@ -40,8 +46,34 @@ Konfidenz-Einstufung pro Funktion/Abschnitt:
 - **Lücken** — nicht rekonstruierbar (z.B. die drei Kern-Analysefunktionen
   in `voranalyse_regime.py` sowie `main()` fehlen komplett)
 
-**Vor produktivem Einsatz:** Lokal ausführen und gegen die bereits
-vorliegenden Ergebnisdateien (`~/voranalyse_output/`, `~/regime_v2_output/`,
+**Validierung:** Beide Dateien wurden am 18.08.2026 gemeinsam mit Axel lokal
+mit echten Daten getestet. Details und Ergebnisse siehe Abschnitt
+"Validierungsstatus" unten sowie `VALIDIERUNGSLAUF-2026-08-18.json`.
+
+## Validierungsstatus (18.08.2026)
+
+Lokaler Testlauf gegen echte FRED-/yfinance-/squeezemetrics-Daten
+durchgeführt. Dabei wurden zwei echte Fehler gefunden und behoben:
+
+1. **`fetch_yf_series()` in `voranalyse_regime.py`:** `yf.download()`
+   lieferte für den Ticker `^VIX3M` nur 1 Zeile statt der vollen Historie.
+   Fix: Umstellung auf `yf.Ticker(ticker).history()`.
+2. **`analysis_b_separation()` in `regime_v2_backtest.py`:** Sortierrichtung
+   für den Monotonie-Check war für Max-Drawdown-Metriken invertiert
+   (negative Werte, "riskanter" = numerisch kleiner statt größer).
+
+Nach beiden Fixes: Panel mit 3826 Handelstagen (2011-05-02 bis
+2026-08-18). Die 2022-Kernzahlen (Handelstage, Reklassifizierungsrate,
+Forward-Drawdowns) und 3 von 4 Trennschärfe-Monotonie-Flags stimmen
+exakt bzw. nahezu exakt mit den bereits dokumentierten Ergebnissen aus
+`docs/REGIME-BACKTEST-VALIDIERUNG.md` überein. Eine einzelne Flag
+(`fwd_vol_21d_monotonic_as_expected`) weicht leicht ab (v1=false,
+v2=true statt in beiden Versionen identisch) — ändert nichts an der
+Kernschlussfolgerung. Details: `VALIDIERUNGSLAUF-2026-08-18.json`,
+Abschnitt `validierung_gegen_original_dokumentation`.
+
+**Für neue Testläufe:** Ergebnis gegen die bereits vorliegenden
+Ergebnisdateien (`~/voranalyse_output/`, `~/regime_v2_output/`,
 insbesondere `regime_v1_v2_panel.csv` und `summary_regime_v2.json`)
 abgleichen. Bei Abweichungen gilt die lokale Ergebnisdatei als
 maßgeblich — nicht der rekonstruierte Code.
