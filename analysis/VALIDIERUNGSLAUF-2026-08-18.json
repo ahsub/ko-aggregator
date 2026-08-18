@@ -1,0 +1,133 @@
+{
+  "_meta": {
+    "erzeugt_am": "2026-08-18",
+    "kontext": "Validierungslauf der rekonstruierten regime_v2_backtest.py / voranalyse_regime.py gegen echte FRED/yfinance/squeezemetrics-Daten, durchgeführt von Axel lokal, begleitet von Claude im Chat.",
+    "panel_zeitraum": "2011-05-02 bis 2026-08-18",
+    "panel_handelstage": 3826,
+    "hinweis": "Dies ist die Ausgabe NACH dem Bugfix in analysis_b_separation() (Sortierrichtung für Max-Drawdown-Metriken). Siehe Kommentarblock am Ende von regime_v2_backtest.py für den vollständigen Validierungsbericht gegen REGIME-BACKTEST-VALIDIERUNG.md."
+  },
+  "analysis_a_2022_focus": {
+    "n_trading_days_2022": 251,
+    "n_reclassified_bull_to_stress": 35,
+    "pct_reclassified": 13.9,
+    "regime_v1_distribution_2022": {
+      "BULL_QUIET": 120,
+      "POST_PANIC_REVERSION": 89,
+      "BULL_FRAGILE": 41,
+      "STRESS_UNSTABLE": 1
+    },
+    "regime_v2_distribution_2022": {
+      "BULL_QUIET": 107,
+      "POST_PANIC_REVERSION": 89,
+      "STRESS_UNSTABLE": 36,
+      "BULL_FRAGILE": 19
+    },
+    "reclassified_days_mean_fwd_return_21d": -0.0074,
+    "reclassified_days_mean_fwd_return_63d": -0.0022,
+    "reclassified_days_pct_negative_fwd_21d": 54.3,
+    "reclassified_days_mean_fwd_vol_21d": 0.2312,
+    "reclassified_days_mean_fwd_vol_63d": 0.2184,
+    "reclassified_days_mean_fwd_maxdd_21d": -0.0489,
+    "reclassified_days_mean_fwd_maxdd_63d": -0.076,
+    "non_reclassified_bull_days_mean_fwd_return_21d": -0.031,
+    "non_reclassified_bull_days_mean_fwd_vol_21d": 0.2335,
+    "non_reclassified_bull_days_mean_fwd_maxdd_21d": -0.0599
+  },
+  "analysis_b_separation_full_history": {
+    "regime_v1": {
+      "fwd_vol_21d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": 0.2086, "n": 191},
+        "POST_PANIC_REVERSION": {"mean": 0.1746, "n": 528},
+        "BULL_FRAGILE": {"mean": 0.179, "n": 172},
+        "BULL_QUIET": {"mean": 0.1352, "n": 2905}
+      },
+      "fwd_vol_21d_monotonic_as_expected": false,
+      "fwd_vol_63d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": 0.1399, "n": 188},
+        "POST_PANIC_REVERSION": {"mean": 0.1545, "n": 513},
+        "BULL_FRAGILE": {"mean": 0.1744, "n": 171},
+        "BULL_QUIET": {"mean": 0.1483, "n": 2861}
+      },
+      "fwd_vol_63d_monotonic_as_expected": false,
+      "fwd_maxdd_21d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": -0.0457, "n": 191},
+        "POST_PANIC_REVERSION": {"mean": -0.0317, "n": 530},
+        "BULL_FRAGILE": {"mean": -0.0306, "n": 172},
+        "BULL_QUIET": {"mean": -0.0221, "n": 2932}
+      },
+      "fwd_maxdd_21d_monotonic_as_expected": true,
+      "fwd_maxdd_63d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": -0.056, "n": 191},
+        "POST_PANIC_REVERSION": {"mean": -0.0464, "n": 530},
+        "BULL_FRAGILE": {"mean": -0.0403, "n": 172},
+        "BULL_QUIET": {"mean": -0.0417, "n": 2932}
+      },
+      "fwd_maxdd_63d_monotonic_as_expected": false,
+      "fwd_return_21d_by_regime_informational": {
+        "STRESS_UNSTABLE": {"mean": 0.0352, "n": 191},
+        "POST_PANIC_REVERSION": {"mean": 0.0212, "n": 530},
+        "BULL_FRAGILE": {"mean": 0.0271, "n": 172},
+        "BULL_QUIET": {"mean": 0.0079, "n": 2912}
+      },
+      "fwd_return_63d_by_regime_informational": {
+        "STRESS_UNSTABLE": {"mean": 0.0966, "n": 191},
+        "POST_PANIC_REVERSION": {"mean": 0.0562, "n": 528},
+        "BULL_FRAGILE": {"mean": 0.0772, "n": 172},
+        "BULL_QUIET": {"mean": 0.0258, "n": 2872}
+      }
+    },
+    "regime_v2": {
+      "fwd_vol_21d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": 0.2026, "n": 265},
+        "POST_PANIC_REVERSION": {"mean": 0.1746, "n": 528},
+        "BULL_FRAGILE": {"mean": 0.172, "n": 141},
+        "BULL_QUIET": {"mean": 0.1346, "n": 2862}
+      },
+      "fwd_vol_21d_monotonic_as_expected": true,
+      "fwd_vol_63d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": 0.1511, "n": 260},
+        "POST_PANIC_REVERSION": {"mean": 0.1545, "n": 513},
+        "BULL_FRAGILE": {"mean": 0.1674, "n": 141},
+        "BULL_QUIET": {"mean": 0.1481, "n": 2819}
+      },
+      "fwd_vol_63d_monotonic_as_expected": false,
+      "fwd_maxdd_21d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": -0.0419, "n": 266},
+        "POST_PANIC_REVERSION": {"mean": -0.0317, "n": 530},
+        "BULL_FRAGILE": {"mean": -0.0289, "n": 141},
+        "BULL_QUIET": {"mean": -0.022, "n": 2888}
+      },
+      "fwd_maxdd_21d_monotonic_as_expected": true,
+      "fwd_maxdd_63d_by_regime": {
+        "STRESS_UNSTABLE": {"mean": -0.0548, "n": 266},
+        "POST_PANIC_REVERSION": {"mean": -0.0464, "n": 530},
+        "BULL_FRAGILE": {"mean": -0.0358, "n": 141},
+        "BULL_QUIET": {"mean": -0.0416, "n": 2888}
+      },
+      "fwd_maxdd_63d_monotonic_as_expected": false,
+      "fwd_return_21d_by_regime_informational": {
+        "STRESS_UNSTABLE": {"mean": 0.0311, "n": 265},
+        "POST_PANIC_REVERSION": {"mean": 0.0212, "n": 530},
+        "BULL_FRAGILE": {"mean": 0.0292, "n": 141},
+        "BULL_QUIET": {"mean": 0.0076, "n": 2869}
+      },
+      "fwd_return_63d_by_regime_informational": {
+        "STRESS_UNSTABLE": {"mean": 0.0824, "n": 265},
+        "POST_PANIC_REVERSION": {"mean": 0.0562, "n": 528},
+        "BULL_FRAGILE": {"mean": 0.0853, "n": 141},
+        "BULL_QUIET": {"mean": 0.0254, "n": 2829}
+      }
+    }
+  },
+  "validierung_gegen_original_dokumentation": {
+    "quelle": "REGIME-BACKTEST-VALIDIERUNG.md, Nebenfund 3",
+    "n_trading_days_2022_original_vs_neu": "251 vs. 251 (exakt)",
+    "n_stress_unstable_v1_2022_original_vs_neu": "1 vs. 1 (exakt)",
+    "n_reclassified_original_vs_neu": "35 (13.9%) vs. 35 (13.9%) (exakt)",
+    "reclassified_maxdd_21d_original_vs_neu": "-5.0% vs. -4.89% (nah)",
+    "non_reclassified_maxdd_21d_original_vs_neu": "-6.1% vs. -5.99% (nah)",
+    "fwd_maxdd_21d_monotonic_original_vs_neu": "beide korrekt geordnet vs. true/true (exakt)",
+    "fwd_maxdd_63d_monotonic_original_vs_neu": "beide falsch geordnet vs. false/false (exakt)",
+    "abweichung": "fwd_vol_21d_monotonic_as_expected: v1=false, v2=true -- einzige nicht 1:1 identische Flag, ändert Kernschlussfolgerung nicht"
+  }
+}
