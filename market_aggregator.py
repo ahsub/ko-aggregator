@@ -6752,44 +6752,30 @@ def fetch_mse_history(days: int = 30) -> dict:
     """Laedt 30-Tage-History fuer VVIX, SKEW, VIX, VIX3M fuer MSE Z-Score Normalisierung."""
     result = {"vvix": [], "skew": [], "vix": [], "vixRatio": [], "dates": []}
     try:
-        # BUGFIX (16.08.2026, Axel-Deep-Debug-Anfrage — Root Cause nach 2
-        # fehlgeschlagenen Versuchen gefunden): Der gebuendelte 4-Symbol-
-        # yf.download(group_by="ticker") lieferte fuer ^VIX3M zuverlaessig nur
-        # 1 Tag Historie, waehrend ^VVIX/^SKEW/^VIX 245-254 Tage lieferten
-        # (per TEMP-DEBUG-Feld im Ergebnis-Dict verifiziert, da GHA-Logs fuer
-        # Claude nicht erreichbar sind). Die anschliessende Schnittmenge war
-        # dadurch zwangsweise auf 1 Tag limitiert — KEIN Timestamp/TZ-Problem
-        # wie in v5.36.7 vermutet (dieser Fix war wirkungslos, da er an der
-        # falschen Stelle ansetzte). fetch_vix_term() (VIX/VIX3M LIVE-Werte,
-        # an anderer Stelle im Code) holt beide Symbole bereits EINZELN und
-        # funktioniert zuverlaessig — dasselbe Muster hier fuer die Historie
-        # uebernommen: 4 separate Einzel-Downloads statt 1 gebuendeltem Call.
-        #
-        # BUGFIX (19.08.2026, Axel-Deep-Debug-Anfrage — Bug 1/3 Root-Cause,
-        # via GHA-Log #228 verifiziert): `period=f"{days+5}d"` (nicht-
-        # kanonischer String, z.B. "257d") lieferte pro Symbol zuverlaessig
-        # 225-257 Zeilen (KEINE 1-Zeilen-Drosselung) — aber das Fenster war
-        # bei 2026-07-17 eingefroren, unabhaengig vom tatsaechlichen Lauf-
-        # datum (verifiziert an Laeufen vom 22.07./01.08./19.08., alle mit
-        # identischem letzten VVIX/SKEW-Wert). Wahrscheinlichste Ursache:
-        # Yahoo/CDN-seitiges Response-Caching, an die exakte, taeglich
-        # identische Request-Signatur (Symbol+Perioden-String) gebunden —
-        # strukturell dasselbe Muster wie der bereits gefixte Client-VIX-
-        # Cache-Bug (v324, index.html), nur mit deutlich laengerer Cache-
-        # Lebensdauer. Fix: explizite start=/end=-Datumsangaben statt
-        # relativem Perioden-String — aendert die Anfrage taeglich zwangs-
-        # laeufig und umgeht damit jedes URL-/Parameter-gebundene Caching.
-        # NOCH NICHT gegen einen echten Live-Lauf verifiziert — vor
-        # Vertrauen in die Daten den naechsten GHA-Lauf gegenchecken
-        # (MSE History: ... Tage | VVIX: ... | Ratio: ... sollte ein
-        # aktuelles Datum/aktuelle Werte zeigen, nicht mehr 07-17/104.87).
-        _end_dt   = datetime.now(timezone.utc).date()
-        _start_dt = _end_dt - timedelta(days=days + 5)
+        # BUGFIX (19.08.2026, Axel-Deep-Debug-Anfrage — Bug 1/3 Root-Cause).
+        # HISTORIE DER FEHLVERSUCHE (fuer spaetere Nachvollziehbarkeit):
+        # 1) period=f"{days+5}d" (nicht-kanonischer String) — lieferte pro
+        #    Symbol 225-257 Zeilen, aber Fenster eingefroren bei 2026-07-17,
+        #    unabhaengig vom Laufdatum (22.07./01.08./19.08. identisch).
+        # 2) start=/end= mit taeglich neu berechneten echten Kalenderdaten
+        #    (Annahme: Yahoo/CDN-Caching an die Request-Signatur gebunden)
+        #    — GHA-Log nach Deploy zeigte weiterhin IDENTISCHE Werte
+        #    (VVIX 104.87/SKEW 147.28/Ratio 1.094). These widerlegt.
+        # ECHTE URSACHE (gefunden via Abgleich mit analysis/voranalyse_
+        # regime.py::fetch_yf_series(), dort bereits am 18.08.2026 im
+        # Rahmen des Backtests geloest): `yf.download()` (modulweite
+        # Funktions-API) ist fuer diese CBOE-Sonderindizes (^VVIX/^SKEW/
+        # ^VIX3M) strukturell unzuverlaessig — liefert oft nur 1 Zeile
+        # unabhaengig vom Parameter-Format. `yf.Ticker(sym).history(...)`
+        # (objektorientierte API, anderer Code-Pfad in yfinance) liefert
+        # dagegen zuverlaessig die volle Historie (dort verifiziert: 3826
+        # Zeilen ^VIX3M via Ticker().history() vs. 1 Zeile via download()).
+        # Daher hier auf dieselbe, bereits bewaehrte API umgestellt.
+        _start_dt = datetime.now(timezone.utc).date() - timedelta(days=days + 5)
         closes = {}
         for sym in ["^VVIX", "^SKEW", "^VIX", "^VIX3M"]:
             try:
-                raw_sym = yf.download(sym, start=_start_dt, end=_end_dt + timedelta(days=1),
-                                       auto_adjust=True, progress=False)
+                raw_sym = yf.Ticker(sym).history(start=_start_dt, auto_adjust=True)
                 s = raw_sym["Close"].dropna()
                 if hasattr(s, 'squeeze'):
                     s = s.squeeze()
