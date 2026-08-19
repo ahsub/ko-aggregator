@@ -6808,9 +6808,23 @@ def fetch_mse_history(days: int = 30) -> dict:
                 log.warning(f"  MSE History {sym} Fehler: {_ce}")
                 closes[sym] = None
 
-        if closes["^VIX"] is None or closes["^VIX3M"] is None:
-            log.warning("  MSE History: VIX/VIX3M nicht verfuegbar")
+        if closes["^VIX"] is None:
+            log.warning("  MSE History: VIX nicht verfuegbar — Historie nicht nutzbar")
             return result
+        # BUGFIX (19.08.2026, Fortsetzung desselben Tages — Regression durch
+        # start=/end=-Fix oben): ^VIX3M lieferte mit expliziten Datumsangaben
+        # teils nur 1 Zeile (squeeze() kollabiert zu Skalar), waehrend
+        # ^VVIX/^SKEW/^VIX zuverlaessig 171-172 Tage lieferten — derselbe
+        # Sonderfall wie beim 16.08.-Fix, nur diesmal bei start=/end= statt
+        # period=. VORHER: harter Abbruch (return leeres result), wenn
+        # VIX3M fehlte — das machte VVIX/SKEW/VIX-Historie kaputt, obwohl
+        # nur VIX3M betroffen war. JETZT: VIX3M ist optional, nur vixRatio
+        # wird dann NICHT berechnet (None) — vvix_z20/skew_pct20/gex_z20/
+        # dix_z20 (die fuer determine_mse_regime() relevanten Werte) bleiben
+        # nutzbar. Der AKTUELLE vixRatio-Wert kommt ohnehin separat und
+        # zuverlaessig aus fetch_vix_term() (LIVE-Einzelwert, nicht History).
+        if closes["^VIX3M"] is None:
+            log.warning("  MSE History: VIX3M nicht verfuegbar — vixRatio-Historie wird uebersprungen, VVIX/SKEW/VIX bleiben nutzbar")
 
         common_idx = closes["^VIX"].index
         for sym in ["^VIX3M", "^VVIX", "^SKEW"]:
@@ -6824,8 +6838,11 @@ def fetch_mse_history(days: int = 30) -> dict:
         vvix   = [round(float(closes["^VVIX"].loc[d]), 2) if closes["^VVIX"] is not None else None for d in common_idx]
         skew   = [round(float(closes["^SKEW"].loc[d]), 2) if closes["^SKEW"] is not None else None for d in common_idx]
         vix    = [round(float(closes["^VIX"].loc[d].squeeze() if hasattr(closes["^VIX"].loc[d],"squeeze") else closes["^VIX"].loc[d]), 2)  for d in common_idx]
-        vix3m  = [round(float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d],"squeeze") else closes["^VIX3M"].loc[d]), 2) for d in common_idx]
-        ratio  = [round(vix3m[i] / vix[i], 3) if vix[i] and vix[i] > 0 else None for i in range(len(vix))]
+        if closes["^VIX3M"] is not None:
+            vix3m = [round(float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d],"squeeze") else closes["^VIX3M"].loc[d]), 2) for d in common_idx]
+            ratio = [round(vix3m[i] / vix[i], 3) if vix3m[i] and vix[i] and vix[i] > 0 else None for i in range(len(vix))]
+        else:
+            ratio = [None for _ in common_idx]
 
         result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates}
         log.info(f"  MSE History: {len(dates)} Tage | VVIX: {vvix[-1]} | SKEW: {skew[-1] if skew[-1] else chr(8212)} | Ratio: {ratio[-1]}")
