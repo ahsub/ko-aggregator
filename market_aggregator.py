@@ -1,4 +1,1021 @@
-#!/usr/bin/env python3
+# -- DAILY MARKET SNAPSHOT (v1.0, 13.07.2026) ----------------------------------
+# Serverseitiges Morning Briefing - laeuft im Aggregator (GHA, Owner-Kosten).
+# Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
+# Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
+
+# ══════════════════════════════════════════════════════════════════════════
+# MARKET CONTEXT MODULE (MCM) — Python-Port (14.07.2026)
+# ══════════════════════════════════════════════════════════════════════════
+# Portiert aus dem Frontend (ko-modules JS), damit generate_daily_snapshot()
+# denselben market_context + dieselben Strategie-Gates nutzt wie der Client
+# (axel-scanner v322/v323, ko-modules@b70ca70). Grund: Der Cache-First-Pfad
+# im Frontend liest DIESES serverseitige Briefing — der MCM-Umbau im JS
+# betrifft nur den seltenen Fallback-Pfad ohne KV-Cache-Hit. Ohne diesen
+# Python-Port wäre der ganze MCM-Sprint für den Regelfall wirkungslos.
+#
+# VERSIONS-LOCK (kein automatischer Sync, manueller Abgleich nötig):
+#   Diese Tabellen sind eine 1:1-Portierung von:
+#   - ko-modules/ko-market-state.js v2.1 (STRATEGY-Regime-Tabellen,
+#     CONTEXT_DOWNGRADE_RULES) — Commit b70ca70
+#   - ko-modules/ko-indicators.json v2.1.0 (signalRules, Calendar-Faktoren)
+#   Bei Änderungen an einer Seite MUSS die andere manuell nachgezogen werden.
+#   Kein gemeinsames Build-Artefakt vorhanden (JS/Python-Sprachgrenze).
+
+# ── signalRules: Schwellwerte -> 'ok'|'caution'|'risk' (1:1 aus ko-indicators.json) ──
+_MCM_SIGNAL_RULES = {
+    "vix":               [{"signal": "risk", "gte": 35}, {"signal": "caution", "gte": 25}, {"signal": "ok"}],
+    "vvix":              [{"signal": "risk", "gte": 1.5}, {"signal": "caution", "gte": 0.8}, {"signal": "ok"}],
+    "skew":              [{"signal": "caution", "gte": 80}, {"signal": "ok"}],
+    "pcr":               [{"signal": "caution", "gte": 1.2}, {"signal": "caution", "lte": 0.7}, {"signal": "ok"}],
+    "fear_greed":        [{"signal": "caution", "lte": 20}, {"signal": "caution", "gte": 80}, {"signal": "ok"}],
+    "intermarket_score": [{"signal": "risk", "gte": 60}, {"signal": "caution", "gte": 40}, {"signal": "ok"}],
+    "bull_indicator":    [{"signal": "caution", "lte": 35}, {"signal": "ok"}],
+    "treasury_stress":   [{"signal": "risk", "gte": 60}, {"signal": "caution", "gte": 35}, {"signal": "ok"}],
+    "ndx_breadth":       [{"signal": "risk", "lte": 35}, {"signal": "caution", "lte": 50}, {"signal": "ok"}],
+    # net_liquidity: caution wenn 4W-Trend ≤ 0 (schrumpfend/stabil) — identisch zu
+    # ko-indicators.json signalRules (trend4w_lte: 0). Wert = trend_4w in Mrd USD.
+    "net_liquidity":     [{"signal": "caution", "lte": 0}, {"signal": "ok"}],
+    # NEU (16.08.2026, MCM-Paritaet-Nachzug, Axel-Deep-Debug-Anfrage): 4 Faktoren,
+    # die im Client (ko-indicators.json) schon lange registriert waren, aber nie
+    # nach Python portiert wurden — dadurch im Server-Briefing (Normalfall,
+    # KV-Cache-First) NIE erwaehnt, unabhaengig vom heutigen Fear&Greed-Fund.
+    # Werte identisch zu den Client-Schwellen (zgte/gte in ko-indicators.json).
+    "move_index":        [{"signal": "risk", "gte": 1.5}, {"signal": "caution", "gte": 0.8}, {"signal": "ok"}],
+    "skew_vvix_div":      [{"signal": "caution", "gte": 1.5}, {"signal": "ok"}],
+    # breadth_osc: McClellan-Oszillatorwert selbst (kein Z-Score) — negativ = Breite
+    # bricht weg. Schwellen an SUITE.md-Backlog-#12-Signalstufen angelehnt
+    # (SEHR_BEARISH < -50, BEARISH < -10).
+    "breadth_osc":       [{"signal": "risk", "lte": -50}, {"signal": "caution", "lte": -10}, {"signal": "ok"}],
+    # distribution_days: dd_max (hoehere von SPY/QQQ) — identisch zu den UI-
+    # Severity-Schwellen (Watch>=4, Danger>=6).
+    "distribution_days": [{"signal": "risk", "gte": 6}, {"signal": "caution", "gte": 4}, {"signal": "ok"}],
+    # NEU (17.08.2026, Axel-Anfrage — Konjunktur-Indikatoren, "auf diesem Auge
+    # bislang blind"). Schwellen s. Docstrings der jeweiligen fetch_fred_macro()-
+    # Bloecke — Sahm-Rule 0.50 ist die offizielle akademische Trigger-Schwelle,
+    # NFCI-Nullpunkt ist Chicago-Fed-eigene Interpretation, restliche Schwellen
+    # sind bewusst weich formuliert (keine erfundene Praezision vortaeuschen).
+    "nfci":              [{"signal": "risk", "gte": 0.5}, {"signal": "caution", "gte": 0}, {"signal": "ok"}],
+    "core_cpi_yoy":      [{"signal": "caution", "gte": 3.0}, {"signal": "ok"}],
+    "sahm_rule":         [{"signal": "risk", "gte": 0.5}, {"signal": "ok"}],
+    # oecd_cli_score: -2 KONTRAKTION .. +2 EXPANSION (Quadranten-Score, s.
+    # fetch_fred_macro()) — risk nur im eindeutigsten Kontraktions-Quadranten.
+    "oecd_cli_score":    [{"signal": "risk", "lte": -2}, {"signal": "caution", "lt": 0}, {"signal": "ok"}],
+    "heavy_truck_trend": [{"signal": "caution", "lte": -3}, {"signal": "ok"}],
+}
+
+# ── Calendar-Faktoren (identische Fenster-/Karenz-Parameter wie ko-indicators.json) ──
+_MCM_CALENDAR_FACTORS = {
+    "fed_window": {"event_type": "FOMC", "buffer_minutes": 15, "signal": "caution"},
+    "nfp_window": {"event_type": "NFP",  "buffer_minutes": 10, "signal": "caution"},
+    "cpi_window": {"event_type": "CPI",  "buffer_minutes": 10, "signal": "caution"},
+}
+
+# ── Regime-Basis-Gates (1:1 aus ko-market-state.js getStrategyGates(), gekürzt auf
+#    Farbe+active — Notes/Labels bleiben Frontend-Domäne, Server braucht nur Ampel) ──
+_MCM_REGIME_GATES = {
+    "BULL_QUIET": {
+        "action": "Trendfolge + CSP voll freigegeben",
+        "strategies": {
+            "momentum": "green", "breakout": "green", "swing": "green", "ko": "green",
+            "csp_wheel": "green", "atmna": "green", "weekly_income": "green", "cc": "green",
+            "value": "amber", "dividend": "amber", "meanrev": "red", "fading_short": "red",
+        },
+    },
+    "BULL_FRAGILE": {
+        "action": "Trendfolge mit engen Stops, CSP drosseln",
+        "strategies": {
+            "momentum": "amber", "swing": "amber", "csp_wheel": "amber", "weekly_income": "amber",
+            "cc": "amber", "atmna": "amber", "value": "amber", "dividend": "green",
+            "breakout": "red", "ko": "red", "meanrev": "red", "fading_short": "red",
+        },
+    },
+    "STRESS_UNSTABLE": {
+        "action": "Positionen absichern · Fading-Short prüfen · Defensive CSPs selektiv",
+        "strategies": {
+            "fading_short": "green", "meanrev": "amber", "csp_wheel": "amber", "value": "amber",
+            "cc": "amber", "dividend": "amber", "momentum": "red", "swing": "red",
+            "breakout": "red", "ko": "red", "atmna": "red", "weekly_income": "red",
+        },
+    },
+    "POST_PANIC_REVERSION": {
+        "action": "Mean Reversion & Income Priorität 1 · Vol-Crush nutzen · Value-Einstiege prüfen",
+        "strategies": {
+            "meanrev": "green", "csp_wheel": "green", "atmna": "green", "weekly_income": "green",
+            "cc": "green", "value": "green", "dividend": "amber", "fading_short": "amber",
+            "momentum": "red", "swing": "red", "breakout": "red", "ko": "red",
+        },
+    },
+    "NEUTRAL": {
+        "action": "Selektiv vorgehen · Nur höchste Qualität · Kein Leverage",
+        "strategies": {
+            "momentum": "amber", "swing": "amber", "csp_wheel": "amber", "weekly_income": "amber",
+            "cc": "amber", "dividend": "amber", "value": "amber", "atmna": "amber",
+            "breakout": "red", "ko": "red", "meanrev": "amber", "fading_short": "red",
+        },
+    },
+}
+
+# ── CONTEXT_DOWNGRADE_RULES (1:1 aus ko-market-state.js) ──
+_MCM_DOWNGRADE_RULES = [
+    ("treasury_stress",   ["ko", "momentum", "breakout", "swing", "csp_wheel", "atmna", "weekly_income", "cc"]),
+    ("ndx_breadth",       ["ko", "momentum", "breakout", "swing"]),
+    ("intermarket_score", ["ko", "momentum", "breakout", "swing", "value"]),
+    ("vix",               ["ko", "breakout", "atmna"]),
+    ("vvix",              ["ko", "breakout", "csp_wheel", "weekly_income"]),
+    ("skew",              ["csp_wheel", "atmna", "weekly_income"]),
+    ("pcr",               ["momentum", "breakout"]),
+    ("fear_greed",        ["momentum", "breakout", "ko"]),
+    ("bull_indicator",    ["ko", "momentum", "breakout", "swing"]),
+    ("fed_window",        ["ko", "momentum", "breakout", "swing", "csp_wheel", "atmna", "weekly_income"]),
+    ("nfp_window",        ["ko", "breakout"]),
+    ("cpi_window",        ["ko", "breakout", "csp_wheel"]),
+]
+
+_MCM_CALENDAR_CACHE = {"events": None, "loaded": False}
+
+
+def _mcm_load_macro_calendar():
+    """macro-calendar.json von axel-scanner laden (raw.githubusercontent, gecacht).
+    FAIL-CLOSED: bei Fehler bleibt events=None -> keine Calendar-Flags."""
+    if _MCM_CALENDAR_CACHE["loaded"]:
+        return _MCM_CALENDAR_CACHE["events"]
+    _MCM_CALENDAR_CACHE["loaded"] = True
+    try:
+        url = "https://raw.githubusercontent.com/ahsub/axel-scanner/main/macro-calendar.json"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            _MCM_CALENDAR_CACHE["events"] = data.get("events") or None
+            log.info(f"  [MCM] Makro-Kalender geladen — {len(data.get('events', []))} Events")
+        else:
+            log.warning(f"  [MCM] macro-calendar.json HTTP {r.status_code} — fail-closed, keine Event-Flags")
+    except Exception as e:
+        log.warning(f"  [MCM] macro-calendar.json nicht ladbar (fail-closed): {e}")
+    return _MCM_CALENDAR_CACHE["events"]
+
+
+def _mcm_eval_signal(rules, val):
+    """Erste passende Regel gewinnt. Identisch zu _evalSignalRules() im JS-Port."""
+    if val is None or rules is None:
+        return None
+    for r in rules:
+        if r.get("gte") is not None and not (val >= r["gte"]):
+            continue
+        if r.get("gt") is not None and not (val > r["gt"]):
+            continue
+        if r.get("lte") is not None and not (val <= r["lte"]):
+            continue
+        if r.get("lt") is not None and not (val < r["lt"]):
+            continue
+        return r["signal"]
+    return None
+
+
+def _mcm_eval_calendar_factor(cfg, events, now_utc):
+    """Identisch zu _evalCalendarFactor() im JS-Port (decision_utc/meeting_start_utc,
+    bufferMinutes-Karenz). FAIL-CLOSED bei fehlendem Kalender."""
+    if not events:
+        return None
+    buf = timedelta(minutes=cfg.get("buffer_minutes", 0))
+    for ev in events:
+        if ev.get("type") != cfg["event_type"] or not ev.get("decision_utc"):
+            continue
+        try:
+            decision = datetime.fromisoformat(ev["decision_utc"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if ev.get("meeting_start_utc"):
+            try:
+                window_start = datetime.fromisoformat(ev["meeting_start_utc"].replace("Z", "+00:00")) - buf
+            except Exception:
+                window_start = decision - timedelta(hours=24) - buf
+        else:
+            window_start = decision - timedelta(hours=24) - buf
+        window_end = decision + buf
+        if window_start <= now_utc <= window_end:
+            hrs = round((decision - now_utc).total_seconds() / 3600)
+            return {"signal": cfg["signal"], "label": ev.get("label", cfg["event_type"]) +
+                    (f" in {hrs}h" if hrs >= 0 else f" vor {-hrs}h")}
+    return None
+
+
+# ── MCM-PARITÄT: SERVER-PORTS DER 4 CLIENT-FUNKTIONEN (v5.13.0, 21.07.2026) ──────────────
+# Port von loadIntermarket() / calcTreasuryStress() / calcBullIndicator() / NDX-Breadth
+# aus index.html — exakte Schwellen und Logik 1:1 übernommen.
+
+def _get_closes(hist_data: dict, sym: str, n: int = None) -> list:
+    """Hilfsfunktion: letzte n Close-Werte für ein Symbol aus hist_data."""
+    df = hist_data.get(sym)
+    if df is None or df.empty:
+        return []
+    closes = df["Close"].dropna().tolist()
+    return closes[-n:] if n else closes
+
+
+def _get_last_price(hist_data: dict, sym: str):
+    """Letzter Close-Kurs für ein Symbol."""
+    closes = _get_closes(hist_data, sym)
+    return closes[-1] if closes else None
+
+
+def _get_chg5d(hist_data: dict, sym: str):
+    """5-Tage-Kursveränderung in % (identisch zu fetchYahooSingle.chg5d im JS)."""
+    closes = _get_closes(hist_data, sym)
+    if len(closes) < 6:
+        return None
+    prev5 = closes[-6]
+    if prev5 == 0:
+        return None
+    return round((closes[-1] - prev5) / prev5 * 100, 2)
+
+
+def calc_mcm_ndx_breadth(hist_data: dict) -> float | None:
+    """Port der NDX-Breadth-Berechnung aus calcBullIndicator() in index.html.
+    Berechnet % der NDX-100 Titel über ihrer 50-EMA (Näherung: SMA50).
+    Schwellen: caution ≤ 50%, risk ≤ 35% (identisch zu _MCM_SIGNAL_RULES).
+    Nutzt Scanner-Universum als Proxy (enthält den Großteil der NDX-Titel).
+    """
+    NDX_PROXY = [
+        "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "COST",
+        "ASML", "NFLX", "AMD", "AZN", "ADBE", "QCOM", "CSCO", "TMUS", "LIN", "PEP",
+        "INTC", "INTU", "AMAT", "AMGN", "ISRG", "MU", "ARM", "BKNG", "LRCX", "REGN",
+        "ADI", "KLAC", "PANW", "MDLZ", "FTNT", "SNPS", "CRWD", "CDNS", "MRVL", "CEG",
+        "CSGP", "CSX", "ORLY", "NXPI", "MCHP", "PCAR", "AEP", "WDAY", "ROST", "MNST",
+        "DXCM", "PAYX", "CHTR", "FANG", "ODFL", "KDP", "EXC", "FAST", "BIIB", "IDXX",
+        "ON", "GFS", "KHC", "EA", "DDOG", "CTSH", "VRSK", "GEHC", "XEL", "ANSS",
+        "CTAS", "CPRT", "TEAM", "SIRI", "TTWO", "DLTR", "ILMN", "ZS", "ALGN", "WBD",
+        "MTCH", "LCID", "PDD", "BIDU", "JD", "MELI", "ABNB", "ZM", "DOCU",
+    ]
+    above, total = 0, 0
+    for sym in NDX_PROXY:
+        closes = _get_closes(hist_data, sym, 60)
+        if len(closes) < 50:
+            continue
+        sma50 = sum(closes[-50:]) / 50
+        if closes[-1] > sma50:
+            above += 1
+        total += 1
+    if total < 10:  # Zu wenige Daten — kein verlässlicher Wert
+        return None
+    return round(above / total * 100, 1)
+
+
+def calc_mcm_intermarket_score(hist_data: dict, market: dict) -> int | None:
+    """Port von loadIntermarket() Scoring-Teil aus index.html.
+    Score 0-100: niedrig = Risk-On, hoch = Risk-Off (identisch zur JS-Logik).
+    Verwendet gewichteten Durchschnitt der verfügbaren Signale.
+    Schwellen: caution ≥ 40, risk ≥ 60 (identisch zu _MCM_SIGNAL_RULES).
+    """
+    score_points, score_count = 0, 0
+
+    # VVIX: <90 OK (15 Pts Risk-On), 90-110 Warnung (8), >110 Risk-Off (2)
+    zsc = market.get("zscores", {}) or {}
+    vvix_val = (zsc.get("vvix") or {}).get("value")  # Rohwert, nicht Z-Score
+    if vvix_val is None:
+        vix_term = market.get("vixTerm", {}) or {}
+        vvix_val = vix_term.get("vvix")
+    if vvix_val is not None:
+        pts = 15 if vvix_val < 90 else (8 if vvix_val < 110 else 2)
+        score_points += pts; score_count += 1
+
+    # AUD/USD: 5d-Chg >+0.5% = Risk-On (14), <-0.5% = Risk-Off (5), sonst neutral (9)
+    aud_chg = _get_chg5d(hist_data, "AUDUSD=X")
+    if aud_chg is None:
+        aud_chg = _get_chg5d(hist_data, "AUD=X")
+    if aud_chg is not None:
+        pts = 14 if aud_chg > 0.5 else (5 if aud_chg < -0.5 else 9)
+        score_points += pts; score_count += 1
+
+    # JPY/USD: steigend = Risk-Off (5), fallend = Risk-On (14)
+    jpy_chg = _get_chg5d(hist_data, "JPYUSD=X")
+    if jpy_chg is None:
+        jpy_chg = _get_chg5d(hist_data, "JPY=X")
+    if jpy_chg is not None:
+        pts = 5 if jpy_chg > 0.3 else (14 if jpy_chg < -0.3 else 9)
+        score_points += pts; score_count += 1
+
+    # Cu/Gold Ratio: steigend = Risk-On (15), fallend = Risk-Off (4)
+    cu_closes  = _get_closes(hist_data, "HG=F", 2)
+    gld_closes = _get_closes(hist_data, "GC=F", 2)
+    if len(cu_closes) >= 2 and len(gld_closes) >= 2 and gld_closes[-1] > 0 and gld_closes[-2] > 0:
+        ratio_now  = cu_closes[-1]  / gld_closes[-1]
+        ratio_prev = cu_closes[-2]  / gld_closes[-2]
+        cu_gold_chg = (ratio_now - ratio_prev) / ratio_prev * 100 if ratio_prev > 0 else 0
+        pts = 15 if cu_gold_chg > 0.5 else (4 if cu_gold_chg < -0.5 else 8)
+        score_points += pts; score_count += 1
+
+    # JNK/LQD Spread: steigend = Risk-On (15), fallend = Risk-Off (4)
+    jnk_closes = _get_closes(hist_data, "JNK", 2)
+    lqd_closes = _get_closes(hist_data, "LQD", 2)
+    if len(jnk_closes) >= 2 and len(lqd_closes) >= 2 and lqd_closes[-1] > 0 and lqd_closes[-2] > 0:
+        ratio_now  = jnk_closes[-1] / lqd_closes[-1]
+        ratio_prev = jnk_closes[-2] / lqd_closes[-2]
+        spread_chg = (ratio_now - ratio_prev) / ratio_prev * 100 if ratio_prev > 0 else 0
+        pts = 15 if spread_chg > 0.2 else (4 if spread_chg < -0.2 else 8)
+        score_points += pts; score_count += 1
+
+    # 10J Treasury: >5% = Risk-Off stark (4), >4.5% = Risk-Off (7), >3.5% = Neutral (10), sonst Risk-On (13)
+    tnx = _get_last_price(hist_data, "^TNX")
+    if tnx is not None:
+        pts = 4 if tnx > 5 else (7 if tnx > 4.5 else (10 if tnx > 3.5 else 13))
+        score_points += pts; score_count += 1
+
+    # 2J/10J Yield Spread aus FRED (bereits im Aggregator)
+    fred = market.get("fredMacro", {}) or {}
+    yc = fred.get("yield_curve", {}) or {}
+    if yc.get("ok"):
+        spread = yc.get("spread_10y2y")
+        if spread is not None:
+            pts = 14 if spread > 0.5 else (9 if spread > 0 else (5 if spread > -0.5 else 2))
+            score_points += pts; score_count += 1
+
+    if score_count == 0:
+        return None
+    # Normalisierung auf 0-100 (analog JS: scorePoints / (scoreCount * 15) * 100, invertiert)
+    max_possible = score_count * 15
+    # JS-Score: hoch = Risk-On. Wir wollen: hoch = Risk-Off (Stress). Invertieren:
+    raw_pct = round(score_points / max_possible * 100)
+    return 100 - raw_pct  # 0 = pure Risk-On, 100 = pure Risk-Off
+
+
+def calc_mcm_treasury_stress(market: dict, hist_data: dict) -> int | None:
+    """Port von calcTreasuryStress() aus index.html.
+    Score 0-100: hoch = Treasury-Stress.
+    Schwellen: caution ≥ 35, risk ≥ 60 (identisch zu _MCM_SIGNAL_RULES).
+    Auktionsparameter nicht serverseitig verfügbar → nur Marktdaten-Komponenten.
+    """
+    score = 0
+    components = 0
+
+    # Zinskurve: Inversion = +15 Punkte (aus FRED, bereits im Aggregator)
+    fred = market.get("fredMacro", {}) or {}
+    yc = fred.get("yield_curve", {}) or {}
+    if yc.get("ok") and yc.get("inverted"):
+        score += 15
+    if yc.get("ok"):
+        components += 1
+
+    # DXY vs SMA20: starker Dollar = +15 Stress (analog calcTreasuryStress JS)
+    dxy_closes = _get_closes(hist_data, "DX-Y.NYB", 25)
+    if not dxy_closes:
+        dxy_closes = _get_closes(hist_data, "DXY", 25)
+    if len(dxy_closes) >= 20:
+        sma20 = sum(dxy_closes[-20:]) / 20
+        if dxy_closes[-1] > sma20:
+            score += 15
+        components += 1
+
+    # VIX > 20 = +15 Stress
+    vix_term = market.get("vixTerm", {}) or {}
+    vix = vix_term.get("vix")
+    if vix is not None:
+        if vix > 20:
+            score += 15
+        components += 1
+
+    # MOVE-Index-Level als Anleihe-Vola-Signal
+    move = market.get("moveIndex", {}) or {}
+    move_val = move.get("current") or move.get("value")
+    if move_val is not None:
+        # MOVE > 130 = erhöhter Bond-Stress (+10), > 160 = stark (+20)
+        if move_val > 160:
+            score += 20
+        elif move_val > 130:
+            score += 10
+        components += 1
+
+    if components == 0:
+        return None
+    return min(100, round(score))
+
+
+def calc_mcm_bull_indicator(market: dict, hist_data: dict, ios_market: dict) -> int | None:
+    """Port von calcBullIndicator() aus index.html.
+    Score 0-100: hoch = bullisch, niedrig = bearisch.
+    Schwellen: caution ≤ 35 (identisch zu _MCM_SIGNAL_RULES).
+    Nutzt server-verfügbare Daten; UI-only Signale (tickerData MACD) werden
+    durch ios_market.iosMarketScore ersetzt (semantisch äquivalent).
+    """
+    total_score, max_score = 0, 0
+
+    # SIGNAL 1: IOS-Market-Score als Marktbreite-Proxy (ersetzt tickerData MACD-Breadth)
+    ios_score = ios_market.get("iosMarketScore") if ios_market else None
+    if ios_score is not None:
+        # Analog zu pctBullMacd in JS: >61 = 20 Pts, >50 = 12, >40 = 6, sonst 2
+        pts = 20 if ios_score > 61 else (12 if ios_score > 50 else (6 if ios_score > 40 else 2))
+        total_score += pts; max_score += 20
+
+    # SIGNAL 2: JNK/SPY Divergenz (HYG/SPY Divergenz-Port)
+    jnk_chg = _get_chg5d(hist_data, "JNK")
+    spy_chg  = _get_chg5d(hist_data, "SPY")
+    if jnk_chg is not None and spy_chg is not None:
+        if spy_chg < -1 and jnk_chg > -0.5:
+            pts = 18  # SPY schwach aber JNK stabil — Smart Money kauft
+        elif spy_chg > 0 and jnk_chg > 0:
+            pts = 15  # Risk-On bestätigt
+        elif spy_chg < -2 and jnk_chg < -1:
+            pts = 2   # Beide schwach
+        else:
+            pts = 8   # Neutral
+        total_score += pts; max_score += 18
+
+    # SIGNAL 3: VVIX als Frühwarner
+    vix_term = market.get("vixTerm", {}) or {}
+    zsc = market.get("zscores", {}) or {}
+    vvix_val = (zsc.get("vvix") or {}).get("value") or vix_term.get("vvix")
+    vvix_chg = _get_chg5d(hist_data, "^VVIX")
+    if vvix_val is not None:
+        if vvix_val > 100 and vvix_chg is not None and vvix_chg < -5:
+            pts = 15  # VVIX fällt von hohem Niveau
+        elif vvix_val < 90:
+            pts = 12  # Ruhig
+        elif vvix_val > 110:
+            pts = 2   # Extrem hoch
+        else:
+            pts = 7
+        total_score += pts; max_score += 15
+
+    # SIGNAL 4: CNN Fear & Greed (kontraindikativ)
+    fg = market.get("fearGreed", {}) or {}
+    fg_score = fg.get("score")
+    if fg_score is not None:
+        if fg_score <= 20:
+            pts = 15  # Extreme Fear = Kontraindikator bullisch
+        elif fg_score <= 35:
+            pts = 11
+        elif fg_score >= 80:
+            pts = 2
+        elif fg_score >= 65:
+            pts = 7
+        else:
+            pts = 8
+        total_score += pts; max_score += 15
+
+    # SIGNAL 5: VIX als Kontraindikator
+    vix = vix_term.get("vix")
+    if vix is not None:
+        if vix > 35:
+            pts = 12  # Panik = Kontraindikator
+        elif vix > 25:
+            pts = 8
+        elif vix < 15:
+            pts = 6
+        else:
+            pts = 7
+        total_score += pts; max_score += 12
+
+    if max_score == 0:
+        return None
+    return round(total_score / max_score * 100)
+
+
+def build_server_market_context(master):
+    """market_context serverseitig — Pendant zu buildMarketContext() im JS-Port.
+    Faktoren (14 + 3 Calendar):
+      vix, vvix, skew, pcr, fear_greed           — direkt aus market-Daten
+      ndx_breadth, intermarket_score,             — v5.13.0 (21.07.2026)
+      treasury_stress, bull_indicator             — server-side calc-Funktionen
+      net_liquidity                               — v5.14.0 (01.08.2026), FRED trend_4w
+      move_index, skew_vvix_div,                  — v5.36.5 (16.08.2026), MCM-
+      breadth_osc, distribution_days              — Paritaet-Nachzug (s. Changelog)
+      fed_window, nfp_window, cpi_window          — macro-calendar
+    ACHTUNG: "MCM-Paritaet vollstaendig" ist eine Momentaufnahme, kein
+    Dauerzustand — bei jedem neuen Client-Registry-Eintrag (ko-indicators.json)
+    hier gegenpruefen, sonst driftet es erneut (s. MCM-PARITAET-KONZEPT.md).
+    """
+    market = master.get("market", {}) or {}
+    meta   = master.get("meta", {}) or {}
+    vt     = market.get("vixTerm", {}) or {}
+    pcr_d  = market.get("pcr", {}) or {}
+    fg     = market.get("fearGreed", {}) or {}
+    zsc    = market.get("zscores", {}) or {}
+
+    regime = master.get("masterShortlist_meta", {}).get("regimeUsed") or meta.get("regimeUsed")
+    # Fallback: regimeUsed liegt strukturell in der Leaderboard-Rueckgabe, nicht in meta
+    # (siehe Bugfix-Kommentar in generate_daily_snapshot). Wird dort korrekt injiziert.
+
+    factors = {}
+    caution, risk = [], []
+
+    def _add(fid, value, rules, label=None):
+        if value is None:
+            return
+        sig = _mcm_eval_signal(rules, value)
+        factors[fid] = {"value": value, "signal": sig}
+        if label:
+            factors[fid]["label"] = label
+        if sig == "caution":
+            caution.append(fid)
+        elif sig == "risk":
+            risk.append(fid)
+
+    _add("vix",        vt.get("vix"),           _MCM_SIGNAL_RULES["vix"])
+    _add("vvix",        (zsc.get("vvix") or {}).get("zscore"), _MCM_SIGNAL_RULES["vvix"])
+    _add("skew",        (zsc.get("skew") or {}).get("percentile"), _MCM_SIGNAL_RULES["skew"])
+    _add("pcr",         pcr_d.get("pcr"),        _MCM_SIGNAL_RULES["pcr"])
+    _add("fear_greed",  fg.get("score"),         _MCM_SIGNAL_RULES["fear_greed"])
+
+    # ── MCM-Parität: 4 neue Server-Faktoren (v5.13.0) ────────────────────────
+    # hist_data wird von main() in master["_hist_data"] injiziert (analog regimeUsed).
+    hist_data  = master.get("_hist_data") or {}
+    ios_market = market.get("iosMarket") or {}
+
+    ndx_b  = calc_mcm_ndx_breadth(hist_data)
+    im_s   = calc_mcm_intermarket_score(hist_data, market)
+    tr_s   = calc_mcm_treasury_stress(market, hist_data)
+    bull_i = calc_mcm_bull_indicator(market, hist_data, ios_market)
+
+    _add("ndx_breadth",       ndx_b,  _MCM_SIGNAL_RULES["ndx_breadth"])
+    _add("intermarket_score", im_s,   _MCM_SIGNAL_RULES["intermarket_score"])
+    _add("treasury_stress",   tr_s,   _MCM_SIGNAL_RULES["treasury_stress"])
+    _add("bull_indicator",    bull_i, _MCM_SIGNAL_RULES["bull_indicator"])
+
+    # net_liquidity: 4W-Trend aus FRED (identische Schwelle wie ko-indicators.json)
+    fred       = market.get("fredMacro", {}) or {}
+    nl         = fred.get("net_liquidity", {}) or {}
+    nl_trend4w = nl.get("trend_4w") if nl.get("ok") else None
+    _add("net_liquidity", nl_trend4w, _MCM_SIGNAL_RULES["net_liquidity"])
+
+    # ── MCM-Paritaet-Nachzug (16.08.2026): 4 Faktoren, die im Client seit
+    # Wochen registriert waren (ko-indicators.json v2.2.0/v2.3.0), aber nie
+    # nach Python portiert wurden — dieser Docstring behauptete "vollstaendig",
+    # das war seit der ersten Client-Erweiterung nicht mehr korrekt. Siehe
+    # MCM-PARITAET-KONZEPT.md fuer die Historie des ersten (04-Faktoren-)
+    # Parity-Sprints vom 21.07. — dieser hier ist die Fortsetzung/Nachtrag.
+    mi = market.get("moveIndex", {}) or {}
+    mi_z = mi.get("zscore") if mi.get("ok") else None
+    _add("move_index", mi_z, _MCM_SIGNAL_RULES["move_index"],
+         label=(f"MOVE Index: {mi.get('current')} (Z={mi_z:+.2f}, P{mi.get('percentile')})" if mi_z is not None else None))
+
+    div = (zsc.get("skew_vvix_divergence") or {})
+    div_val = div.get("value") if div.get("ok") else None
+    _add("skew_vvix_div", div_val, _MCM_SIGNAL_RULES["skew_vvix_div"],
+         label=(f"SKEW/VVIX-Divergenz: {div_val} → {div.get('signal')}" if div_val is not None else None))
+
+    bo = market.get("breadthOsc", {}) or {}
+    bo_val = bo.get("oscillator")
+    _add("breadth_osc", bo_val, _MCM_SIGNAL_RULES["breadth_osc"],
+         label=(f"UIQ Breadth-Oszillator (McClellan): {bo_val} ({bo.get('ema19')}/{bo.get('ema39')} EMA19/39)" if bo_val is not None else None))
+
+    dd = market.get("distributionDays", {}) or {}
+    dd_max_val = dd.get("dd_max")
+    _add("distribution_days", dd_max_val, _MCM_SIGNAL_RULES["distribution_days"],
+         label=(f"Distribution Days (25T, O'Neil/IBD): SPY {dd.get('dd_spy')} / QQQ {dd.get('dd_qqq')} ({dd.get('dd_severity')})" if dd_max_val is not None else None))
+
+    # ── Konjunktur-Indikatoren (17.08.2026, Axel-Anfrage) ────────────────────
+    nfci = fred.get("nfci", {}) or {}
+    nfci_val = nfci.get("current") if nfci.get("ok") else None
+    _add("nfci", nfci_val, _MCM_SIGNAL_RULES["nfci"],
+         label=(f"NFCI (Chicago Fed): {nfci_val:+.3f} (Z={nfci.get('zscore')})" if nfci_val is not None else None))
+
+    cpi = fred.get("core_cpi_yoy", {}) or {}
+    cpi_val = cpi.get("current") if cpi.get("ok") else None
+    _add("core_cpi_yoy", cpi_val, _MCM_SIGNAL_RULES["core_cpi_yoy"],
+         label=(f"US Core CPI YoY: {cpi_val}%" if cpi_val is not None else None))
+
+    unemp = fred.get("unemployment", {}) or {}
+    sahm_val = unemp.get("sahmRule") if unemp.get("ok") else None
+    _add("sahm_rule", sahm_val, _MCM_SIGNAL_RULES["sahm_rule"],
+         label=(f"Sahm-Rule: {sahm_val:+.2f} Pkt (Arbeitslosenrate {unemp.get('current')}%, Trigger ≥0.50)" if sahm_val is not None else None))
+
+    cli = fred.get("oecd_cli", {}) or {}
+    cli_score = cli.get("quadrantScore") if cli.get("ok") else None
+    _add("oecd_cli_score", cli_score, _MCM_SIGNAL_RULES["oecd_cli_score"],
+         label=(f"OECD Composite Leading Indicator (USA): {cli.get('current')} → {cli.get('signal')}" if cli_score is not None else None))
+
+    truck = fred.get("heavy_truck", {}) or {}
+    truck_trend = truck.get("trend_3m_pct") if truck.get("ok") else None
+    _add("heavy_truck_trend", truck_trend, _MCM_SIGNAL_RULES["heavy_truck_trend"],
+         label=(f"Heavy Truck Sales (10M-Schnitt, 3M-Trend): {truck_trend:+.1f}% → {truck.get('signal')}" if truck_trend is not None else None))
+
+    # Rein informativ, kein caution/risk-Signal (Rotationsrichtung ist nicht
+    # per se "gut" oder "schlecht" — Interpretation bleibt der KI-Prosa
+    # überlassen, analog zum bestehenden qqq_markov-Faktor).
+    sd = market.get("stapleDiscretionary", {}) or {}
+    if sd.get("ok"):
+        factors["staples_discretionary"] = {
+            "value": sd.get("trend"), "signal": None,
+            "label": f"Consumer Staples vs. Discretionary (XLP/XLY): {sd.get('ratio')} — 5T {sd.get('chg5d')}% / 20T {sd.get('chg20d')}% ({sd.get('trend')})",
+        }
+    gv = market.get("growthValue", {}) or {}
+    if gv.get("ok"):
+        factors["growth_value"] = {
+            "value": gv.get("trend"), "signal": None,
+            "label": f"Growth vs. Value (IWF/IWD): {gv.get('ratio')} — 5T {gv.get('chg5d')}% / 20T {gv.get('chg20d')}% ({gv.get('trend')})",
+        }
+
+    # Calendar-Faktoren
+    events = _mcm_load_macro_calendar()
+    now_utc = datetime.now(timezone.utc)
+    for fid, cfg in _MCM_CALENDAR_FACTORS.items():
+        r = _mcm_eval_calendar_factor(cfg, events, now_utc)
+        if r:
+            factors[fid] = r
+            if r["signal"] == "caution":
+                caution.append(fid)
+            elif r["signal"] == "risk":
+                risk.append(fid)
+
+    risk_level = "high" if risk else ("elevated" if len(caution) >= 2 else "low")
+    return {
+        "regime": regime,
+        "factors": factors,
+        "summary": {"risk_level": risk_level, "caution_flags": caution, "risk_flags": risk},
+    }
+
+
+def calc_server_strategy_gates(regime, ctx):
+    """Pendant zu KoMarketState.calcStrategyGates() im JS-Port. Nur Farben +
+    Downgrades — Notes/Labels bleiben UI-Domäne (Frontend zeigt sie an)."""
+    base = _MCM_REGIME_GATES.get(regime or "NEUTRAL", _MCM_REGIME_GATES["NEUTRAL"])
+    strategies = dict(base["strategies"])  # Kopie
+    downgrades = []
+    if ctx and ctx.get("factors"):
+        for fid, affected in _MCM_DOWNGRADE_RULES:
+            f = ctx["factors"].get(fid)
+            if not f or not f.get("signal") or f["signal"] == "ok":
+                continue
+            for s in affected:
+                if s not in strategies:
+                    continue
+                cur = strategies[s]
+                if f["signal"] == "caution" and cur == "green":
+                    strategies[s] = "amber"
+                    downgrades.append({"strategy": s, "from": "green", "to": "amber", "factor": fid})
+                elif f["signal"] == "risk" and cur in ("green", "amber"):
+                    strategies[s] = "red"
+                    downgrades.append({"strategy": s, "from": cur, "to": "red", "factor": fid})
+    return {"action": base["action"], "strategies": strategies, "downgrades": downgrades}
+
+
+# ── MSE-REGIME PORT (19.08.2026, Axel-Anfrage — Bug 1/3 Root-Cause-Fix) ────────
+# 1:1-Port von KoMarketState.determineRegime() / normalizeMetrics() / zScore() /
+# percentileRank() aus ahsub/ko-modules/ko-market-state.js (Client, MSE v2.3).
+#
+# HINTERGRUND: Der bisherige server-seitige `market_regime_str` (s.u., zur
+# Leaderboard-Selektion) ist EIN GANZ ANDERES, einfacheres Modell (nur VIX-
+# Termstruktur + VIX-Level) — kein Bugfix-Ziel, bleibt für Leaderboards/
+# score_options_collar() unveraendert (Track-Record-Risiko, s. Uebergabe
+# 2026-08-19). Diese neue Funktion ist AUSSCHLIESSLICH fuer den KI-Text in
+# generate_daily_snapshot() gedacht, damit das dort genannte Regime mit dem
+# Client-Badge (KoMarketState._lastRegime, MSE v2.3, Multi-Faktor) uebereinstimmt.
+#
+# WICHTIG: Fensterlaenge (LOOKBACK=20) und Thresholds MUESSEN 1:1 mit dem
+# Client synchron gehalten werden — bei Aenderungen an ko-market-state.js
+# IMMER auch hier nachziehen (und umgekehrt), sonst lebt die Divergenz einfach
+# an anderer Stelle weiter.
+#
+# NOCH NICHT VALIDIERT — vor Produktiveinsatz gegen historische Client-Regime-
+# Ausgaben diffen (analog REGIME-BACKTEST-VALIDIERUNG.md-Vorgehen), s. Uebergabe.
+
+_MSE_LOOKBACK = 20
+
+_MSE_THRESHOLDS = {
+    "vixTermContango":  1.05,
+    "vixTermFlat":       0.98,
+    "vvixHighStress":    1.5,
+    "vvixLowStress":    -1.0,
+    "gexShortGamma":    -1.0,
+    "dixAccumulation":   0.5,
+    "skewHighHedging":  80,
+}
+
+
+def _mse_z_score(series, current_val):
+    """1:1-Port von KoMarketState.zScore() (ko-market-state.js)."""
+    if not series or len(series) < 3 or current_val is None:
+        return None
+    n = min(len(series), _MSE_LOOKBACK)
+    data = series[-n:]
+    mean = sum(data) / n
+    variance = sum((v - mean) ** 2 for v in data) / n
+    std = variance ** 0.5
+    if std == 0:
+        return 0.0
+    return round(((current_val - mean) / std) * 100) / 100
+
+
+def _mse_percentile_rank(series, current_val):
+    """1:1-Port von KoMarketState.percentileRank() (ko-market-state.js)."""
+    if not series or len(series) < 3 or current_val is None:
+        return None
+    n = min(len(series), _MSE_LOOKBACK)
+    data = series[-n:]
+    below = sum(1 for v in data if v <= current_val)
+    return round((below / len(data)) * 100)
+
+
+def determine_mse_regime(mse_history, dix_gex, vix_term):
+    """1:1-Port von KoMarketState.normalizeMetrics() + .determineRegime().
+
+    Input:
+        mse_history: dict mit "vvix"/"skew"/"vix"/"vixRatio" (Listen, wie von
+                      fetch_mse_history() geliefert — 252T-Fenster im Aufrufer)
+        dix_gex:      dict mit "gex"/"dix" (aktuell) + "history" (dict mit
+                      "gex"/"dix"-Listen, wie von fetch_dix_gex() geliefert)
+        vix_term:     dict mit "vix"/"vix3m" (aktuell, wie von fetch_vix_term())
+
+    Output: (regime_str, metrics_dict) — regime_str eines von
+            BULL_QUIET / BULL_FRAGILE / STRESS_UNSTABLE / POST_PANIC_REVERSION
+            / NEUTRAL. metrics_dict fuer Debug/Prompt-Kontext.
+    """
+    T = _MSE_THRESHOLDS
+
+    vvix_hist = (mse_history or {}).get("vvix") or []
+    skew_hist = (mse_history or {}).get("skew") or []
+    gex_hist  = ((dix_gex or {}).get("history") or {}).get("gex") or []
+    dix_hist  = ((dix_gex or {}).get("history") or {}).get("dix") or []
+
+    vvix_raw = vvix_hist[-1] if vvix_hist else None
+    skew_raw = skew_hist[-1] if skew_hist else None
+    gex_raw  = (dix_gex or {}).get("gex")
+    dix_raw  = (dix_gex or {}).get("dix")
+
+    vix_val  = (vix_term or {}).get("vix")
+    vix3m    = (vix_term or {}).get("vix3m")
+    vix_ratio = round(vix3m / vix_val, 3) if (vix_val and vix3m and vix_val > 0) else None
+
+    if vix_ratio is None:
+        term_structure = "UNKNOWN"
+    elif vix_ratio > T["vixTermContango"]:
+        term_structure = "CONTANGO"
+    elif vix_ratio < T["vixTermFlat"]:
+        term_structure = "BACKWARDATION"
+    else:
+        term_structure = "FLAT"
+
+    metrics = {
+        "vvix_raw": vvix_raw, "gex_raw": gex_raw, "dix_raw": dix_raw, "skew_raw": skew_raw,
+        "vixRatio": vix_ratio,
+        "vvix_z20":    _mse_z_score(vvix_hist, vvix_raw),
+        "gex_z20":     _mse_z_score(gex_hist, gex_raw),
+        "dix_z20":     _mse_z_score(dix_hist, dix_raw),
+        "skew_pct20":  _mse_percentile_rank(skew_hist, skew_raw),
+        "term_structure": term_structure,
+    }
+
+    vvix_z20   = metrics["vvix_z20"]
+    gex_z20    = metrics["gex_z20"]
+    dix_z20    = metrics["dix_z20"]
+    skew_pct20 = metrics["skew_pct20"]
+    term       = metrics["term_structure"]
+
+    # Fehlende Kernwerte (zu kurze Historie o.ae.) -> NEUTRAL, wie Client bei
+    # unvollstaendigen Metriken (Vergleiche mit None sind in JS falsy/false,
+    # in Python werfen sie TypeError -- deshalb hier explizite Guards).
+    if vvix_z20 is None or gex_z20 is None or dix_z20 is None or skew_pct20 is None:
+        return "NEUTRAL", metrics
+
+    if term == "BACKWARDATION" or (vvix_z20 > T["vvixHighStress"] and gex_z20 < T["gexShortGamma"]):
+        return "STRESS_UNSTABLE", metrics
+    if term == "FLAT" and dix_z20 > T["dixAccumulation"] and vvix_z20 < 0:
+        return "POST_PANIC_REVERSION", metrics
+    if term == "CONTANGO" and skew_pct20 > T["skewHighHedging"] and vvix_z20 > 0.8:
+        return "BULL_FRAGILE", metrics
+    if term == "CONTANGO" and gex_z20 > 0 and dix_z20 >= -0.5:
+        return "BULL_QUIET", metrics
+    return "NEUTRAL", metrics
+
+
+def generate_daily_snapshot(master):
+    """Generiert das Morning Briefing serverseitig via Anthropic API.
+
+    Input:  master (vollstaendiger Aggregator-Output nach main())
+    Output: daily_market_snapshot-Dict fuer KV-Push
+    Fehler: fehlerisoliert - Exception bricht main() nie ab.
+
+    BUGFIX (14.07.2026, Axel-Review v323): Vor diesem Fix waren VIX/Regime/PCR
+    IMMER "n/v" im Briefing, unabhaengig von der tatsaechlichen Datenlage —
+    reine Feldpfad-Fehler, keine Timing-Probleme:
+      - regime kam aus meta["regimeUsed"] (existiert dort nie, liegt in der
+        Leaderboard-Rueckgabe) -> jetzt: master["masterShortlist_meta"] Fallback
+        UND direkter Parameter (siehe main()-Aufrufstelle, dort korrekt injiziert)
+      - VIX kam aus snapshot["vix"] (kein VIX-Symbol in fetch_market_snapshot())
+        -> jetzt: vixTerm["vix"] (fetch_vix_term() liefert den echten Wert)
+      - PCR kam aus pcr["pcr_equity"]/["pcr_index"] (Felder existieren nie im
+        Schema, nur ein einzelner Blended-Wert pcr["pcr"]) -> jetzt: pcr["pcr"]
+        direkt, ein Wert statt Equity/Index-Split
+    MCM-PORT (14.07.2026): market_context + calc_server_strategy_gates() bauen
+    denselben Kontext wie der Client (axel-scanner v322/v323) — Prompt bekommt
+    jetzt Signal-Flags (ok/caution/risk) + Calendar-Fenster + die bereits
+    berechnete Ampel mit dem Auftrag, sie zu erklaeren statt zu widersprechen.
+    """
+    import urllib.request as _ur
+    import json as _j
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        log.warning("  [SNAPSHOT] ANTHROPIC_API_KEY fehlt - uebersprungen")
+        return {"ok": False, "reason": "no_api_key"}
+
+    try:
+        market    = master.get("market", {})
+        snap      = market.get("snapshot", {})
+        fg        = market.get("fearGreed", {})
+        meta      = master.get("meta", {})
+        # BUGFIX: regimeUsed korrekt lesen (siehe Docstring) — Aufruferstelle in
+        # main() injiziert regimeUsed zusaetzlich in meta, siehe dortigen Patch.
+        regime_aggregator = meta.get("regimeUsed") or "-"
+        vix_term  = market.get("vixTerm", {}) or {}
+        pcr_d     = market.get("pcr", {}) or {}
+        # NEU (15.08.2026, Fortsetzung §5 Client-Fix vom selben Tag): dixGex lag
+        # bereits vollstaendig in master["market"]["dixGex"] vor (siehe main()-
+        # Merge), wurde aber bislang nie in mlines/den Prompt aufgenommen -
+        # server-seitiger Prompt kannte DIX/GEX bis hierher ueberhaupt nicht.
+        dix_gex   = market.get("dixGex", {}) or {}
+        shortlist = master.get("masterShortlist", [])[:10]
+        snap_ts   = meta.get("generated", "-")
+        ltd       = meta.get("last_trading_day", "-")
+
+        # NEU (19.08.2026, Bug 1/3 Root-Cause-Fix — s. Uebergabeprotokoll):
+        # Bisher nutzte der KI-Text hier `regime_aggregator` (VIX-Term+Level-
+        # Heuristik, identisch zu market_regime_str fuer die Leaderboard-
+        # Selektion) — das WEICHT strukturell vom Client-Badge (MSE v2.3,
+        # Multi-Faktor VVIX/GEX/DIX/SKEW, s. ko-market-state.js) ab, dadurch
+        # sahen Nutzer z.B. "BULL_QUIET" im Briefing-Text bei gleichzeitig
+        # "NEUTRAL" im Live-Badge. Fix NUR fuer den KI-Text-Kontext hier
+        # (ctx/gates/Prompt) — market_regime_str (Leaderboard/Collar-Scoring,
+        # s. weiter unten in main()) bleibt bewusst UNVERAENDERT, um die
+        # laufende Track-Record-Selektion nicht zu beeinflussen.
+        # NOCH NICHT VALIDIERT — vor produktivem Rollout gegen historische
+        # Client-Regime-Werte diffen (s. determine_mse_regime()-Docstring).
+        mse_history = market.get("mseHistory", {}) or {}
+        regime_mse, _mse_metrics = determine_mse_regime(mse_history, dix_gex, vix_term)
+        regime = regime_mse
+        if regime_aggregator != "-" and regime_aggregator != regime_mse:
+            log.info(
+                f"  [SNAPSHOT] Regime-Divergenz: Aggregator={regime_aggregator} "
+                f"vs. MSE(client-aequivalent)={regime_mse} — Briefing-Text nutzt MSE."
+            )
+
+        def _fmt(val, decimals=2, suffix=""):
+            if val is None:
+                return "n/v"
+            try:
+                return f"{round(float(val), decimals)}{suffix}"
+            except Exception:
+                return str(val)
+
+        # ── MCM: market_context + deterministische Strategie-Gates ──────
+        ctx   = build_server_market_context(master)
+        ctx["regime"] = regime if regime != "-" else None
+        gates = calc_server_strategy_gates(regime if regime != "-" else None, ctx)
+
+        mlines = [
+            f"SNAPSHOT-ZEITPUNKT: {snap_ts} UTC (Aggregator-Lauf, serverseitig)",
+            f"LETZTER HANDELSTAG: {ltd}",
+            "DATENBINDUNG: Ausschliesslich diese Messwerte - kein Trainingswissen.",
+            "",
+            "--- REGIME & TREND ---",
+            f"Markt-Regime (MSE, client-aequivalent): {regime}",
+        ]
+        for key, label in [("spy", "SPY"), ("qqq", "QQQ"), ("iwm", "IWM")]:
+            s = snap.get(key, {})
+            if s.get("ok"):
+                mlines.append(f"{label}: {_fmt(s.get('price'))} USD ({_fmt(s.get('chg_pct'), 2, '%')})")
+
+        mlines += ["", "--- VOLATILITAET & SENTIMENT ---"]
+        # BUGFIX: VIX aus vixTerm (fetch_vix_term()), nicht aus snapshot (kein VIX-Symbol dort)
+        if vix_term.get("vix") is not None:
+            mlines.append(f"VIX: {_fmt(vix_term.get('vix'))}")
+        if vix_term.get("vix3m") is not None:
+            mlines.append(f"VIX3M: {_fmt(vix_term.get('vix3m'))}")
+        # BUGFIX: PCR-Schema hat nur einen Blended-Wert (pcr["pcr"]), keine Equity/Index-Trennung
+        if pcr_d.get("pcr") is not None:
+            mlines.append(f"Put/Call-Ratio: {_fmt(pcr_d.get('pcr'))} ({pcr_d.get('signal', '—')})")
+        # NEU (15.08.2026): DIX/GEX (SqueezeMetrics, SPY-marktweit) - bisher komplett
+        # gefehlt, obwohl Rohdaten laengst im master-Dict vorlagen (§5, s.o.).
+        if dix_gex.get("dix") is not None:
+            mlines.append(f"DIX (SqueezeMetrics, SPY-marktweit): {_fmt(dix_gex.get('dix'))}%")
+        if dix_gex.get("gex") is not None:
+            mlines.append(f"GEX (SqueezeMetrics, Markt-Gamma): {_fmt(dix_gex.get('gex'), 3)} Mrd USD"
+                          + (" [negativ = Gamma-Flip-Zone, erhoehtes Gap-Risiko]" if dix_gex.get("gex", 0) < 0 else ""))
+        if dix_gex.get("dixEtfBasket") is not None:
+            mlines.append(f"DIX (ETF-Korb-Heuristik, {dix_gex.get('dixEtfBasketSource', '-')}): "
+                          f"{_fmt(dix_gex.get('dixEtfBasket'))}%")
+        # Fear & Greed — robuster Check: score muss vorhanden und eine Zahl sein
+        fg_score = fg.get('score') if fg else None
+        if fg_score is not None:
+            mlines.append(f"Fear & Greed: {fg_score}/100 ({fg.get('rating', '-')})")
+        # IOS Market Score — war bisher nicht in mlines! KI erfand ihn aus Training.
+        ios_mkt = market.get("iosMarket") or {}
+        ios_score = ios_mkt.get("iosMarketScore")
+        if ios_score is not None:
+            ios_rating = ios_mkt.get("iosMarketRating", "-")
+            ios_decision = ios_mkt.get("iosMarketDecision", "-")
+            mlines.append(f"IOS Market Score: {ios_score}/100 ({ios_rating} — {ios_decision})")
+
+        mlines += ["", "--- MAKRO ---"]
+        fred = market.get("fredMacro", {})
+        if fred:
+            mlines.append(f"HY-Spread: {_fmt(fred.get('hy_spread'))} %")
+            mlines.append(f"Net Liquidity (Fed): {_fmt(fred.get('net_liquidity'), 0)} Mrd USD")
+
+        mlines += ["", "--- ROHSTOFFE & FX ---"]
+        for key, label in [("gold", "Gold"), ("oil_wti", "Oel WTI"), ("btc", "Bitcoin")]:
+            s = snap.get(key, {})
+            if s.get("ok"):
+                mlines.append(f"{label}: {_fmt(s.get('price'))} ({_fmt(s.get('chg_pct'), 2, '%')})")
+
+        zscores   = market.get("zscores", {})
+        sektor_rs = zscores.get("sector_rs", {})
+        if sektor_rs:
+            sorted_rs = sorted(sektor_rs.items(), key=lambda x: x[1] if x[1] else 0, reverse=True)
+            top3  = ", ".join(f"{k}:+{v:.2f}" for k, v in sorted_rs[:3]  if v and v > 0)
+            flop3 = ", ".join(f"{k}:{v:.2f}"  for k, v in sorted_rs[-3:] if v and v < 0)
+            if top3:  mlines.append(f"Sektor RS Top:  {top3}")
+            if flop3: mlines.append(f"Sektor RS Flop: {flop3}")
+
+        if shortlist:
+            mlines += ["", "--- TOP-10 SHORTLIST ---"]
+            for t in shortlist:
+                mlines.append(
+                    f"{t.get('sym', '?')}: Score {t.get('score', '?')}/100,"
+                    f" Strategie {t.get('strategy', '?')}"
+                )
+
+        # ── MCM: Context + berechnete Ampel als eigener Block ────────────
+        mlines += ["", "--- MARKET CONTEXT (Single Source of Truth, MCM) ---"]
+        mlines.append(f"Aggregiertes Risk-Level: {ctx['summary']['risk_level'].upper()}"
+                      + (f" | Caution: {', '.join(ctx['summary']['caution_flags'])}" if ctx['summary']['caution_flags'] else "")
+                      + (f" | Risk: {', '.join(ctx['summary']['risk_flags'])}" if ctx['summary']['risk_flags'] else ""))
+        for fid, f in ctx["factors"].items():
+            sig = f" [{f['signal'].upper()}]" if f.get("signal") else ""
+            if f.get("label"):
+                mlines.append(f"{f['label']}{sig}")
+            else:
+                mlines.append(f"{fid}: {f.get('value')}{sig}")
+        mlines += ["", "--- STRATEGIE-AMPEL (bereits berechnet, regelbasiert) ---"]
+        if gates["downgrades"]:
+            dg_txt = " · ".join(f"{d['strategy']} {d['from']}->{d['to']} ({d['factor']})" for d in gates["downgrades"])
+            mlines.append(f"Context-Downgrades: {dg_txt}")
+        else:
+            mlines.append("Keine Context-Downgrades — Regime-Basis-Gates gelten unveraendert.")
+        gates_txt = ", ".join(f"{k}:{v}" for k, v in gates["strategies"].items())
+        mlines.append(f"Berechnete Gates: {gates_txt}")
+        mlines.append("AUFGABE: Deine Markteinschaetzung MUSS konsistent mit diesen Gates sein. Erklaere die Datenlage, die zu ihnen fuehrt — widersprich ihnen nicht.")
+
+        messwerte = "\n".join(mlines)
+
+        prompt = (
+            "Du bist UIQ Market Analyst. Erstelle das Morning Briefing fuer heute.\n\n"
+            "PFLICHTREGELN:\n"
+            "- Ausschliesslich die unten stehenden Messwerte verwenden - KEIN Trainingswissen.\n"
+            "- Keine Kurse, Zahlen oder Prozente erfinden. Fehlende Werte: n/v schreiben.\n"
+            "- Ampeln (gruen/gelb/rot/leer) NUR aus den bereits berechneten Gates uebernehmen, nie selbst schaetzen.\n"
+            "- JEDER Faktor aus MARKET CONTEXT mit Signal [CAUTION] oder [RISK] MUSS explizit im SENTIMENT-\n"
+            "  oder MAKRO-KONDENSAT-Abschnitt namentlich genannt werden — unabhaengig davon, ob er in der\n"
+            "  STRUKTUR-Liste unten als Pflichtinhalt aufgefuehrt ist. Diese Liste ist eine Mindestanforderung,\n"
+            "  keine abschliessende Aufzaehlung. (16.08.2026: vorher stand ohne diese Regel im Ermessen der KI,\n"
+            "  ob z.B. VVIX/SKEW/MOVE Index/Breadth-Oszillator bei caution/risk erwaehnt werden.)\n"
+            "- Sprache: Deutsch, direkt, praezise. Keine Floskeln.\n\n"
+            "STRUKTUR (immer diese Reihenfolge, siehe PFLICHTREGEL oben zu zusaetzlichen Pflichtnennungen):\n"
+            "1. MARKTLAGE (3-4 Saetze): Regime + Trend + wichtigste Abweichung heute.\n"
+            "2. SENTIMENT (2-3 Saetze, laenger falls zusaetzliche caution/risk-Faktoren zu nennen sind): VIX-Zone, PCR, DIX/GEX, Fear&Greed, IOS Market Score (jeweils falls in Messwerten vorhanden).\n"
+            "3. MAKRO-KONDENSAT (2 Saetze, laenger falls zusaetzliche caution/risk-Faktoren zu nennen sind): HY-Spread + Net Liquidity.\n"
+            "4. STRATEGIE-AMPEL (je Zeile: [Ampel] STRATEGIE - 1 Satz mit Messwert, Ampel-Farbe aus den berechneten Gates uebernehmen):\n"
+            "   Momentum/SEPA | Swing-Trading | Mean Reversion Long | CSP/Wheel | Covered Call | KO-Long | KO-Short\n"
+            "5. TOP-KANDIDATEN (max 5 Ticker, 1 Zeile: Ticker - Strategie - Kernaussage)\n\n"
+            + messwerte
+        )
+
+        body = _j.dumps({
+            "model":      "claude-sonnet-4-6",
+            "max_tokens": 4500,
+            "messages":   [{"role": "user", "content": prompt}]
+        }).encode()
+        req2 = _ur.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "Content-Type":      "application/json",
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST"
+        )
+        with _ur.urlopen(req2, timeout=30) as resp:
+            rd = _j.loads(resp.read().decode())
+            briefing_text = rd.get("content", [{}])[0].get("text", "")
+
+        log.info(f"  [SNAPSHOT] Morning Briefing generiert ({len(briefing_text)} Zeichen)")
+        return {
+            "ok":               True,
+            "generated":        snap_ts,
+            "last_trading_day": ltd,
+            "regime":           regime,             # MSE-Regime (client-aequivalent) — fuehrend fuer Anzeige/Text
+            "regimeAggregator": regime_aggregator,   # Markov/VIX-Term-Heuristik — nur Referenz, s. Docstring
+            "briefing":         briefing_text,
+            "messwerte_lines":  len(mlines),
+            "model":            "claude-sonnet-4-6",
+            "marketContext":    ctx,     # MCM: fuer Frontend/Konsistenz-Checks verfuegbar
+            "strategyGates":    gates,   # MCM: deterministische Ampel, identisch zur Client-Berechnung
+            "finArchive":       master.get("finArchive", {}),   # Russell3000-Shard-Status (fin_layer)
+            "ivArchive":        master.get("ivArchive",  {}),   # IV-Archiv-Status (iv_layer)
+        }
+    except Exception as e:
+        log.warning(f"  [SNAPSHOT] Fehler: {e}")
+        return {"ok": False, "reason": f"exception: {e}"}#!/usr/bin/env python3
 """
 UnderlyingIQ Market Aggregator v5.36.2
 =====================================
