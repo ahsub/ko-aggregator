@@ -1,7 +1,22 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.9
+ * UnderlyingIQ — KI-Proxy Worker v1.10
+ *
+ * NEU in v1.10 (21.08.2026):
+ *   - morning: 3000 → 4500. Live-Beweis (Axel, 21.08.2026, 08:12 Uhr
+ *     Briefing): Ausgabe brach hart mitten im Wort ab ("bei bestehenden
+ *     Long-Positionen s...") — klassische max_tokens-Abbruchsignatur,
+ *     kein Frontend-Anzeigefehler. Die v1.9-Annahme, morning sei nach
+ *     der 05.08-Erhöhung (2000->3000) nicht mehr betroffen, war FALSCH:
+ *     der Prompt ist seither mehrfach gewachsen (Pflicht-Sentiment-
+ *     Auswertung + 10-zeilige Strategie-Ampel-Tabelle mit Begruendung
+ *     pro Zeile, s. v1.4/v1.5), ohne dass das Token-Budget je gegen die
+ *     aktuelle Prompt-Laenge nachgetestet wurde.
+ *   - Lehre aus drei Fehlschaetzungen in Folge (deep_dive am 05.08.,
+ *     eic und ki_briefing/dark_pool in v1.9, jetzt morning): kuenftig
+ *     grosszuegige Sicherheitsmarge statt knapper Nachjustierung, um
+ *     wiederholtes Nachbessern kurz vor Praesentationen zu vermeiden.
  *
  * NEU in v1.9 (21.08.2026):
  *   - max_tokens-Erhöhung gegen wiederkehrende Truncation-Beschwerden
@@ -17,9 +32,9 @@
  *       dark_pool: 400 → 1000  (bislang nie erhöht — bei ~300 Wörtern
  *         Kapazität plausibler Kandidat für Abbrüche, erst heute als
  *         betroffen gemeldet.)
- *     morning (3000) und deep_dive (2500) unveraendert, da nicht als
- *     weiterhin betroffen gemeldet — Grundsatz: nur explizit gemeldete/
- *     plausible Kandidaten anfassen, nicht pauschal alle Limits hochsetzen.
+ *     morning (3000) und deep_dive (2500) zunaechst unveraendert gelassen,
+ *     da nicht explizit als weiterhin betroffen gemeldet — dieser Grundsatz
+ *     wurde in v1.10 fuer morning revidiert, s.o. (Live-Beweis).
  *   - Root-Cause-Kontext (Nachtrag zur 05.08-Änderung): Die damalige
  *     Session hatte behauptet, diese Datei sei bereits als workers/
  *     ko-ai.js ins Repo ahsub/ko-aggregator versioniert worden — das war
@@ -574,10 +589,10 @@ async function handleRejectTickers(request, env, origin) {
 const ACTION_CONFIG = {
   makro:         { model: 'claude-haiku-4-5-20251001', max_tokens: 3000 },
   ki_briefing:   { model: 'claude-haiku-4-5-20251001', max_tokens: 3000 }, // v1.9: 2048->3000
-  morning:       { model: 'claude-sonnet-4-6',          max_tokens: 3000 },
+  morning:       { model: 'claude-sonnet-4-6',          max_tokens: 4500 }, // v1.10: 3000->4500 (Live-Truncation bestaetigt)
   oversold:      { model: 'claude-haiku-4-5-20251001', max_tokens: 1500 },
   meta_analysis: { model: 'claude-haiku-4-5-20251001', max_tokens: 1500 },
-  deep_dive:     { model: 'claude-sonnet-4-6',          max_tokens: 2500  },
+  deep_dive:     { model: 'claude-sonnet-4-6',          max_tokens: 3200  }, // v1.10: 2500->3200, vorsorglich (gleiche Risikoklasse wie morning/eic)
   dark_pool:     { model: 'claude-sonnet-4-6',          max_tokens: 1000  }, // v1.9: 400->1000
   eic:           { model: 'claude-sonnet-4-6',          max_tokens: 3500  }, // v1.9: 2000->3500
 };
