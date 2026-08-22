@@ -8879,7 +8879,7 @@ def generate_daily_snapshot(master):
 
         body = _j.dumps({
             "model":      "claude-sonnet-4-6",
-            "max_tokens": 1200,
+            "max_tokens": 4500,
             "messages":   [{"role": "user", "content": prompt}]
         }).encode()
         req2 = _ur.Request(
@@ -8895,6 +8895,26 @@ def generate_daily_snapshot(master):
         with _ur.urlopen(req2, timeout=30) as resp:
             rd = _j.loads(resp.read().decode())
             briefing_text = rd.get("content", [{}])[0].get("text", "")
+
+        # DIAGNOSE (21.08.2026, Axel-Anfrage — Truncation trotz max_tokens=4500
+        # weiterhin bei ~3000 Zeichen/~700 Tokens; Ursache noch unklar, ob echtes
+        # max_tokens-Limit erreicht wurde oder das Modell freiwillig stoppte).
+        # Rein additiv, keine Verhaltensaenderung — nur fuer die naechsten 1-2
+        # Laeufe gedacht, danach wieder entfernen, sobald Root Cause klar ist.
+        _stop_reason  = rd.get("stop_reason", "?")
+        _usage        = rd.get("usage", {}) or {}
+        _out_tokens   = _usage.get("output_tokens", "?")
+        _in_tokens    = _usage.get("input_tokens", "?")
+        log.info(
+            f"  [SNAPSHOT-DIAG] stop_reason={_stop_reason} | "
+            f"output_tokens={_out_tokens} | input_tokens={_in_tokens} | "
+            f"max_tokens_limit=4500"
+        )
+        if _stop_reason not in ("end_turn", "?"):
+            log.warning(
+                f"  [SNAPSHOT-DIAG] Ungewoehnlicher stop_reason='{_stop_reason}' — "
+                f"pruefen ob dies die Ursache der Truncation ist."
+            )
 
         log.info(f"  [SNAPSHOT] Morning Briefing generiert ({len(briefing_text)} Zeichen)")
         return {
