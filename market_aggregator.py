@@ -994,7 +994,7 @@ def generate_daily_snapshot(master):
             },
             method="POST"
         )
-        with _ur.urlopen(req2, timeout=30) as resp:
+        with _ur.urlopen(req2, timeout=90) as resp:
             rd = _j.loads(resp.read().decode())
             briefing_text = rd.get("content", [{}])[0].get("text", "")
 
@@ -8892,7 +8892,7 @@ def generate_daily_snapshot(master):
             },
             method="POST"
         )
-        with _ur.urlopen(req2, timeout=30) as resp:
+        with _ur.urlopen(req2, timeout=90) as resp:
             rd = _j.loads(resp.read().decode())
             briefing_text = rd.get("content", [{}])[0].get("text", "")
 
