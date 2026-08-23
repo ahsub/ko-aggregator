@@ -36,5 +36,7 @@ Alle vier Reihen lassen sich direkt per Download-Link aktualisieren (kein Login 
 2. VVIX: `https://cdn.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv`
 3. SKEW: `https://cdn.cboe.com/api/global/us_indices/daily_prices/SKEW_History.csv` (Muster-basiert, siehe Anmerkung oben)
 4. SKEW Term Structure: `https://cdn.cboe.com/resources/indices/documents/skewtermstructure.csv`
+5. VIX3M: `https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX3M_History.csv`
+6. DIX/GEX: `https://squeezemetrics.com/monitor/static/DIX.csv`
 
 Vorgehen: Link im Browser öffnen (lädt automatisch als CSV) → Datei ersetzt die alte in `data/raw_data/` unter demselben Namen → `python cboe_vol_loader.py` laufen lassen, um `cboe_vol_panel_daily.csv` neu zu bauen → `diagnose_coverage()`-Ausgabe auf Lückenfreiheit und aktuelles Enddatum prüfen, bevor die Daten produktiv genutzt werden.
