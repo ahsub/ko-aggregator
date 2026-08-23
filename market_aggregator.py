@@ -648,134 +648,6 @@ def calc_server_strategy_gates(regime, ctx):
     return {"action": base["action"], "strategies": strategies, "downgrades": downgrades}
 
 
-# ── MSE-REGIME PORT (19.08.2026, Axel-Anfrage — Bug 1/3 Root-Cause-Fix) ────────
-# 1:1-Port von KoMarketState.determineRegime() / normalizeMetrics() / zScore() /
-# percentileRank() aus ahsub/ko-modules/ko-market-state.js (Client, MSE v2.3).
-#
-# HINTERGRUND: Der bisherige server-seitige `market_regime_str` (s.u., zur
-# Leaderboard-Selektion) ist EIN GANZ ANDERES, einfacheres Modell (nur VIX-
-# Termstruktur + VIX-Level) — kein Bugfix-Ziel, bleibt für Leaderboards/
-# score_options_collar() unveraendert (Track-Record-Risiko, s. Uebergabe
-# 2026-08-19). Diese neue Funktion ist AUSSCHLIESSLICH fuer den KI-Text in
-# generate_daily_snapshot() gedacht, damit das dort genannte Regime mit dem
-# Client-Badge (KoMarketState._lastRegime, MSE v2.3, Multi-Faktor) uebereinstimmt.
-#
-# WICHTIG: Fensterlaenge (LOOKBACK=20) und Thresholds MUESSEN 1:1 mit dem
-# Client synchron gehalten werden — bei Aenderungen an ko-market-state.js
-# IMMER auch hier nachziehen (und umgekehrt), sonst lebt die Divergenz einfach
-# an anderer Stelle weiter.
-#
-# NOCH NICHT VALIDIERT — vor Produktiveinsatz gegen historische Client-Regime-
-# Ausgaben diffen (analog REGIME-BACKTEST-VALIDIERUNG.md-Vorgehen), s. Uebergabe.
-
-_MSE_LOOKBACK = 20
-
-_MSE_THRESHOLDS = {
-    "vixTermContango":  1.05,
-    "vixTermFlat":       0.98,
-    "vvixHighStress":    1.5,
-    "vvixLowStress":    -1.0,
-    "gexShortGamma":    -1.0,
-    "dixAccumulation":   0.5,
-    "skewHighHedging":  80,
-}
-
-
-def _mse_z_score(series, current_val):
-    """1:1-Port von KoMarketState.zScore() (ko-market-state.js)."""
-    if not series or len(series) < 3 or current_val is None:
-        return None
-    n = min(len(series), _MSE_LOOKBACK)
-    data = series[-n:]
-    mean = sum(data) / n
-    variance = sum((v - mean) ** 2 for v in data) / n
-    std = variance ** 0.5
-    if std == 0:
-        return 0.0
-    return round(((current_val - mean) / std) * 100) / 100
-
-
-def _mse_percentile_rank(series, current_val):
-    """1:1-Port von KoMarketState.percentileRank() (ko-market-state.js)."""
-    if not series or len(series) < 3 or current_val is None:
-        return None
-    n = min(len(series), _MSE_LOOKBACK)
-    data = series[-n:]
-    below = sum(1 for v in data if v <= current_val)
-    return round((below / len(data)) * 100)
-
-
-def determine_mse_regime(mse_history, dix_gex, vix_term):
-    """1:1-Port von KoMarketState.normalizeMetrics() + .determineRegime().
-
-    Input:
-        mse_history: dict mit "vvix"/"skew"/"vix"/"vixRatio" (Listen, wie von
-                      fetch_mse_history() geliefert — 252T-Fenster im Aufrufer)
-        dix_gex:      dict mit "gex"/"dix" (aktuell) + "history" (dict mit
-                      "gex"/"dix"-Listen, wie von fetch_dix_gex() geliefert)
-        vix_term:     dict mit "vix"/"vix3m" (aktuell, wie von fetch_vix_term())
-
-    Output: (regime_str, metrics_dict) — regime_str eines von
-            BULL_QUIET / BULL_FRAGILE / STRESS_UNSTABLE / POST_PANIC_REVERSION
-            / NEUTRAL. metrics_dict fuer Debug/Prompt-Kontext.
-    """
-    T = _MSE_THRESHOLDS
-
-    vvix_hist = (mse_history or {}).get("vvix") or []
-    skew_hist = (mse_history or {}).get("skew") or []
-    gex_hist  = ((dix_gex or {}).get("history") or {}).get("gex") or []
-    dix_hist  = ((dix_gex or {}).get("history") or {}).get("dix") or []
-
-    vvix_raw = vvix_hist[-1] if vvix_hist else None
-    skew_raw = skew_hist[-1] if skew_hist else None
-    gex_raw  = (dix_gex or {}).get("gex")
-    dix_raw  = (dix_gex or {}).get("dix")
-
-    vix_val  = (vix_term or {}).get("vix")
-    vix3m    = (vix_term or {}).get("vix3m")
-    vix_ratio = round(vix3m / vix_val, 3) if (vix_val and vix3m and vix_val > 0) else None
-
-    if vix_ratio is None:
-        term_structure = "UNKNOWN"
-    elif vix_ratio > T["vixTermContango"]:
-        term_structure = "CONTANGO"
-    elif vix_ratio < T["vixTermFlat"]:
-        term_structure = "BACKWARDATION"
-    else:
-        term_structure = "FLAT"
-
-    metrics = {
-        "vvix_raw": vvix_raw, "gex_raw": gex_raw, "dix_raw": dix_raw, "skew_raw": skew_raw,
-        "vixRatio": vix_ratio,
-        "vvix_z20":    _mse_z_score(vvix_hist, vvix_raw),
-        "gex_z20":     _mse_z_score(gex_hist, gex_raw),
-        "dix_z20":     _mse_z_score(dix_hist, dix_raw),
-        "skew_pct20":  _mse_percentile_rank(skew_hist, skew_raw),
-        "term_structure": term_structure,
-    }
-
-    vvix_z20   = metrics["vvix_z20"]
-    gex_z20    = metrics["gex_z20"]
-    dix_z20    = metrics["dix_z20"]
-    skew_pct20 = metrics["skew_pct20"]
-    term       = metrics["term_structure"]
-
-    # Fehlende Kernwerte (zu kurze Historie o.ae.) -> NEUTRAL, wie Client bei
-    # unvollstaendigen Metriken (Vergleiche mit None sind in JS falsy/false,
-    # in Python werfen sie TypeError -- deshalb hier explizite Guards).
-    if vvix_z20 is None or gex_z20 is None or dix_z20 is None or skew_pct20 is None:
-        return "NEUTRAL", metrics
-
-    if term == "BACKWARDATION" or (vvix_z20 > T["vvixHighStress"] and gex_z20 < T["gexShortGamma"]):
-        return "STRESS_UNSTABLE", metrics
-    if term == "FLAT" and dix_z20 > T["dixAccumulation"] and vvix_z20 < 0:
-        return "POST_PANIC_REVERSION", metrics
-    if term == "CONTANGO" and skew_pct20 > T["skewHighHedging"] and vvix_z20 > 0.8:
-        return "BULL_FRAGILE", metrics
-    if term == "CONTANGO" and gex_z20 > 0 and dix_z20 >= -0.5:
-        return "BULL_QUIET", metrics
-    return "NEUTRAL", metrics
-
 
 def generate_daily_snapshot(master):
     """Generiert das Morning Briefing serverseitig via Anthropic API.
@@ -827,22 +699,12 @@ def generate_daily_snapshot(master):
         snap_ts   = meta.get("generated", "-")
         ltd       = meta.get("last_trading_day", "-")
 
-        # NEU (19.08.2026, Bug 1/3 Root-Cause-Fix — s. Uebergabeprotokoll):
-        # Bisher nutzte der KI-Text hier `regime_aggregator` (VIX-Term+Level-
-        # Heuristik, identisch zu market_regime_str fuer die Leaderboard-
-        # Selektion) — das WEICHT strukturell vom Client-Badge (MSE v2.3,
-        # Multi-Faktor VVIX/GEX/DIX/SKEW, s. ko-market-state.js) ab, dadurch
-        # sahen Nutzer z.B. "BULL_QUIET" im Briefing-Text bei gleichzeitig
-        # "NEUTRAL" im Live-Badge. Fix NUR fuer den KI-Text-Kontext hier
-        # (ctx/gates/Prompt) — market_regime_str (Leaderboard/Collar-Scoring,
-        # s. weiter unten in main()) bleibt bewusst UNVERAENDERT, um die
-        # laufende Track-Record-Selektion nicht zu beeinflussen.
-        # NOCH NICHT VALIDIERT — vor produktivem Rollout gegen historische
-        # Client-Regime-Werte diffen (s. determine_mse_regime()-Docstring).
-        # regime_v2 ist jetzt die EINZIGE Regime-Quelle (Server + Client) --
-        # kein separater "MSE-aequivalenter" Pfad mehr, daher keine
-        # Divergenz-Moeglichkeit mehr an dieser Stelle (s. Nachtrag
-        # REGIME-BACKTEST-VALIDIERUNG.md, 23.08.2026).
+        # regime_v2 (validiert 23.08.2026, s. Nachtrag REGIME-BACKTEST-
+        # VALIDIERUNG.md) ist die EINZIGE Regime-Quelle (Server + Client) --
+        # ersetzt die fruehere Divergenz zwischen KI-Text und Client-Badge
+        # (bis 19.08.2026: regime_aggregator vs. determine_mse_regime(),
+        # seit 23.08.2026 nicht mehr moeglich, da beide Pfade dieselbe
+        # Formel nutzen).
         regime, _ = classify_regime_v2(
             vix_term.get('vix') if vix_term else None,
             vix_term.get('vix3m') if vix_term else None,
@@ -1428,7 +1290,30 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.37.0"
+AGGREGATOR_VERSION = "5.37.2"
+# v5.37.2 (23.08.2026): IWV-Holdings-Update (Jul 24 -> Aug 20, 2026) + Fix
+# fuer Namens-Matching in build_sector_holdings()/_resolve(): iShares hat die
+# IWV-Namenskonvention systematisch geaendert (INC/CORP/CORPORATION aus ~49%
+# der 2.579 Namen entfernt). Bei "X INC CLASS A" -> "X CLASS A"-Faellen (122
+# betroffene Ticker, u.a. ROKU/CLOUDFLARE/GITLAB/MONGODB/DOORDASH/REDDIT/
+# MASTERCARD) brach das bisherige 15-Zeichen-Substring-Matching, weil INC/CORP
+# genau vor der Cut-Grenze saß -- waere ohne Fix eine stille Verschlechterung
+# der Match-Rate gewesen (bislang 93%, s. Run #125). Neue _norm()-Hilfsfunktion
+# entfernt Rechtsform-Suffixe (INC/CORP/CORPORATION/LTD/PLC) vor dem Substring-
+# Vergleich, als zusaetzlicher Fallback NACH dem bisherigen unnormalisierten
+# Vergleich (Abwaertskompatibel). 120/122 Faelle dadurch geloest -- 2 Restfaelle
+# (SEI: Solaris Oilfield->Energy Infrastructure, BEN: Franklin Resources->
+# Templeton) sind echte Firmenumbenennungen, kein Matching-Bug, ggf. spaeter
+# MANUAL_NAME_MAP-Eintrag noetig falls sie als unresolved auftauchen.
+# v5.37.1 (23.08.2026): Aufraeumen nach regime_v2-Umstellung. Beide toten
+# determine_mse_regime()-Bloecke (inkl. _mse_z_score()/_mse_percentile_rank()/
+# _MSE_LOOKBACK/_MSE_THRESHOLDS, je 128 Zeilen) entfernt -- seit v5.37.0 ohne
+# Aufrufstelle. Veraltete, sich selbst widersprechende Kommentare an beiden
+# classify_regime_v2()-Aufrufstellen (Stand 19.08.2026, verwiesen noch auf
+# das geloeschte determine_mse_regime()-Docstring) konsolidiert. [SNAPSHOT-
+# DIAG]-Truncation-Diagnose-Logging vom 21.08.2026 entfernt (laut eigenem
+# Kommentar nur fuer 1-2 Laeufe gedacht, Zweck erfuellt). Rein kosmetisch,
+# keine Verhaltensaenderung.
 # v5.37.0 (23.08.2026): regime_v2 UIQ-weit uebernommen (s. Nachtrag
 # UIQ-Suite/docs/REGIME-BACKTEST-VALIDIERUNG.md). Neue Funktion
 # classify_regime_v2() (VIX3M/VIX-Ratio + VIX-Level + validierte
@@ -6842,14 +6727,28 @@ def build_sector_holdings(etf_ticker: str, xlsx_path: str, top_n: int = 15) -> d
     except Exception:
         pass
 
+    def _norm(s):
+        """Rechtsform-Suffixe entfernen vor dem Matching (23.08.2026 -- iShares
+        hat die IWV-Namenskonvention Aug 2026 geaendert, INC/CORP/CORPORATION
+        systematisch aus ~49% der Namen entfernt, s. Chat 23.08.2026. Ohne
+        Normalisierung brechen 122 Faelle wie "KLAVIYO INC SERIES A" vs.
+        "KLAVIYO SERIES A" am 15-Zeichen-Substring-Test, weil das INC/CORP
+        genau vor der Cut-Grenze sitzt)."""
+        for suf in (" INCORPORATED", " CORPORATION", " INC", " CORP", " LTD", " PLC"):
+            s = s.replace(suf, "")
+        return s.strip()
+
     def _resolve(name):
         nu = name.upper().strip()
         if nu in MANUAL_NAME_MAP: return MANUAL_NAME_MAP[nu]
         for k, v in MANUAL_NAME_MAP.items():
             if nu.startswith(k[:12]) or k.startswith(nu[:12]): return v
         if nu in _iwv_map: return _iwv_map[nu]
+        nu_n = _norm(nu)
         for iwv_name, sym in _iwv_map.items():
             if nu[:15] in iwv_name or iwv_name[:15] in nu: return sym
+            iwv_n = _norm(iwv_name)
+            if nu_n[:15] in iwv_n or iwv_n[:15] in nu_n: return sym
         return None
 
     resolved = []
@@ -8588,134 +8487,6 @@ def calc_server_strategy_gates(regime, ctx):
     return {"action": base["action"], "strategies": strategies, "downgrades": downgrades}
 
 
-# ── MSE-REGIME PORT (19.08.2026, Axel-Anfrage — Bug 1/3 Root-Cause-Fix) ────────
-# 1:1-Port von KoMarketState.determineRegime() / normalizeMetrics() / zScore() /
-# percentileRank() aus ahsub/ko-modules/ko-market-state.js (Client, MSE v2.3).
-#
-# HINTERGRUND: Der bisherige server-seitige `market_regime_str` (s.u., zur
-# Leaderboard-Selektion) ist EIN GANZ ANDERES, einfacheres Modell (nur VIX-
-# Termstruktur + VIX-Level) — kein Bugfix-Ziel, bleibt für Leaderboards/
-# score_options_collar() unveraendert (Track-Record-Risiko, s. Uebergabe
-# 2026-08-19). Diese neue Funktion ist AUSSCHLIESSLICH fuer den KI-Text in
-# generate_daily_snapshot() gedacht, damit das dort genannte Regime mit dem
-# Client-Badge (KoMarketState._lastRegime, MSE v2.3, Multi-Faktor) uebereinstimmt.
-#
-# WICHTIG: Fensterlaenge (LOOKBACK=20) und Thresholds MUESSEN 1:1 mit dem
-# Client synchron gehalten werden — bei Aenderungen an ko-market-state.js
-# IMMER auch hier nachziehen (und umgekehrt), sonst lebt die Divergenz einfach
-# an anderer Stelle weiter.
-#
-# NOCH NICHT VALIDIERT — vor Produktiveinsatz gegen historische Client-Regime-
-# Ausgaben diffen (analog REGIME-BACKTEST-VALIDIERUNG.md-Vorgehen), s. Uebergabe.
-
-_MSE_LOOKBACK = 20
-
-_MSE_THRESHOLDS = {
-    "vixTermContango":  1.05,
-    "vixTermFlat":       0.98,
-    "vvixHighStress":    1.5,
-    "vvixLowStress":    -1.0,
-    "gexShortGamma":    -1.0,
-    "dixAccumulation":   0.5,
-    "skewHighHedging":  80,
-}
-
-
-def _mse_z_score(series, current_val):
-    """1:1-Port von KoMarketState.zScore() (ko-market-state.js)."""
-    if not series or len(series) < 3 or current_val is None:
-        return None
-    n = min(len(series), _MSE_LOOKBACK)
-    data = series[-n:]
-    mean = sum(data) / n
-    variance = sum((v - mean) ** 2 for v in data) / n
-    std = variance ** 0.5
-    if std == 0:
-        return 0.0
-    return round(((current_val - mean) / std) * 100) / 100
-
-
-def _mse_percentile_rank(series, current_val):
-    """1:1-Port von KoMarketState.percentileRank() (ko-market-state.js)."""
-    if not series or len(series) < 3 or current_val is None:
-        return None
-    n = min(len(series), _MSE_LOOKBACK)
-    data = series[-n:]
-    below = sum(1 for v in data if v <= current_val)
-    return round((below / len(data)) * 100)
-
-
-def determine_mse_regime(mse_history, dix_gex, vix_term):
-    """1:1-Port von KoMarketState.normalizeMetrics() + .determineRegime().
-
-    Input:
-        mse_history: dict mit "vvix"/"skew"/"vix"/"vixRatio" (Listen, wie von
-                      fetch_mse_history() geliefert — 252T-Fenster im Aufrufer)
-        dix_gex:      dict mit "gex"/"dix" (aktuell) + "history" (dict mit
-                      "gex"/"dix"-Listen, wie von fetch_dix_gex() geliefert)
-        vix_term:     dict mit "vix"/"vix3m" (aktuell, wie von fetch_vix_term())
-
-    Output: (regime_str, metrics_dict) — regime_str eines von
-            BULL_QUIET / BULL_FRAGILE / STRESS_UNSTABLE / POST_PANIC_REVERSION
-            / NEUTRAL. metrics_dict fuer Debug/Prompt-Kontext.
-    """
-    T = _MSE_THRESHOLDS
-
-    vvix_hist = (mse_history or {}).get("vvix") or []
-    skew_hist = (mse_history or {}).get("skew") or []
-    gex_hist  = ((dix_gex or {}).get("history") or {}).get("gex") or []
-    dix_hist  = ((dix_gex or {}).get("history") or {}).get("dix") or []
-
-    vvix_raw = vvix_hist[-1] if vvix_hist else None
-    skew_raw = skew_hist[-1] if skew_hist else None
-    gex_raw  = (dix_gex or {}).get("gex")
-    dix_raw  = (dix_gex or {}).get("dix")
-
-    vix_val  = (vix_term or {}).get("vix")
-    vix3m    = (vix_term or {}).get("vix3m")
-    vix_ratio = round(vix3m / vix_val, 3) if (vix_val and vix3m and vix_val > 0) else None
-
-    if vix_ratio is None:
-        term_structure = "UNKNOWN"
-    elif vix_ratio > T["vixTermContango"]:
-        term_structure = "CONTANGO"
-    elif vix_ratio < T["vixTermFlat"]:
-        term_structure = "BACKWARDATION"
-    else:
-        term_structure = "FLAT"
-
-    metrics = {
-        "vvix_raw": vvix_raw, "gex_raw": gex_raw, "dix_raw": dix_raw, "skew_raw": skew_raw,
-        "vixRatio": vix_ratio,
-        "vvix_z20":    _mse_z_score(vvix_hist, vvix_raw),
-        "gex_z20":     _mse_z_score(gex_hist, gex_raw),
-        "dix_z20":     _mse_z_score(dix_hist, dix_raw),
-        "skew_pct20":  _mse_percentile_rank(skew_hist, skew_raw),
-        "term_structure": term_structure,
-    }
-
-    vvix_z20   = metrics["vvix_z20"]
-    gex_z20    = metrics["gex_z20"]
-    dix_z20    = metrics["dix_z20"]
-    skew_pct20 = metrics["skew_pct20"]
-    term       = metrics["term_structure"]
-
-    # Fehlende Kernwerte (zu kurze Historie o.ae.) -> NEUTRAL, wie Client bei
-    # unvollstaendigen Metriken (Vergleiche mit None sind in JS falsy/false,
-    # in Python werfen sie TypeError -- deshalb hier explizite Guards).
-    if vvix_z20 is None or gex_z20 is None or dix_z20 is None or skew_pct20 is None:
-        return "NEUTRAL", metrics
-
-    if term == "BACKWARDATION" or (vvix_z20 > T["vvixHighStress"] and gex_z20 < T["gexShortGamma"]):
-        return "STRESS_UNSTABLE", metrics
-    if term == "FLAT" and dix_z20 > T["dixAccumulation"] and vvix_z20 < 0:
-        return "POST_PANIC_REVERSION", metrics
-    if term == "CONTANGO" and skew_pct20 > T["skewHighHedging"] and vvix_z20 > 0.8:
-        return "BULL_FRAGILE", metrics
-    if term == "CONTANGO" and gex_z20 > 0 and dix_z20 >= -0.5:
-        return "BULL_QUIET", metrics
-    return "NEUTRAL", metrics
-
 
 def generate_daily_snapshot(master):
     """Generiert das Morning Briefing serverseitig via Anthropic API.
@@ -8767,22 +8538,12 @@ def generate_daily_snapshot(master):
         snap_ts   = meta.get("generated", "-")
         ltd       = meta.get("last_trading_day", "-")
 
-        # NEU (19.08.2026, Bug 1/3 Root-Cause-Fix — s. Uebergabeprotokoll):
-        # Bisher nutzte der KI-Text hier `regime_aggregator` (VIX-Term+Level-
-        # Heuristik, identisch zu market_regime_str fuer die Leaderboard-
-        # Selektion) — das WEICHT strukturell vom Client-Badge (MSE v2.3,
-        # Multi-Faktor VVIX/GEX/DIX/SKEW, s. ko-market-state.js) ab, dadurch
-        # sahen Nutzer z.B. "BULL_QUIET" im Briefing-Text bei gleichzeitig
-        # "NEUTRAL" im Live-Badge. Fix NUR fuer den KI-Text-Kontext hier
-        # (ctx/gates/Prompt) — market_regime_str (Leaderboard/Collar-Scoring,
-        # s. weiter unten in main()) bleibt bewusst UNVERAENDERT, um die
-        # laufende Track-Record-Selektion nicht zu beeinflussen.
-        # NOCH NICHT VALIDIERT — vor produktivem Rollout gegen historische
-        # Client-Regime-Werte diffen (s. determine_mse_regime()-Docstring).
-        # regime_v2 ist jetzt die EINZIGE Regime-Quelle (Server + Client) --
-        # kein separater "MSE-aequivalenter" Pfad mehr, daher keine
-        # Divergenz-Moeglichkeit mehr an dieser Stelle (s. Nachtrag
-        # REGIME-BACKTEST-VALIDIERUNG.md, 23.08.2026).
+        # regime_v2 (validiert 23.08.2026, s. Nachtrag REGIME-BACKTEST-
+        # VALIDIERUNG.md) ist die EINZIGE Regime-Quelle (Server + Client) --
+        # ersetzt die fruehere Divergenz zwischen KI-Text und Client-Badge
+        # (bis 19.08.2026: regime_aggregator vs. determine_mse_regime(),
+        # seit 23.08.2026 nicht mehr moeglich, da beide Pfade dieselbe
+        # Formel nutzen).
         regime, _ = classify_regime_v2(
             vix_term.get('vix') if vix_term else None,
             vix_term.get('vix3m') if vix_term else None,
@@ -8938,26 +8699,6 @@ def generate_daily_snapshot(master):
         with _ur.urlopen(req2, timeout=90) as resp:
             rd = _j.loads(resp.read().decode())
             briefing_text = rd.get("content", [{}])[0].get("text", "")
-
-        # DIAGNOSE (21.08.2026, Axel-Anfrage — Truncation trotz max_tokens=4500
-        # weiterhin bei ~3000 Zeichen/~700 Tokens; Ursache noch unklar, ob echtes
-        # max_tokens-Limit erreicht wurde oder das Modell freiwillig stoppte).
-        # Rein additiv, keine Verhaltensaenderung — nur fuer die naechsten 1-2
-        # Laeufe gedacht, danach wieder entfernen, sobald Root Cause klar ist.
-        _stop_reason  = rd.get("stop_reason", "?")
-        _usage        = rd.get("usage", {}) or {}
-        _out_tokens   = _usage.get("output_tokens", "?")
-        _in_tokens    = _usage.get("input_tokens", "?")
-        log.info(
-            f"  [SNAPSHOT-DIAG] stop_reason={_stop_reason} | "
-            f"output_tokens={_out_tokens} | input_tokens={_in_tokens} | "
-            f"max_tokens_limit=4500"
-        )
-        if _stop_reason not in ("end_turn", "?"):
-            log.warning(
-                f"  [SNAPSHOT-DIAG] Ungewoehnlicher stop_reason='{_stop_reason}' — "
-                f"pruefen ob dies die Ursache der Truncation ist."
-            )
 
         log.info(f"  [SNAPSHOT] Morning Briefing generiert ({len(briefing_text)} Zeichen)")
         return {
