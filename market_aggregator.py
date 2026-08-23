@@ -839,14 +839,15 @@ def generate_daily_snapshot(master):
         # laufende Track-Record-Selektion nicht zu beeinflussen.
         # NOCH NICHT VALIDIERT — vor produktivem Rollout gegen historische
         # Client-Regime-Werte diffen (s. determine_mse_regime()-Docstring).
-        mse_history = market.get("mseHistory", {}) or {}
-        regime_mse, _mse_metrics = determine_mse_regime(mse_history, dix_gex, vix_term)
-        regime = regime_mse
-        if regime_aggregator != "-" and regime_aggregator != regime_mse:
-            log.info(
-                f"  [SNAPSHOT] Regime-Divergenz: Aggregator={regime_aggregator} "
-                f"vs. MSE(client-aequivalent)={regime_mse} — Briefing-Text nutzt MSE."
-            )
+        # regime_v2 ist jetzt die EINZIGE Regime-Quelle (Server + Client) --
+        # kein separater "MSE-aequivalenter" Pfad mehr, daher keine
+        # Divergenz-Moeglichkeit mehr an dieser Stelle (s. Nachtrag
+        # REGIME-BACKTEST-VALIDIERUNG.md, 23.08.2026).
+        regime, _ = classify_regime_v2(
+            vix_term.get('vix') if vix_term else None,
+            vix_term.get('vix3m') if vix_term else None,
+            dix_gex.get('gex'),
+        )
 
         def _fmt(val, decimals=2, suffix=""):
             if val is None:
@@ -1427,7 +1428,21 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.36.14"
+AGGREGATOR_VERSION = "5.37.0"
+# v5.37.0 (23.08.2026): regime_v2 UIQ-weit uebernommen (s. Nachtrag
+# UIQ-Suite/docs/REGIME-BACKTEST-VALIDIERUNG.md). Neue Funktion
+# classify_regime_v2() (VIX3M/VIX-Ratio + VIX-Level + validierte
+# GEX<0-Override-Regel) ersetzt sowohl den bisherigen market_regime_str-
+# Block als auch determine_mse_regime() (Python-Port des 5-Faktor-Modells,
+# 19.08.2026, verworfen) — Server nutzt jetzt nur noch eine Formel, deckt
+# sich mit ko-market-state.js v2.4 (Client). Grund: faire Neuvalidierung
+# aller drei bis dahin konkurrierenden Regime-Berechnungen auf identischer
+# CBOE-Primaerdatenbasis zeigte regime_v2 als durchgaengig mindestens
+# gleichwertig, bei BULL_FRAGILE klar ueberlegen. Alte
+# determine_mse_regime()-Funktionsdefinitionen (beide Kopien, s.
+# 22.08.-Protokoll "Funktions-Duplikate") bewusst NICHT geloescht — toter
+# Code, keine Aufrufstelle mehr, Entfernen ist unkritisches spaeteres
+# Aufraeumen, kein Funktionsrisiko. Noch NICHT live verifiziert.
 # v5.12.4 (19.07.2026): SECTOR_ETF_LIST auf alle 10 ETFs erweitert
 # (XLP/XLC/XLB fehlten — waren nicht in der Liste trotz vorhandener Dateien).
 # v5.12.3 (19.07.2026): SSGA-US-Download deaktiviert — US-Format inkompatibel
@@ -7632,6 +7647,33 @@ def calc_ratio_signal(hist_data: dict, sym_a: str, sym_b: str, label: str) -> di
         return {"ok": False, "reason": str(e)[:120]}
 
 
+def classify_regime_v2(vix, vix3m, gex):
+    """regime_v2 (validiert 23.08.2026, s. REGIME-BACKTEST-VALIDIERUNG.md
+    Nachtrag): v1-Formel (VIX3M/VIX-Ratio + VIX-Level) + GEX<0-Override,
+    NUR wenn v1 BULL_FRAGILE/BULL_QUIET sagt. Ersetzt market_regime_str
+    UND determine_mse_regime() als einzige Regime-Quelle (Server + Client
+    nutzen ab jetzt dieselbe Formel, s. ko-market-state.js).
+
+    Returns: (regime_str, ratio) -- ratio fuer Logging/Diagnose.
+    """
+    if vix is None or vix3m is None or vix <= 0:
+        return "NEUTRAL", None
+
+    ratio = round(vix3m / vix, 3)
+
+    if ratio < 0.98:
+        regime = "STRESS_UNSTABLE"
+    elif ratio < 1.05:
+        regime = "POST_PANIC_REVERSION"
+    else:
+        regime = "BULL_FRAGILE" if vix > 25 else "BULL_QUIET"
+        # GEX<0-Override: nur bei BULL_*, ueberschreibt zu STRESS_UNSTABLE
+        if gex is not None and gex < 0:
+            regime = "STRESS_UNSTABLE"
+
+    return regime, ratio
+
+
 def calc_regime_history_flag(mse_history: dict, current_regime: str) -> dict:
     """Regime-History-Flag (Backlog №29, 07.08.2026) — Übergangsvektor für den MSE.
 
@@ -8737,14 +8779,15 @@ def generate_daily_snapshot(master):
         # laufende Track-Record-Selektion nicht zu beeinflussen.
         # NOCH NICHT VALIDIERT — vor produktivem Rollout gegen historische
         # Client-Regime-Werte diffen (s. determine_mse_regime()-Docstring).
-        mse_history = market.get("mseHistory", {}) or {}
-        regime_mse, _mse_metrics = determine_mse_regime(mse_history, dix_gex, vix_term)
-        regime = regime_mse
-        if regime_aggregator != "-" and regime_aggregator != regime_mse:
-            log.info(
-                f"  [SNAPSHOT] Regime-Divergenz: Aggregator={regime_aggregator} "
-                f"vs. MSE(client-aequivalent)={regime_mse} — Briefing-Text nutzt MSE."
-            )
+        # regime_v2 ist jetzt die EINZIGE Regime-Quelle (Server + Client) --
+        # kein separater "MSE-aequivalenter" Pfad mehr, daher keine
+        # Divergenz-Moeglichkeit mehr an dieser Stelle (s. Nachtrag
+        # REGIME-BACKTEST-VALIDIERUNG.md, 23.08.2026).
+        regime, _ = classify_regime_v2(
+            vix_term.get('vix') if vix_term else None,
+            vix_term.get('vix3m') if vix_term else None,
+            dix_gex.get('gex'),
+        )
 
         def _fmt(val, decimals=2, suffix=""):
             if val is None:
@@ -9720,36 +9763,20 @@ def main():
     )[:20]
 
     # Markt-Regime aus VIX-Term-Structure ableiten (fuer Leaderboard-Filter)
-    market_regime_str = 'NEUTRAL'
-    # Primärquelle: VIX Term Structure — KONVENTION: VIX3M/VIX (>1 = Contango/gesund)
-    # v4.3 KRITISCHER FIX (02.07.2026): vix_term['ratio'] ist VIX/VIX3M (<1 = gesund),
-    # die Schwellen unten (<0.98 STRESS, <1.05 POST_PANIC, sonst BULL) wurden aber
-    # für die INVERSE Konvention VIX3M/VIX geschrieben (wie mseHistory.vixRatio).
-    # Folge: ruhiger Contango-Markt wurde als STRESS_UNSTABLE geroutet und umgekehrt
-    # — Master-Shortlist lief im Bärenmodus bei gesunder Marktlage (Lauf v4.2:
-    # VIX 16.15 / VIX3M 19.04 / CONTANGO → fälschlich STRESS_UNSTABLE, 13× MR-Long
-    # + 7 Shorts). Fix: Ratio aus vix/vix3m-Rohwerten in VIX3M/VIX-Konvention bilden.
-    _regime_ratio = None
-    if vix_term and vix_term.get('vix') and vix_term.get('vix3m'):
-        # KONVENTION: ratio_3m_spot = VIX3M/VIX (>1 = Contango). Primär aus
-        # explizitem Feld; Fallback berechnet für ältere KV-Snapshots ohne das Feld.
-        _regime_ratio = vix_term.get('ratio_3m_spot') or round(vix_term['vix3m'] / vix_term['vix'], 3)
-    elif mse_history and mse_history.get('vixRatio') and mse_history['vixRatio']:
-        _regime_ratio = mse_history['vixRatio'][-1]   # bereits VIX3M/VIX
+    # regime_v2 (validiert 23.08.2026) -- ersetzt die reine v1-Ratio-Formel,
+    # s. REGIME-BACKTEST-VALIDIERUNG.md Nachtrag. dix_gex ist an dieser
+    # Stelle bereits im Scope (dix_gex = fetch_dix_gex() or {}).
+    _vix_val = vix_term.get('vix') if vix_term else None
+    _vix3m_val = vix_term.get('vix3m') if vix_term else None
+    if not _vix_val and mse_history and mse_history.get('vix'):
+        _vix_val = mse_history['vix'][-1]
+    if not _vix3m_val and mse_history and mse_history.get('vixRatio') and _vix_val:
+        _vix3m_val = mse_history['vixRatio'][-1] * _vix_val  # Rueckrechnung falls nur Ratio vorliegt
 
-    if _regime_ratio:
-        if _regime_ratio < 0.98:
-            market_regime_str = 'STRESS_UNSTABLE'
-        elif _regime_ratio < 1.05:
-            market_regime_str = 'POST_PANIC_REVERSION'
-        else:
-            # Contango = BULL — unterscheide QUIET vs FRAGILE per VIX-Niveau
-            _vix_val = vix_term.get('vix') if vix_term else None
-            if _vix_val and _vix_val > 25:
-                market_regime_str = 'BULL_FRAGILE'
-            else:
-                market_regime_str = 'BULL_QUIET'
-    log.info(f'  Markt-Regime: {market_regime_str} | Ratio: {_regime_ratio} (v5.12: vor Options-Loop verschoben fuer score_options_collar)')
+    market_regime_str, _regime_ratio = classify_regime_v2(
+        _vix_val, _vix3m_val, dix_gex.get('gex')
+    )
+    log.info(f'  Markt-Regime (v2): {market_regime_str} | Ratio: {_regime_ratio} | GEX: {dix_gex.get("gex")}')
 
     # Regime-History-Flag (Backlog №29, v5.29.0): Übergangsvektor aus mse_history
     # Brücke bis MCM-HMM ab ~01.10.2026 (ML_KONZEPT.md §3b)
