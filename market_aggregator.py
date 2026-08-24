@@ -2660,6 +2660,230 @@ def score_options_collar(r: dict, market_regime: str = "NEUTRAL") -> int:
 
     return max(0, min(100, s))
 
+
+# ══════════════════════════════════════════════════════════════════════════
+# MULTI-LEG-PREFILTER — Stufe 1 des zweistufigen Siebs (24.08.2026, Entwurf)
+# ══════════════════════════════════════════════════════════════════════════
+# Löst das "alle 700+ Ticker brauchen Volatilitätsdaten"-Problem aus der
+# Übergabe vom 23.08. Zwei Ebenen, analog zur bestehenden MCM/CSP-Architektur:
+#
+#   Stufe 1a (marktweit, 1x/Lauf):  calc_multileg_season()
+#     Bestimmt aus VIX-Terminstruktur + SKEW-Perzentil, welche der 5
+#     Multi-Leg-Strategien aus multileg-strategien-konzept.md (Chen/
+#     Sebastian Kap. 9) heute strukturell "in Season" sind.
+#
+#   Stufe 1b (pro Ticker, alle 700+):  score_multileg_prefilter()
+#     Filtert pro Ticker anhand von hvp (Proxy für IV-Regime — s. Warnhinweis
+#     unten), regime und dem Earnings-Gate (Wiederverwendung von
+#     _earnings_gate(), bereits in market_aggregator.py vorhanden).
+#
+# NICHT enthalten (bewusst): Stufe 2 (echte Optionsketten-Daten: Delta/
+# Strike, IV-Skew, Bid/Ask, OI). Das bleibt an die CapTrader-Architektur-
+# entscheidung gebunden (s. Übergabe 23.08., Nachtrag), die noch offen ist.
+#
+# BEKANNTE, BEWUSSTE EINSCHRÄNKUNG (24.08.2026, mit Axel geklärt): Iron
+# Condor und Iron Butterfly liefern in Stufe 1 IDENTISCHE Ranglisten. Das
+# Konzeptdokument (§3) verlangt für Iron Butterfly eine stärkere Skew-
+# Abhängigkeit (flache Put-Kurve). Recherche 24.08.: CBOE SKEW ist ein
+# SPX-/marktweiter Index, es gibt KEINE CBOE-Version davon pro Einzelaktie
+# — echte Put-vs-Call-IV pro Ticker gibt es nur aus echten Optionsketten-
+# Daten (CBOE DataShop wäre die einzige CBOE-eigene Quelle dafür, kosten-
+# pflichtiges Enterprise-Produkt, keine CDN-Gratis-Route wie VIX/VVIX/SKEW).
+# Bewusste Entscheidung: KEINE Krücke/Zusatzquelle einbauen — die Trennung
+# wartet auf Stufe 2 (CapTrader-Chain-Daten), die ohnehin geplant ist.
+# ══════════════════════════════════════════════════════════════════════════
+#
+# WICHTIGER VORBEHALT (multileg-strategien-konzept.md, Abschnitt 0):
+# hvp ist historische Vola (aus Kursverlauf), KEIN Implied-Vol-Rank. UIQ hat
+# pro Ticker keine echte IV — das ist eine Näherung, wie bei collar/csp_wheel
+# bereits dokumentiert. Die HVP-Bänder unten sind Claudes Interpretation der
+# in multileg-strategien-konzept.md beschriebenen IV-Regime-Vorlieben, NICHT
+# 1:1 von Axel vorgegebene Schwellenwerte — nach erster Live-Prüfung ggf.
+# nachschärfen (so am 24.08. mit Axel besprochen).
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def calc_multileg_season(vix_term: dict, zsc: dict) -> dict:
+    """Stufe 1a: marktweite Vorabprüfung, welche Multi-Leg-Strategien heute
+    strukturell infrage kommen.
+
+    Nutzt ausschließlich bereits vorhandene Aggregator-Felder:
+      - vix_term["ratio_3m_spot"]  (VIX3M/VIX; >1 Contango/gesund,
+        <1 Backwardation — MSE-Konvention, s. fetch_vix_term()-Kommentar)
+      - zsc["skew"]["percentile"]  (0-100, s. _MCM_SIGNAL_RULES["skew"])
+
+    Rückgabe: {strategy_key: {"active": bool, "reasons": [str, ...]}}
+    Fail-open bei fehlenden Daten (kein Datum -> kein Ausschlussgrund),
+    analog zum bestehenden MCM-Muster (_add() in build_server_market_context).
+    """
+    ratio_3m_spot = vix_term.get("ratio_3m_spot") if vix_term else None
+    skew_pct = (zsc.get("skew") or {}).get("percentile") if zsc else None
+
+    season = {}
+
+    # Iron Condor: braucht stabile/fallende Vola beim Einstieg (Konzept-
+    # dokument §2). Backwardation = Vola zieht an = Ausschlussgrund.
+    # Steile SKEW = Warnsignal für bevorstehenden Vola-Spike (§2).
+    reasons = []
+    active = True
+    if ratio_3m_spot is not None and ratio_3m_spot < 1.0:
+        active = False
+        reasons.append(f"VIX-Term in Backwardation (ratio_3m_spot={ratio_3m_spot})")
+    if skew_pct is not None and skew_pct >= 90:
+        active = False
+        reasons.append(f"SKEW-Perzentil extrem ({skew_pct}) — Vola-Spike-Warnsignal")
+    season["iron_condor"] = {"active": active, "reasons": reasons}
+
+    # Vertical Credit Spread: braucht "stabile oder fallende Volatilität"
+    # (§1) — gleiche Bedingung wie Iron Condor, aber ohne SKEW-Anforderung.
+    reasons = []
+    active = True
+    if ratio_3m_spot is not None and ratio_3m_spot < 1.0:
+        active = False
+        reasons.append(f"VIX-Term in Backwardation (ratio_3m_spot={ratio_3m_spot})")
+    season["vertical_credit_spread"] = {"active": active, "reasons": reasons}
+
+    # Iron Butterfly: wie Iron Condor (IV>ATR-Grundannahme, hier via HVP-
+    # Band in Stufe 1b), aber Erfolg hängt STÄRKER von SKEW ab (§3) —
+    # flache Put-Kurve gewünscht. Ohne echte Skew-Kurve (nur Gesamt-SKEW-
+    # Perzentil vorhanden) können wir nur den groben Extremfall filtern.
+    reasons = []
+    active = True
+    if skew_pct is not None and skew_pct >= 90:
+        active = False
+        reasons.append(f"SKEW-Perzentil extrem ({skew_pct}) — Konzept verlangt flache Put-Kurve")
+    season["iron_butterfly"] = {"active": active, "reasons": reasons}
+
+    # Calendar Long / Ratio Spread: keine marktweite Season-Bedingung im
+    # Konzeptdokument über das HVP-Band hinaus (§4/§5 sind tickerspezifisch,
+    # nicht marktweit) — bleiben in Stufe 1a standardmäßig aktiv.
+    season["calendar_long"] = {"active": True, "reasons": []}
+    season["ratio_spread"] = {"active": True, "reasons": []}
+
+    return season
+
+
+# Stufe 1b: pro Strategie (hvp_lo, hvp_hi, directional)
+#   directional=True  -> braucht regime in ("bull","bear"), "side" wird 0
+#   directional=False -> "side"/"volatile" werden bonifiziert (Theta-Play)
+MULTILEG_PREFILTER_CONFIG = {
+    # Iron Condor: IV muss nicht absolut hoch sein, nur > ATR — mittleres
+    # HVP-Band als Näherung ("nicht extrem niedrig, nicht extrem hoch").
+    "iron_condor":            {"hvp_band": (30, 70), "directional": False},
+    # Vertical Credit Spread: braucht eine Richtungsmeinung (§1).
+    "vertical_credit_spread": {"hvp_band": (0, 100), "directional": True},
+    # Iron Butterfly: wie Iron Condor.
+    "iron_butterfly":         {"hvp_band": (30, 70), "directional": False},
+    # Calendar Long: unterdurchschnittliche IV, aber nicht unterste ~15%
+    # (§4: "nicht die untersten ~15%, sonst zu anfällig für Vola-Spikes").
+    "calendar_long":          {"hvp_band": (15, 40), "directional": False},
+    # Ratio Spread: unteres 40%-Perzentil (§5, explizit genannt).
+    "ratio_spread":           {"hvp_band": (0, 40),  "directional": False},
+}
+
+
+def score_multileg_prefilter(r: dict, season: dict) -> dict:
+    """Stufe 1b: Vorfilter-Score (0-100) pro Ticker für jede der 5 Multi-
+    Leg-Strategien. Reine Aggregator-Daten, keine Chain-Daten nötig.
+
+    r: process_ticker()-Ergebnis-Dict (braucht hvp, regime, earningsDTE)
+    season: Rückgabe von calc_multileg_season() (Stufe 1a, 1x/Lauf)
+
+    Rückgabe: {strategy_key: score_0_100}
+    Score 0 = kein Kandidat (Earnings-Gate, Season inaktiv, oder außerhalb
+    des HVP-Bands / falsches Regime für gerichtete Strategien).
+    """
+    hvp = r.get("hvp", 0) or 0
+    regime = (r.get("regime") or "").lower()
+
+    # Earnings-Gate wiederverwenden (identisch zu score_options_csp()) —
+    # Earnings im DTE-Fenster = negativer EV bei ALLEN Multi-Leg-Strategien
+    # (IV-Crush/Gap-Risk betrifft nicht nur CSP, s. _earnings_gate()-Docstring).
+    eg_blocked, _eg_reason, eg_sev = _earnings_gate(r, dte_window=14)
+    if eg_blocked:
+        return {k: 0 for k in MULTILEG_PREFILTER_CONFIG}
+
+    scores = {}
+    for strat, cfg in MULTILEG_PREFILTER_CONFIG.items():
+        if not season.get(strat, {}).get("active", True):
+            scores[strat] = 0
+            continue
+
+        lo, hi = cfg["hvp_band"]
+        s = 0
+
+        if lo <= hvp <= hi:
+            s += 50
+        else:
+            # Außerhalb des Bands: kein Hard-Gate (anders als Earnings),
+            # aber kein Basis-Score — Distanz zum Band leicht bestraft,
+            # analog zum weichen Earnings-Malus-Muster im Codebase-Stil.
+            dist = (lo - hvp) if hvp < lo else (hvp - hi)
+            s += max(0, 30 - dist)  # sanfter Abfall statt Hard-Cut
+
+        if cfg["directional"]:
+            if regime == "side":
+                s = 0  # Richtungsstrategie auf Seitwärtsmarkt: kein Kandidat
+            elif regime in ("bull", "bear"):
+                # ADX graduiert die Richtungsüberzeugung (s. Kommentar oben).
+                # NEU (24.08.2026, Axel-Wunsch): zusätzliches Hard-Gate —
+                # ADX<20 gilt als "kein bestätigter Trend" (Standard-
+                # Interpretation der ADX-Schwelle), macht den Ticker für
+                # Vertical Credit Spread trotz bull/bear-Regime-Label zum
+                # Nicht-Kandidaten. Verengt den bisher breiten Kandidatenpool
+                # (371 bei min_score=60 im Live-Test) gezielt auf Ticker mit
+                # wirklich bestätigtem Trend statt jedem schwach gerichteten
+                # Regime-Label.
+                adx = r.get("adx")
+                if adx is None or adx < 20:
+                    s = 0
+                else:
+                    s += min(40, round(adx))
+        else:
+            if regime == "side":
+                s += 30
+            elif regime == "volatile":
+                s += 15
+
+        if eg_sev == "soft":
+            s = max(0, s - 20)
+
+        scores[strat] = max(0, min(100, s))
+
+    return scores
+
+
+def build_multileg_shortlist(results: list, season: dict,
+                              min_score: int = 60, top_n: int = 20) -> dict:
+    """Baut die Stufe-1-Shortlist je Strategie — Pendant zu top20() in
+    build_leaderboards(), aber für die 5 Multi-Leg-Strategien.
+
+    Nur diese Shortlist (max top_n Ticker je Strategie) sollte später an
+    Stufe 2 (echte Chain-Daten) übergeben werden — nicht die vollen 700+.
+
+    Rückgabe: {strategy_key: [{"sym", "score", "hvp", "regime", "price"}, ...]}
+    """
+    _core = ["sym", "price", "hvp", "regime", "score", "earningsDTE"]
+    per_strategy = {k: [] for k in MULTILEG_PREFILTER_CONFIG}
+
+    for r in results:
+        if r.get("error") or not r.get("price"):
+            continue
+        prefilter_scores = score_multileg_prefilter(r, season)
+        for strat, sc in prefilter_scores.items():
+            if sc >= min_score:
+                entry = {f: r.get(f) for f in _core}
+                entry["prefilterScore"] = sc
+                per_strategy[strat].append(entry)
+
+    for strat in per_strategy:
+        per_strategy[strat] = sorted(
+            per_strategy[strat], key=lambda x: x["prefilterScore"], reverse=True
+        )[:top_n]
+
+    return per_strategy
+
+
 def calc_markov(closes, lookback=60, stride=1):
     """Markov 2.0 Regime-Signal — stride=1 fuer korrekte Uebergangswahrscheinlichkeiten.
     Fix E: stride=7 erzeugte 85% Autokorrelation → p_bull2bear statistisch bedeutungslos.
@@ -9850,6 +10074,19 @@ def main():
     _ant_key = _os.environ.get("ANTHROPIC_API_KEY") or _os.environ.get("ANT_KEY")
     strategy_data = build_leaderboards(results, market_regime=market_regime_str)
 
+    # ── MULTI-LEG-PREFILTER (Stufe 1 des zweistufigen Siebs, 24.08.2026) ────
+    # Marktweite Season (1a) + Pro-Ticker-Vorfilter (1b) für die 5 Multi-Leg-
+    # Strategien aus multileg-strategien-konzept.md. Ersetzt NICHT die
+    # bestehenden CSP/CC/Collar-Leaderboards — eigener Block, weil diese
+    # Strategien noch keine eigenen Scorer haben (Stufe 2 / Chain-Daten
+    # noch offen, s. Kommentar am Anfang von calc_multileg_season()).
+    _multileg_season = calc_multileg_season(vix_term or {}, macro_zscores or {})
+    _multileg_shortlist = build_multileg_shortlist(results, _multileg_season)
+    log.info(f"  [MULTILEG] Season: " +
+             ", ".join(f"{k}={'aktiv' if v['active'] else 'inaktiv'}" for k, v in _multileg_season.items()))
+    log.info(f"  [MULTILEG] Shortlist-Größen: " +
+             ", ".join(f"{k}={len(v)}" for k, v in _multileg_shortlist.items()))
+
     # ── DIAGNOSE-LOG (temporär) ──────────────────────────────────────────────
     _ms_raw = strategy_data.get("masterShortlist", [])
     if _ms_raw:
@@ -9974,6 +10211,10 @@ def main():
     master["leaderboards"]     = leaderboards_obj
     master["masterShortlist"]  = master_shortlist
     master["optionsWatchlist"] = options_watchlist   # Top-50 Options-Kandidaten (täglich)
+    master["multilegPrefilter"] = {                  # Stufe 1 (Sieb), 24.08.2026
+        "season":    _multileg_season,
+        "shortlist": _multileg_shortlist,
+    }
     master["strategyMeta"]     = {
         "regimeUsed":  strategy_data["regimeUsed"],
         "timestamp":   strategy_data["timestamp"],
