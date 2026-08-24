@@ -46,10 +46,17 @@ def _ratio_to_regime(r):
     if r < 1.05:  return "POST_PANIC_REVERSION"
     return "BULL"
 
-def classify_mse_regime(vix3m, vix):
+def classify_mse_regime(vix3m, vix, gex=None):
     """
-    Identisch zur Regime-Klassifikations-Logik in main() (market_aggregator.py Z.7363ff).
+    Identisch zur Regime-Klassifikations-Logik in main() (market_aggregator.py Z.7363ff)
+    UND zu classify_regime_v2() (market_aggregator.py, validiert 23.08.2026).
     ratio_3m_spot = VIX3M/VIX (MSE-Konvention: >1 = Contango = gesund)
+
+    NACHGERUESTET (24.08.2026, Backlog №32-Vervollstaendigung): gex-Parameter
+    + GEX<0-Override ergaenzt -- fehlte bisher komplett in dieser Test-Kopie,
+    obwohl classify_regime_v2() diesen Zweig seit 23.08.2026 hat. Ohne diesen
+    Parameter war der GEX-Override-Pfad vollstaendig ungetestet trotz
+    bestehendem Testgeruest -- genau das Risiko, das Backlog №32 verhindern soll.
     """
     if vix is None or vix3m is None or vix <= 0:
         return "NEUTRAL"
@@ -58,10 +65,13 @@ def classify_mse_regime(vix3m, vix):
         return "STRESS_UNSTABLE"
     elif ratio_3m_spot < 1.05:
         return "POST_PANIC_REVERSION"
-    elif vix > 25:
-        return "BULL_FRAGILE"
     else:
-        return "BULL_QUIET"
+        regime = "BULL_FRAGILE" if vix > 25 else "BULL_QUIET"
+        # GEX<0-Override: nur bei BULL_*, ueberschreibt zu STRESS_UNSTABLE
+        # (identisch zu classify_regime_v2(), market_aggregator.py)
+        if gex is not None and gex < 0:
+            regime = "STRESS_UNSTABLE"
+        return regime
 
 def calc_regime_history_flag(mse_history, current_regime):
     """Identisch zu calc_regime_history_flag() in market_aggregator.py."""
@@ -178,6 +188,55 @@ class TestRatioKonventionen:
         """Echter Stress: VIX > VIX3M → STRESS_UNSTABLE."""
         regime = classify_mse_regime(vix3m=22.0, vix=35.0)
         assert regime == "STRESS_UNSTABLE"
+
+
+# ── 1b. GEX<0-Override (NACHGERUESTET 24.08.2026 — Backlog №32-Lücke) ────────
+
+class TestGexOverride:
+    """
+    classify_regime_v2() (market_aggregator.py, validiert 23.08.2026) hat einen
+    GEX<0-Override-Zweig: ueberschreibt BULL_QUIET/BULL_FRAGILE zu STRESS_UNSTABLE,
+    wenn GEX negativ ist. Dieser Zweig war bislang komplett ungetestet, obwohl er
+    seit dem regime_v2-Rollout produktiv ist.
+    """
+
+    def test_gex_negativ_ueberschreibt_bull_quiet(self):
+        """GEX<0 bei sonst BULL_QUIET-Bedingungen -> STRESS_UNSTABLE."""
+        regime = classify_mse_regime(vix3m=20.0, vix=18.0, gex=-5.0)
+        assert regime == "STRESS_UNSTABLE", (
+            f"GEX<0-Override griff nicht: erwartet STRESS_UNSTABLE, got {regime}"
+        )
+
+    def test_gex_negativ_ueberschreibt_bull_fragile(self):
+        """GEX<0 bei sonst BULL_FRAGILE-Bedingungen (VIX>25) -> STRESS_UNSTABLE."""
+        regime = classify_mse_regime(vix3m=30.0, vix=28.0, gex=-2.5)
+        assert regime == "STRESS_UNSTABLE", (
+            f"GEX<0-Override griff nicht bei BULL_FRAGILE: got {regime}"
+        )
+
+    def test_gex_positiv_kein_override(self):
+        """GEX>=0 darf BULL_QUIET nicht veraendern."""
+        regime = classify_mse_regime(vix3m=20.0, vix=18.0, gex=5.0)
+        assert regime == "BULL_QUIET"
+
+    def test_gex_none_kein_override(self):
+        """gex=None (Default, z.B. wenn DIX/GEX-Feed ausgefallen) darf nichts aendern."""
+        regime = classify_mse_regime(vix3m=20.0, vix=18.0, gex=None)
+        assert regime == "BULL_QUIET"
+
+    def test_gex_negativ_wirkt_nicht_bei_stress_unstable(self):
+        """Override gilt laut Kommentar 'nur bei BULL_*' -- STRESS_UNSTABLE bleibt
+        STRESS_UNSTABLE (kein Unterschied beobachtbar, aber Pfad nicht crashen)."""
+        regime = classify_mse_regime(vix3m=20.0, vix=22.0, gex=-10.0)
+        assert regime == "STRESS_UNSTABLE"
+
+    def test_gex_negativ_wirkt_nicht_bei_post_panic(self):
+        """Override gilt nur bei BULL_* -- POST_PANIC_REVERSION bleibt unveraendert,
+        auch bei stark negativem GEX (kein 'versehentliches' Miteinbeziehen)."""
+        regime = classify_mse_regime(vix3m=20.0, vix=20.0, gex=-10.0)
+        assert regime == "POST_PANIC_REVERSION", (
+            "GEX-Override darf NICHT in POST_PANIC_REVERSION greifen (nur bei BULL_*)"
+        )
 
 
 # ── 2. MSE-Regime-Klassifikation ─────────────────────────────────────────────
