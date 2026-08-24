@@ -1698,8 +1698,10 @@ SECTOR_ETFS_US = [
     "XLE","VDE","IYE","OIH","XOP",
     # Industrials
     "XLI","VIS","IYJ",
-    # Defense & Aerospace
-    "ITA","XAR","DFEN","PPA",
+    # Defense & Aerospace (DFEN bewusst NICHT aufgenommen -- 24.08.2026,
+    # Axel-Entscheidung: 3x taeglich gehebelter Fonds verzerrt Leaderboards/
+    # technische Scores, widerspricht UIQ-Leitprinzip Fehler-Reduzierer)
+    "ITA","XAR","PPA",
     # Nuclear / Uranium / Space (v4.2, 02.07.2026 — RS-Referenz neue Watchlists)
     "NLR","URA","ARKX",
     # Consumer Discretionary
@@ -1839,8 +1841,10 @@ for _sector, _tickers in SECTOR_WATCHLISTS.items():
 RS_SECTOR_ETFS = [
     "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
     "SMH","SOXX","IBB","XBI","ARKK","BOTZ","ITA","ICLN","VNQ",
-    # Defence & Aerospace (01.07.2026 ergänzt)
-    "XAR","PPA","DFEN",
+    # Defence & Aerospace (01.07.2026 ergänzt; DFEN am 24.08.2026 wieder
+    # entfernt -- 3x taeglich gehebelt, verzerrt den RS-Vergleich, s. Kommentar
+    # bei SECTOR_ETFS_US)
+    "XAR","PPA",
     # Robotics & AI-Hardware (01.07.2026 ergänzt)
     "IRBO","ROBO",
     # v4.2 (02.07.2026): RS-Referenzen der neuen Watchlists —
