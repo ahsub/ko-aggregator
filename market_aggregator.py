@@ -9464,9 +9464,27 @@ def main():
     if _valid_pct < 0.50:
         # Weniger als 50% valide = yfinance-Ausfall, nicht normale Datenlücken
         log.error(
-            f"  ⚠️  DEGRADED MODE: Nur {_valid_pct:.0%} der Ticker valide — "            f"yfinance-Problem vermutet. Vortages-KV wird beibehalten (kein Upload)."        )
-        # master['meta']['degraded'] = True wird weiter unten gesetzt
-        # sodass das Frontend einen Hinweis anzeigen kann
+            f"  ⚠️  DEGRADED MODE: Nur {_valid_pct:.0%} der Ticker valide — "
+            f"yfinance-Problem vermutet. Vortages-KV wird beibehalten (kein Upload)."
+        )
+        # NACHGERUESTET (24.08.2026, Backlog №35-Vervollstaendigung): Der alte
+        # Kommentar hier versprach "master['meta']['degraded'] = True wird
+        # weiter unten gesetzt" -- strukturell unmoeglich, weil sys.exit()
+        # VOR dem Bau des master-Dicts passiert. Ergebnis bisher: KV blieb
+        # zwar unangetastet (kein Datenverlust), aber das Frontend hatte
+        # KEINE Moeglichkeit, den Degraded-Zustand zu erkennen -- Nutzer sahen
+        # kommentarlos veraltete Daten. Fix: separater, kleiner KV-Key
+        # "degraded_status", unabhaengig von master_market_data, den das
+        # Frontend zusaetzlich abfragen kann fuer einen Hinweis-Banner.
+        _degraded_status = {
+            "degraded":      True,
+            "reason":        "yfinance_low_valid_pct",
+            "validPct":      round(_valid_pct, 3),
+            "validCount":    _valid_count,
+            "totalCount":    _total_count,
+            "detectedAt":    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        push_to_cloudflare_kv(_degraded_status, key="degraded_status")
         import sys
         sys.exit(0)   # Sauberer Exit: kein KV-Überschreiben, GHA-Run grün
 
@@ -10454,6 +10472,13 @@ def main():
     # 8. Cloudflare KV Upload
     log.info(f"\n☁️  Cloudflare KV Upload...")
     push_to_cloudflare_kv(master, key="master_market_data")
+
+    # Degraded-Status zuruecksetzen (Backlog №35-Vervollstaendigung, 24.08.2026):
+    # dieser Lauf war erfolgreich (wir sind hier, weil der 50%-Valid-Check oben
+    # NICHT ausgeloest hat) -- also alten Degraded-Zustand explizit loeschen,
+    # sonst bliebe ein einmal gesetztes degraded_status=true fuer immer stehen
+    # und das Frontend wuerde einen veralteten Warn-Banner nie wieder los.
+    push_to_cloudflare_kv({"degraded": False}, key="degraded_status")
 
     # Separater KV-Key für schnellen Options-Desk Zugriff
     options_kv = {
