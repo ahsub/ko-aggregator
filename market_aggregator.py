@@ -6957,7 +6957,17 @@ def build_sector_holdings(etf_ticker: str, xlsx_path: str, top_n: int = 15) -> d
         systematisch aus ~49% der Namen entfernt, s. Chat 23.08.2026. Ohne
         Normalisierung brechen 122 Faelle wie "KLAVIYO INC SERIES A" vs.
         "KLAVIYO SERIES A" am 15-Zeichen-Substring-Test, weil das INC/CORP
-        genau vor der Cut-Grenze sitzt)."""
+        genau vor der Cut-Grenze sitzt).
+
+        NEU (24.08.2026, Sektor-Holdings-Match-Rate-Check): zusaetzlich
+        Bindestriche -> Leerzeichen und Apostrophe entfernen, VOR der
+        Suffix-Entfernung. Andere Fehlerklasse als der Suffix-Fix: SSGA-
+        Quellnamen schreiben Bindestriche (ARCHER-DANIELS-MIDLAND,
+        TAKE-TWO, BRISTOL-MYERS, T-MOBILE), IWV-CSV nutzt durchgehend
+        Leerzeichen (ARCHER DANIELS MIDLAND etc.) -- bricht den 15-Zeichen-
+        Praefixvergleich schon vor jeder Suffix-Frage. Ebenso O'REILLY vs.
+        OREILLY (Apostroph im Quellnamen, IWV ohne)."""
+        s = s.replace("-", " ").replace("'", "")
         for suf in (" INCORPORATED", " CORPORATION", " INC", " CORP", " LTD", " PLC"):
             s = s.replace(suf, "")
         return s.strip()
