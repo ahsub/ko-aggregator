@@ -1,7 +1,33 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.10
+ * UnderlyingIQ — KI-Proxy Worker v1.11
+ *
+ * NEU in v1.11 (27.08.2026, Legal-Briefing-Audit — Backlog №60 in SUITE.md v4.19):
+ *   - SICHERHEITS-FIX: expert_mode ist jetzt serverseitig hart an isOwner
+ *     gebunden (`expertModeRequested && isOwner`), statt das Client-Flag
+ *     ungeprüft zu übernehmen. Hintergrund: STATIC_TOKEN wird von allen
+ *     Beta-Testern geteilt, das clientseitige EIC-PIN-Gate (localStorage,
+ *     axel-scanner/index.html) ist selbstgesetzt und bot keine echte
+ *     Identitätsprüfung — jeder Beta-Tester konnte sich damit theoretisch
+ *     selbst freischalten und Axels reale Portfoliodaten (NAV ~€212K,
+ *     Live-Positionen) aus den Expert-Prompts (eic, ki_briefing_expert,
+ *     deep_dive_expert, morning_expert) einsehen. Da der Token selbst
+ *     keine Einzelnutzer unterscheidet, ist OWNER_TOKEN das einzig
+ *     verfügbare Unterscheidungsmerkmal (Axel persönlich vs. alle
+ *     STATIC_TOKEN-Nutzer). Deutlich kleiner als die für Phase-2 vorgesehene
+ *     volle JWT-Migration (s. Auth-Abschnitt unten) — reine Absicherung
+ *     der bestehenden Mechanik, kein neues Auth-System. Verworfene
+ *     Alternative: Token-Hash-Allowlist — funktioniert nicht, weil
+ *     STATIC_TOKEN für alle Nutzer identisch ist und daher keinen
+ *     Einzelnutzer-Hash liefert. Abgelehnte Anfragen werden als
+ *     `<action>_EXPERT_DENIED` geloggt (Audit-Spur, kein Fehler an den
+ *     Client — fällt still auf den Public-Prompt zurück).
+ *   - ZUSATZFUND beim Umsetzen: die 'eic'-Action hatte gar keinen Public/
+ *     Expert-Split (immer voller Investment-Case, unabhängig von
+ *     expert_mode) und war über die API weiterhin erreichbar, obwohl im
+ *     aktuellen Frontend kein Call-Site mehr existiert. Jetzt zusätzlich
+ *     hart auf isOwner gesperrt (403 für Nicht-Owner).
  *
  * NEU in v1.10 (21.08.2026):
  *   - morning: 3000 → 4500. Live-Beweis (Axel, 21.08.2026, 08:12 Uhr
@@ -746,7 +772,7 @@ export default {
       return jsonResponse({ error: 'Invalid JSON' }, 400, origin);
     }
 
-    const { action, payload, expert_mode = false } = body;
+    const { action, payload, expert_mode: expertModeRequested = false } = body;
 
     if (!action || !payload) {
       return jsonResponse({ error: 'action und payload erforderlich' }, 400, origin);
@@ -755,6 +781,37 @@ export default {
     const cfg = ACTION_CONFIG[action];
     if (!cfg) {
       return jsonResponse({ error: `Unbekannte action: ${action}` }, 400, origin);
+    }
+
+    // SICHERHEITS-FIX (v1.11, 27.08.2026, Legal-Briefing-Audit Backlog №60):
+    // expert_mode war bisher ein reines Client-Flag — jeder Inhaber des
+    // geteilten STATIC_TOKEN (also jeder Beta-Tester) konnte sich per
+    // clientseitigem EIC-PIN (localStorage) selbst freischalten und damit
+    // Axels reale Portfoliodaten (NAV, Positionen) aus den Expert-Prompts
+    // einsehen. Da STATIC_TOKEN von allen Beta-Nutzern geteilt wird, kann
+    // eine Token-basierte Allowlist einzelne Nutzer nicht unterscheiden —
+    // OWNER_TOKEN ist das einzige Merkmal, das Axel persönlich von allen
+    // anderen Token-Inhabern trennt. Daher: expert_mode wird jetzt serverseitig
+    // hart auf isOwner geprüft und nicht mehr vom Client übernommen. Jede
+    // Anfrage mit STATIC_TOKEN bekommt zwingend den Public-Prompt, unabhängig
+    // vom gesendeten Flag oder gesetztem PIN.
+    if (expertModeRequested && !isOwner) {
+      logRequest(env, token, `${action}_EXPERT_DENIED`, origin,
+        request.headers.get('CF-Ray') || '', false);
+    }
+    const expert_mode = expertModeRequested && isOwner;
+
+    // ZUSATZFUND (v1.11, beim Umsetzen von №60 entdeckt): die 'eic'-Action hat
+    // KEINEN Public/Expert-Split in selectSystemPrompt() — sie liefert IMMER
+    // den vollen persönlichen Investment-Case (Axels reale Portfoliodaten),
+    // unabhängig von expert_mode. Im aktuellen Frontend nicht aufgerufen
+    // (kein 'eic'-Call-Site in axel-scanner/index.html gefunden), aber über
+    // die API mit dem geteilten STATIC_TOKEN weiterhin erreichbar. Gleiche
+    // Fundklasse wie oben — daher zusätzlich hart auf isOwner gesperrt.
+    if (action === 'eic' && !isOwner) {
+      logRequest(env, token, 'eic_EXPERT_DENIED', origin,
+        request.headers.get('CF-Ray') || '', false);
+      return jsonResponse({ error: 'Diese Funktion ist nur für den Betreiber verfügbar.' }, 403, origin);
     }
 
     const rawSystemPrompt = selectSystemPrompt(action, expert_mode);
