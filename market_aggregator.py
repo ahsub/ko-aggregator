@@ -5513,21 +5513,41 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     }
 
 
+def _fit_label(score: int) -> str:
+    if score >= 75: return "HIGH FIT"
+    if score >= 45: return "MODERATE FIT"
+    return "AVOID"
+
+
+def _fit_conclusion(score: int) -> str:
+    if score >= 75: return "FAVOURABLE"
+    if score >= 45: return "MODERATE"
+    return "AVOID"
+
+
+def _get_atmna_flag(regime: str) -> str:
+    """Liest den bestehenden regime-weiten ATM/NA-Ampel-Wert aus _MCM_REGIME_GATES
+    (Zeile ~74ff). Einzige Quelle der Wahrheit bleibt dort; hier nur Lookup."""
+    table = _MCM_REGIME_GATES.get(regime, {})
+    return table.get("strategies", {}).get("atmna", "amber")
+
+
 async def enrich_options_watchlist_with_ai(watchlist: list, market_data: dict,
                                              api_key: str | None = None) -> list:
     """
-    KI-Enrichment fuer die Options-Watchlist (Phase 0.5 Arbeitspaket F Punkt 2,
-    15.07.2026): Claude Sonnet analysiert Top-15 Options-Kandidaten und
-    generiert strukturierte Options-Handelsparameter als JSON. Analog zu
-    enrich_shortlist_with_ai(), aber Options-spezifisch (Strike/DTE/Delta/
-    Praemie statt Trigger/StopLoss/CRV fuer Aktienpositionen).
+    KI-Enrichment fuer die Options-Watchlist — v2.0 (28.08.2026, Legal-Briefing-
+    Audit Backlog #62-Vorarbeit): Ersetzt die bisherige "Trade-Generator"-Logik
+    (Strike/DTE/Delta/Praemie als direkte Handlungsempfehlung) durch eine
+    "Decision-Support"-Struktur: Setup-Fit-Score + Faktoren + Parameterbereiche,
+    KEIN imperativer Kauf-/Eroeffnungs-Schritt. Konkrete Zahlen (Strike/Delta/
+    Praemie) wandern in einen separaten EIC-Only-Layer (ki_eic-Feld),
+    serverseitig gefiltert in ko-sync-worker.js (v2.2, stripKiEic()).
 
-    WICHTIG: die Strategie-WAHL (CSP vs. Covered Call vs. Credit Spread) wird
-    an die KI delegiert (Score-Vergleich CSP/CC/Spread pro Ticker im Prompt),
-    NICHT algorithmisch vorentschieden — die 4 Score-Felder (optsScore/
-    scoreCsp/scoreCc/scoreSpread) bilden nicht 1:1 auf eine einzelne Strategie
-    ab, ein hartes Mapping waere Raten (vgl. Client-seitige Vorsicht in
-    Arbeitspaket D/F).
+    Strategiewahl weiterhin KI-delegiert aus 4 Optionen (csp/csp_atm_na/
+    covered_call/credit_spread), NICHT algorithmisch vorentschieden — csp_atm_na
+    nutzt vorerst denselben Score wie csp (Backlog #64: eigener Score aussteht),
+    ergaenzt um den bereits vorhandenen regime-weiten ATM/NA-Ampel-Hinweis aus
+    _MCM_REGIME_GATES.
     """
     if not api_key or not watchlist:
         log.warning("  Options-KI-Enrichment: kein API-Key oder leere Watchlist — uebersprungen")
@@ -5542,53 +5562,70 @@ async def enrich_options_watchlist_with_ai(watchlist: list, market_data: dict,
     vix_val   = vix_term.get("vix", "?")
     vix3m_val = vix_term.get("vix3m", "?")
     regime    = market_data.get("regimeUsed", "NEUTRAL")
+    atmna_flag = _get_atmna_flag(regime)
 
     for c in top15:
-        sym    = c["sym"]
-        price  = c.get("price")
-        hvp    = c.get("hvp", 0)
-        s_csp  = c.get("scoreCsp", 0)
-        s_cc   = c.get("scoreCc", 0)
+        sym      = c["sym"]
+        price    = c.get("price")
+        hvp      = c.get("hvp", 0)
+        s_csp    = c.get("scoreCsp", 0)
+        s_cc     = c.get("scoreCc", 0)
         s_spread = c.get("scoreSpread", 0)
-        rsi    = c.get("rsi")
-        dist200 = c.get("dist200")
+        rsi      = c.get("rsi")
+        dist200  = c.get("dist200")
+        macro_note = c.get("_macroNote") or "keine besonderen Auffälligkeiten"
 
         prompt = f"""Du bist die quantitative Options-Analyse-Engine von UnderlyingIQ.
-Erstelle fuer diesen Kandidaten ein praezises Options-Setup-JSON.
-Antworte NUR mit dem JSON-Objekt — kein Markdown, kein Praeambel.
+Du interpretierst ausschließlich die unten bereitgestellten Daten und Regeln.
+Du darfst KEINE zusätzlichen Handelsregeln, Schwellenwerte oder Marktdaten erfinden.
+Du sprichst NIE eine Kauf-/Verkaufs- oder Eröffnungsempfehlung aus — deine Aufgabe
+ist die Erklärung der Modell-Kompatibilität, nicht die Transaktionsentscheidung.
+Antworte NUR mit dem JSON-Objekt — kein Markdown, kein Präambel.
 
 MARKTKONTEXT:
 - Regime: {regime}
 - VIX: {vix_val} (VIX3M: {vix3m_val})
-- Fiktives Modell-Depot: 100.000 EUR (BaFin-konforme Deskription gemaess §1 WpHG)
+- Makro-Hinweis: {macro_note}
+- Regime-Ampel CSP(ATM/NA): {atmna_flag} (grün=günstig, gelb=neutral, rot=ungünstig)
+- Fiktives Modell-Depot: 100.000 EUR (BaFin-konforme Deskription gemäß §1 WpHG)
 
 KANDIDAT:
 - Ticker: {sym}
 - Kurs: {price} USD
-- HVP (Historical Vol Percentile): {hvp}%
-- RSI(14): {round(rsi, 1) if rsi else 'n/v'}
-- Abstand 200-Tage-Linie: {dist200}%
 - Scores je Options-Strategie (0-100): CSP={s_csp} | Covered-Call={s_cc} | Credit-Spread={s_spread}
+- HVP: {hvp}% | RSI(14): {round(rsi, 1) if rsi else 'n/v'} | Abstand 200-Tage-Linie: {dist200}%
 
-Bestimme zuerst anhand der Scores, welche Options-Strategie fuer diesen Titel
-aktuell am besten passt (die mit dem hoechsten Score, es sei denn ein anderer
-Faktor spricht klar dagegen). Berechne dann mathematisch praezise (2 Dezimalstellen):
+Bestimme zuerst, welche Options-Strategie für diesen Titel am besten passt — wähle aus
+genau diesen 4 Optionen: "csp" (klassischer OTM-CSP), "csp_atm_na" (CSP am Geld, höherer
+Zeitwert, höhere Assignment-Wahrscheinlichkeit — bevorzugt bei günstiger ATM/NA-Ampel),
+"covered_call", "credit_spread". Nutze die Scores als Hauptkriterium; die ATM/NA-Ampel
+beeinflusst nur die Wahl zwischen "csp" und "csp_atm_na" bei ausreichendem CSP-Score.
+
+Gib zurück:
 {{
   "sym": "{sym}",
-  "strategy": <"csp"|"covered_call"|"credit_spread" — die von dir gewaehlte beste Strategie>,
-  "strikeSuggestion": <Strike-Preis in USD, passend zur gewaehlten Strategie>,
-  "dte": <Tage bis Verfall: 30-45 Standard, 21-30 bei hoher HVP>,
-  "deltaTarget": <Ziel-Delta als Float, z.B. 0.20-0.30 fuer defensives CSP>,
-  "premiumEstimate": <geschaetzte Praemie als % des Strikes, informativ>,
-  "riskClass": <"LOW"|"MEDIUM"|"HIGH">,
-  "keyRisk": <1 Satz: Hauptrisiko dieses Setups>,
-  "note": <1 Satz: Wichtigste deskriptive Beobachtung, §1 WpHG-konform>
+  "strategy": <"csp"|"csp_atm_na"|"covered_call"|"credit_spread">,
+  "fitScore": <0-100, der Score der gewählten Strategie (CSP-Varianten nutzen den CSP-Score)>,
+  "positiveFactors": [<max. 4 kurze, faktenbasierte Stichpunkte NUR aus obigen Daten>],
+  "riskFactors": [<max. 3 Stichpunkte; bei "csp"/"csp_atm_na" IMMER: "bleibt ein
+                    Long-Equity-Risiko bei Assignment"; bei "csp_atm_na" ZUSÄTZLICH:
+                    "ATM-Strikes besitzen eine höhere Assignment-Wahrscheinlichkeit als
+                    OTM-Strikes"; bei "covered_call" IMMER: Opportunity-Cost bei starkem
+                    Aufwärtstrend>],
+  "requiredChecks": [<max. 3 Stichpunkte, IMMER inkl. "Earnings-Termin vor
+                       Positionseröffnung prüfen">],
+  "modelParamRange": {{"dte": "21-35 Tage",
+                        "strikeGuideline": <je Strategie: "unterhalb des aktuellen Kurses"
+                          | "am oder nahe dem aktuellen Kurs" | "oberhalb des aktuellen
+                          Kurses" je nach gewählter Strategie>}},
+  "conclusion": <"FAVOURABLE"|"MODERATE"|"AVOID" passend zu fitScore>,
+  "note": "Deskriptive Modellauswertung gemäß §1 WpHG, keine individuelle Anlageempfehlung."
 }}"""
 
         try:
             req_body = json_mod.dumps({
                 "model": "claude-sonnet-4-6",
-                "max_tokens": 350,
+                "max_tokens": 500,
                 "messages": [{"role": "user", "content": prompt}]
             }).encode()
             req = urllib.request.Request(
@@ -5608,12 +5645,41 @@ Faktor spricht klar dagegen). Berechne dann mathematisch praezise (2 Dezimalstel
                 if text.startswith("```"):
                     text = '\n'.join(text.split('\n')[1:-1])
                 ki_params = json_mod.loads(text)
-                enriched.append({**c, "ki": ki_params})
+
+                # fitLabel/conclusion serverseitig aus fitScore ableiten statt der KI zu
+                # überlassen (Konsistenz-Garantie, vgl. Bucketing-Vorgabe).
+                fit_score = ki_params.get("fitScore", 0)
+                ki_params["fitLabel"]  = _fit_label(fit_score)
+                ki_params["conclusion"] = _fit_conclusion(fit_score)
+
+                # EIC-Only-Layer: konkrete Zahlen weiterhin berechnen, aber getrennt
+                # vom Public-sichtbaren Analyseblock halten (ko-sync-worker.js filtert
+                # "ki_eic" komplett für Nicht-Owner).
+                strike_prompt = f"""Berechne NUR folgende konkrete Werte für {sym} als JSON,
+basierend auf Strategie "{ki_params.get('strategy')}", Kurs {price} USD, HVP {hvp}%:
+{{"strikeSuggestion": <Strike in USD>, "dte": <Tage>, "deltaTarget": <Float>,
+"premiumEstimate": <% des Strikes>}}"""
+                req2_body = json_mod.dumps({
+                    "model": "claude-sonnet-4-6", "max_tokens": 150,
+                    "messages": [{"role": "user", "content": strike_prompt}]
+                }).encode()
+                req2 = urllib.request.Request(
+                    "https://api.anthropic.com/v1/messages", data=req2_body,
+                    headers={"Content-Type": "application/json", "x-api-key": api_key,
+                             "anthropic-version": "2023-06-01"}, method="POST")
+                with urllib.request.urlopen(req2, timeout=15) as resp2:
+                    resp2_data = json_mod.loads(resp2.read().decode())
+                    text2 = resp2_data.get("content", [{}])[0].get("text", "").strip()
+                    if text2.startswith("```"):
+                        text2 = '\n'.join(text2.split('\n')[1:-1])
+                    ki_eic = json_mod.loads(text2)
+
+                enriched.append({**c, "ki": ki_params, "ki_eic": ki_eic})
                 log.info(f"    Options-KI {sym}: Strategie={ki_params.get('strategy')} | "
-                         f"Strike={ki_params.get('strikeSuggestion')} | DTE={ki_params.get('dte')}")
+                         f"Fit={fit_score} ({ki_params.get('conclusion')})")
         except Exception as e:
             log.warning(f"    Options-KI {sym} Fehler: {e}")
-            enriched.append(c)   # ohne KI-Enrichment
+            enriched.append(c)
 
     enriched_syms = {x["sym"] for x in enriched}
     for c in watchlist[15:]:
