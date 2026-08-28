@@ -70,3 +70,5 @@
 {"ts":"2026-08-27T16:31:00Z","source":"cboe_vix","http_code":"200","bytes":"471952","seconds":"0.228319","last_modified":"Thu, 27 Aug 2026 16:01:04 GMT"}
 {"ts":"2026-08-28T01:29:44Z","source":"squeezemetrics_dix","http_code":"200","bytes":"221151","seconds":"0.693069","last_modified":"Thu, 27 Aug 2026 21:51:35 GMT"}
 {"ts":"2026-08-28T01:29:44Z","source":"cboe_vix","http_code":"200","bytes":"472003","seconds":"0.305754","last_modified":"Fri, 28 Aug 2026 01:21:02 GMT"}
+{"ts":"2026-08-28T17:26:48Z","source":"squeezemetrics_dix","http_code":"200","bytes":"221151","seconds":"0.625962","last_modified":"Thu, 27 Aug 2026 21:51:35 GMT"}
+{"ts":"2026-08-28T17:26:48Z","source":"cboe_vix","http_code":"200","bytes":"472003","seconds":"0.209342","last_modified":"Fri, 28 Aug 2026 01:50:45 GMT"}
