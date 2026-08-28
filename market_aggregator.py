@@ -1290,7 +1290,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.37.2"
+AGGREGATOR_VERSION = "5.38.0"
 # v5.37.2 (23.08.2026): IWV-Holdings-Update (Jul 24 -> Aug 20, 2026) + Fix
 # fuer Namens-Matching in build_sector_holdings()/_resolve(): iShares hat die
 # IWV-Namenskonvention systematisch geaendert (INC/CORP/CORPORATION aus ~49%
