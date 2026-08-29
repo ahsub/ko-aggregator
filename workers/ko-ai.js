@@ -1,7 +1,21 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.13
+ * UnderlyingIQ — KI-Proxy Worker v1.14
+ *
+ * NEU in v1.14 (29.08.2026, Collar-Live-Test, letzter Fund des Tages):
+ *   - 3 neue COMPLIANCE_PATTERNS: HVP-Richtungsfehler ("Volatilitaets-
+ *     kompression" bei tatsaechlich HOHER Volatilitaet — Bedeutungsumkehr,
+ *     erschien konsistent in mehreren Strategien heute, obwohl nirgends im
+ *     Prompt-Text vorgegeben); "strukturell unnoetig" (Regime-Einschaetzung
+ *     die wie eine Handlungsfreigabe klingt); "praemieneffizient" (weitere
+ *     Variante der oekonomischen Tatsachenbehauptung ohne Live-Optionskette).
+ *     Bekannte Einschraenkung: der HVP-Kompressions-Filter ist textbasiert
+ *     und kann nicht pruefen, ob der HVP-Wert im konkreten Satz tatsaechlich
+ *     hoch war — bei legitimer Verwendung des Konzepts "Volatility
+ *     Contraction" (z.B. VCP-Strategie, echte Kursbereich-Kontraktion, ein
+ *     anderes Konzept als HVP) waere ein Fehlalarm moeglich. Da der Scan
+ *     rein loggend (nicht blockierend) ist, ist das Risiko gering.
  *
  * NEU in v1.13 (29.08.2026, CC-Live-Test, Trade-off-Prinzip):
  *   - 3 neue COMPLIANCE_PATTERNS ergaenzt (guenstiges Praemien-/Volatilitaets-
@@ -571,6 +585,9 @@ const COMPLIANCE_PATTERNS = [
   { label: 'günstiges Prämien-/Volatilitäts-Umfeld', re: /günstiges?\s+(Prämien|Volatilitäts)-?Umfeld/i },
   { label: 'reduziert die Gefahr/das Risiko', re: /reduziert\s+(modellseitig\s+)?(die\s+Gefahr|das\s+Risiko)/i },
   { label: 'Modell favorisiert/bevorzugt [Parameter]', re: /Modell\s+(favorisiert|bevorzugt)\s+(hier\s+)?(die|den|eine?)\s+(aggressiv|konservativ|höher|nieder)/i },
+  { label: 'HVP-Richtungsfehler (Kompression bei hohem HVP)', re: /(Volatilitäts-?kompression|Volatilitäts-?komprimierung|komprimierte\s+Vol)/i },
+  { label: 'strukturell unnötig', re: /strukturell\s+(unnötig|nicht\s+erforderlich)/i },
+  { label: 'prämieneffiziente Struktur', re: /prämieneffizient/i },
 ];
 
 function scanForComplianceViolations(text) {
