@@ -1,7 +1,17 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.12
+ * UnderlyingIQ — KI-Proxy Worker v1.13
+ *
+ * NEU in v1.13 (29.08.2026, CC-Live-Test, Trade-off-Prinzip):
+ *   - 3 neue COMPLIANCE_PATTERNS ergaenzt (guenstiges Praemien-/Volatilitaets-
+ *     Umfeld als oekonomische Tatsachenbehauptung; "reduziert die Gefahr/das
+ *     Risiko" als Marktprognose-Framing; "Modell favorisiert/bevorzugt
+ *     [aggressiv/konservativ/...]" als indirekte Options-Parameter-
+ *     Entscheidung). Bewusst NICHT als blanker "Modell bevorzugt"-Filter,
+ *     da diese Phrase auf Aggregatebene (Titel-Ranking) weiterhin zulaessig
+ *     und sogar Pflichtformulierung ist — nur die Parameter-Kombination
+ *     (aggressiv/konservativ/höher/nieder direkt danach) wird geflaggt.
  *
  * NEU in v1.12 (29.08.2026, Spec-Belastungstest — CSP/Wheel-Live-Test):
  *   - Deterministischer Compliance-Scan nach der KI-Antwort, vor Auslieferung
@@ -558,6 +568,9 @@ const COMPLIANCE_PATTERNS = [
   { label: 'Exit-Schwelle/-Fenster', re: /Exit-(Schwelle|Fenster)/i },
   { label: 'Stop unterhalb/oberhalb', re: /Stop\s+(unterhalb|oberhalb)/i },
   { label: 'ist für dich nicht geeignet', re: /ist\s+für\s+dich\s+nicht\s+geeignet/i },
+  { label: 'günstiges Prämien-/Volatilitäts-Umfeld', re: /günstiges?\s+(Prämien|Volatilitäts)-?Umfeld/i },
+  { label: 'reduziert die Gefahr/das Risiko', re: /reduziert\s+(modellseitig\s+)?(die\s+Gefahr|das\s+Risiko)/i },
+  { label: 'Modell favorisiert/bevorzugt [Parameter]', re: /Modell\s+(favorisiert|bevorzugt)\s+(hier\s+)?(die|den|eine?)\s+(aggressiv|konservativ|höher|nieder)/i },
 ];
 
 function scanForComplianceViolations(text) {
