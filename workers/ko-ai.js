@@ -1,7 +1,25 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.11
+ * UnderlyingIQ — KI-Proxy Worker v1.12
+ *
+ * NEU in v1.12 (29.08.2026, Spec-Belastungstest — CSP/Wheel-Live-Test):
+ *   - Deterministischer Compliance-Scan nach der KI-Antwort, vor Auslieferung
+ *     (scanForComplianceViolations()). Auslöser: "attraktiv" und
+ *     "Prämienerwartung" waren beide bereits wortwörtlich in
+ *     PUBLIC_REGULATORY_GUARDRAIL (ko-prompts.js) verboten und erschienen
+ *     trotzdem im Output — Beweis, dass Prompt-Instruktionen allein keine
+ *     100%ige Zuverlässigkeit haben. Diese Ebene haengt nicht von
+ *     Prompt-Befolgung ab, sondern erkennt bekannte Verstöße mechanisch.
+ *   - Bewusst NICHT blockierend (kein Retry, keine Zensur) — nur Logging via
+ *     bestehendem logRequest()-Mechanismus (neues optionales Feld
+ *     `complianceFlags`), abrufbar über /logs?flagged=1. Begründung:
+ *     Blockieren ohne Fallback-Plan (Retry? Fehlermeldung an Nutzer?) wäre
+ *     ein neues Risiko in einem aktiv genutzten Produkt — erst Daten
+ *     sammeln, wie oft/wo das wirklich auftritt, dann über härtere
+ *     Maßnahmen entscheiden.
+ *   - Nur für Public-Mode-Antworten aktiv (expert_mode ist bewusst
+ *     unverändert direktiv, s. SUITE.md №65/№66).
  *
  * NEU in v1.11 (27.08.2026, Legal-Briefing-Audit — Backlog №60 in SUITE.md v4.19):
  *   - SICHERHEITS-FIX: expert_mode ist jetzt serverseitig hart an isOwner
@@ -486,7 +504,7 @@ async function rateLimitReport(env) {
 }
 
 // ── REQUEST LOGGER ────────────────────────────────────────────────────────────
-async function logRequest(env, token, action, origin, cfRay, success) {
+async function logRequest(env, token, action, origin, cfRay, success, complianceFlags) {
   if (!env.AUTH_KV) return;
   try {
     const tokenHash  = await hashToken(token);
@@ -499,11 +517,56 @@ async function logRequest(env, token, action, origin, cfRay, success) {
       cfRay:    cfRay  || 'unknown',
       success,
       timestamp,
+      // NEU (29.08.2026, Spec-Belastungstest CSP/Wheel-Live-Test): nur
+      // gesetzt, wenn der Compliance-Scan (s. scanForComplianceViolations())
+      // in einer Public-Mode-Antwort mindestens einen bekannten Verstoss
+      // gefunden hat. Absichtlich NICHT blockierend — dient der Sichtbarkeit
+      // (wie oft/wo treten Verstoesse trotz Guardrail auf), nicht der
+      // automatischen Zensur. Ueber den bestehenden /logs-Endpoint abrufbar.
+      ...(complianceFlags && complianceFlags.length ? { complianceFlags } : {}),
     });
     await env.AUTH_KV.put(logKey, logEntry, { expirationTtl: 60 * 60 * 24 * 90 });
   } catch(e) {
     console.error('[LOG] KV write failed:', e.message, '| AUTH_KV bound:', !!env.AUTH_KV);
   }
+}
+
+// ── COMPLIANCE-SCAN (v1.12, 29.08.2026) ─────────────────────────────────────
+// Deterministischer Nachpruef-Schritt gegen UIQ-REGULATORY-LANGUAGE-SPEC.md.
+// Entstanden nach dem CSP/Wheel-Live-Test: "attraktiv" und "Praemienerwartung"
+// waren beide bereits WORTWOERTLICH in PUBLIC_REGULATORY_GUARDRAIL
+// (ko-prompts.js) verboten und erschienen trotzdem im Output — Beweis, dass
+// Prompt-Instruktionen allein keine 100%ige Zuverlaessigkeit haben, auch bei
+// exakten Wortverboten. Diese Liste ist bewusst NICHT identisch mit der
+// Guardrail-Wortliste: sie enthaelt nur Begriffe mit niedrigem
+// Fehlalarm-Risiko (z.B. "Empfehlung" fehlt hier bewusst, weil das Modell es
+// legitim in einer Verneinung wie "keine Empfehlung" verwenden darf/soll —
+// ein reiner String-Match wuerde das faelschlich flaggen). Nur fuer
+// Public-Mode-Antworten relevant (expert_mode-Antworten sind bewusst
+// direktiv, s. SUITE.md №65/№66).
+const COMPLIANCE_PATTERNS = [
+  { label: 'attraktiv',            re: /\battraktiv(?:e|er|es|en)?\b/i },
+  { label: 'strukturell günstig',  re: /strukturell\s+(günstig|attraktiv)/i },
+  { label: 'Prämienerwartung',     re: /Prämienerwartung/i },
+  { label: 'optimal',              re: /\boptimal(?:e|er|es|en|erweise)?\b/i },
+  { label: 'Fokus auf',            re: /\bFokus\s+auf\b/i },
+  { label: 'priorisier',           re: /priorisier/i },
+  { label: 'solltest du',          re: /solltest\s+du/i },
+  { label: 'jetzt handeln',        re: /jetzt\s+handeln/i },
+  { label: 'Trade eröffnen',       re: /Trade\s+eröffnen/i },
+  { label: 'Top-Kandidat',         re: /Top-Kandidat/i },
+  { label: 'Exit-Schwelle/-Fenster', re: /Exit-(Schwelle|Fenster)/i },
+  { label: 'Stop unterhalb/oberhalb', re: /Stop\s+(unterhalb|oberhalb)/i },
+  { label: 'ist für dich nicht geeignet', re: /ist\s+für\s+dich\s+nicht\s+geeignet/i },
+];
+
+function scanForComplianceViolations(text) {
+  if (!text) return [];
+  const hits = [];
+  for (const p of COMPLIANCE_PATTERNS) {
+    if (p.re.test(text)) hits.push(p.label);
+  }
+  return hits;
 }
 
 // ── EXTRA-TICKER HELPERS ──────────────────────────────────────────────────────
@@ -707,12 +770,20 @@ export default {
       }
       entries.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
+      // NEU (29.08.2026): ?flagged=1 zeigt nur Eintraege mit
+      // Compliance-Verstoessen (s. scanForComplianceViolations()) — schnelle
+      // Sicht ohne alle Logs manuell zu durchsuchen.
+      const flaggedOnly = url.searchParams.get('flagged') === '1';
+      const filteredEntries = flaggedOnly
+        ? entries.filter(e => e.complianceFlags && e.complianceFlags.length)
+        : entries;
+
       if (url.searchParams.get('rl') === '1') {
         const rl = await rateLimitReport(env);
-        return jsonResponse({ count: entries.length, logs: entries, rateLimitsToday: rl }, 200, origin);
+        return jsonResponse({ count: filteredEntries.length, logs: filteredEntries, rateLimitsToday: rl }, 200, origin);
       }
 
-      return jsonResponse({ count: entries.length, logs: entries }, 200, origin);
+      return jsonResponse({ count: filteredEntries.length, logs: filteredEntries }, 200, origin);
     }
 
     if (url.pathname === '/extra-tickers' && request.method === 'GET') {
@@ -856,8 +927,15 @@ export default {
 
       const text = data?.content?.[0]?.text || '';
 
+      // Compliance-Scan nur im Public-Modus (expert_mode ist bewusst
+      // direktiv, s. SUITE.md №65/№66) — nicht blockierend, nur geloggt.
+      const complianceFlags = expert_mode ? [] : scanForComplianceViolations(text);
+      if (complianceFlags.length) {
+        console.warn('[COMPLIANCE]', action, complianceFlags.join(', '));
+      }
+
       const cfRay = request.headers.get('CF-Ray') || '';
-      await logRequest(env, token, action, origin, cfRay, true);
+      await logRequest(env, token, action, origin, cfRay, true, complianceFlags);
 
       return jsonResponse({ text, model: cfg.model }, 200, origin);
 
