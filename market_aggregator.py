@@ -1290,7 +1290,27 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.38.0"
+AGGREGATOR_VERSION = "5.39.0"
+# v5.39.0 (30.08.2026): VIX-Single-Source-of-Truth-Fix (Axel-Fund, MB-Text
+# zitierte "18.77" vs. "14.43" im selben Fliesstext). Root Cause (belegt per
+# GHA-Log vom 29.08.2026 10:25 UTC): fetch_mse_history() bildete die
+# VIX/VVIX/SKEW-Kern-Schnittmenge bisher GEGEN ^VIX3M mit -- an diesem Lauf
+# lieferte ^VIX3M nur 147 statt 176-177 Tage und zog dadurch VIX/VVIX/SKEW
+# faelschlich auf ein ~1 Monat aelteres gemeinsames Enddatum zurueck (VIX
+# zeigte 18.77 statt des tatsaechlichen 14.43 -- 30% Abweichung, direkt in
+# KI-Prompts gelandet). Zwei Fixes: (1) Kern-Schnittmenge nur noch ueber
+# VIX/VVIX/SKEW, ^VIX3M/vixRatio bekommt eigene Tag-fuer-Tag-Zuordnung ohne
+# Rueckwirkung auf die anderen drei Serien. (2) calc_macro_zscores(): 'current'
+# fuer VIX kommt jetzt kanonisch aus dem einfacheren, unabhaengigen
+# fetch_vix_term()-Live-Fetch statt aus vals[-1] der Intersection-Historie;
+# Z-Score/Perzentil weiterhin aus der 252T-Verteilung, aber gegen diesen
+# kanonischen Wert berechnet. Log-Warnung bei >10% Abweichung zwischen altem
+# und kanonischem Wert, nicht blockierend. Live gegen echte Yahoo-Daten
+# verifiziert (isolierte Funktionsextraktion + Ausfuehrung, s. Session
+# 30.08.2026): 'current' stimmt danach exakt mit vix_term.vix ueberein.
+# Betrifft dieselbe Fehlerklasse wie die wiederholten VIX3M-Squeeze-Bugs vom
+# 16./19.08.2026 (s.u.) -- diesmal die Intersection-Kopplung selbst, nicht
+# der einzelne Fetch.
 # v5.37.2 (23.08.2026): IWV-Holdings-Update (Jul 24 -> Aug 20, 2026) + Fix
 # fuer Namens-Matching in build_sector_holdings()/_resolve(): iShares hat die
 # IWV-Namenskonvention systematisch geaendert (INC/CORP/CORPORATION aus ~49%
@@ -6849,6 +6869,38 @@ def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = Non
     result["vix"]      = _entry(hist.get("vix", []),      "VIX Spot")
     result["vixRatio"] = _entry(hist.get("vixRatio", []), "VIX3M/VIX Ratio (Contango)")
 
+    # KANONISIERUNG (30.08.2026, Axel-Fund, Ergaenzung zum fetch_mse_history()-
+    # Fix vom selben Tag): 'current' fuer VIX kam bisher ausschliesslich aus
+    # vals[-1] der 4-Symbol-Intersection-Historie — schon EIN kurzfristig
+    # unvollstaendiges Symbol (hier: ^VIX3M) konnte dieses Enddatum nach
+    # hinten verschieben, ohne dass 'current' das erkennbar als "alt"
+    # markiert. fetch_vix_term() ist ein einfacherer, unabhaengiger
+    # Live-Einzelwert-Fetch (nur ^VIX + ^VIX3M, keine Vier-Symbol-Schnitt-
+    # menge) und bereits die Quelle, die UI/Prompt an anderer Stelle als
+    # "aktuell" anzeigen (#m-vix, vixTerm.vix). Ab jetzt wird DIESER Wert als
+    # kanonisch fuer 'current' uebernommen; Z-Score/Perzentil bleiben aus der
+    # 252T-Verteilung berechnet, aber gegen den kanonischen Wert statt gegen
+    # vals[-1] — damit koennen 'current' hier und der Live-Wert anderswo im
+    # System strukturell nicht mehr auseinanderlaufen, unabhaengig davon, wie
+    # kurz eines der vier History-Symbole an einem beliebigen Tag zurueckkommt.
+    if vix_term and vix_term.get("vix") is not None and result["vix"].get("ok"):
+        _canon_vix = vix_term["vix"]
+        _hist_vals = [v for v in hist.get("vix", []) if v is not None]
+        if len(_hist_vals) >= 20:
+            _old_current = result["vix"]["current"]
+            _mean  = statistics.mean(_hist_vals)
+            _stdev = statistics.stdev(_hist_vals)
+            result["vix"]["current"]    = _canon_vix
+            result["vix"]["zscore"]     = round((_canon_vix - _mean) / _stdev, 2) if _stdev > 0 else 0.0
+            _sorted = sorted(_hist_vals)
+            _below  = sum(1 for v in _sorted if v < _canon_vix)
+            _equal  = sum(1 for v in _sorted if v == _canon_vix)
+            result["vix"]["percentile"] = round((_below + _equal / 2) / len(_sorted) * 100)
+            if _old_current and abs(_canon_vix - _old_current) / max(abs(_old_current), 0.01) > 0.10:
+                log.warning(f"  VIX-Kanonisierung: Historie-'current' ({_old_current}) wich >10% vom "
+                            f"kanonischen Live-Wert ({_canon_vix}) ab — Live-Wert uebernommen, "
+                            f"Historie-Frische von fetch_mse_history() bitte pruefen (s. Fix 30.08.2026).")
+
     # Divergenz-Detektor: SKEW hoch + VVIX niedrig = verstecktes Tail-Risk
     skew_z = result["skew"].get("zscore")
     vvix_z = result["vvix"].get("zscore")
@@ -8074,26 +8126,55 @@ def fetch_mse_history(days: int = 30) -> dict:
         if closes["^VIX3M"] is None:
             log.warning("  MSE History: VIX3M nicht verfuegbar — vixRatio-Historie wird uebersprungen, VVIX/SKEW/VIX bleiben nutzbar")
 
+        # FIX (30.08.2026, Axel-Fund — Single-Source-of-Truth-Bruch im Live-
+        # Betrieb nachgewiesen): Die Kern-Schnittmenge fuer VIX/VVIX/SKEW wurde
+        # bisher GEGEN ALLE VIER Symbole gebildet, obwohl ^VIX3M nur fuer
+        # vixRatio gebraucht wird. Konkreter Vorfall (Lauf 29.08.2026,
+        # 10:25 UTC): ^VIX3M lieferte nur 147 Tage waehrend ^VVIX/^SKEW/^VIX
+        # 176-177 Tage hatten — die alte for-Schleife zog dadurch VIX/VVIX/SKEW
+        # faelschlich auf ^VIX3Ms kuerzeres, aelteres gemeinsames Enddatum
+        # zurueck (VIX zeigte 18.77 statt des tatsaechlichen aktuellen
+        # Schlusskurses 14.43 — 30% Abweichung, direkt in KI-Prompts gelandet).
+        # JETZT: Kern-Schnittmenge nur noch ueber VIX/VVIX/SKEW; ^VIX3M/vixRatio
+        # bekommt eine eigene, EIGENSTAENDIGE Tag-fuer-Tag-Zuordnung weiter
+        # unten und kann VIX/VVIX/SKEW nicht mehr beeinflussen — unabhaengig
+        # davon, wie kurz oder lueckenhaft ^VIX3M an einem beliebigen Tag ist.
         common_idx = closes["^VIX"].index
-        for sym in ["^VIX3M", "^VVIX", "^SKEW"]:
+        for sym in ["^VVIX", "^SKEW"]:
             if closes[sym] is not None:
                 common_idx = common_idx.intersection(closes[sym].index)
 
         common_idx = common_idx[-days:]
-        log.info(f"  MSE History Schnittmenge: {len(common_idx)} gemeinsame Tage")
+        log.info(f"  MSE History Kern-Schnittmenge (VIX/VVIX/SKEW, ohne VIX3M): {len(common_idx)} gemeinsame Tage")
 
         dates  = [str(d.date()) for d in common_idx]
         vvix   = [round(float(closes["^VVIX"].loc[d]), 2) if closes["^VVIX"] is not None else None for d in common_idx]
         skew   = [round(float(closes["^SKEW"].loc[d]), 2) if closes["^SKEW"] is not None else None for d in common_idx]
         vix    = [round(float(closes["^VIX"].loc[d].squeeze() if hasattr(closes["^VIX"].loc[d],"squeeze") else closes["^VIX"].loc[d]), 2)  for d in common_idx]
+
+        # vixRatio: eigene Tag-fuer-Tag-Zuordnung gegen den VIX3M-eigenen Index,
+        # NICHT mehr Teil der oben gebildeten Kern-Schnittmenge. Fehlt VIX3M an
+        # einem einzelnen Tag, wird nur der Ratio-Wert dieses einen Tages None
+        # (von _entry() beim spaeteren Z-Score/Mean ohnehin herausgefiltert) —
+        # nie mehr die gesamte VIX/VVIX/SKEW-Historie.
         if closes["^VIX3M"] is not None:
-            vix3m = [round(float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d],"squeeze") else closes["^VIX3M"].loc[d]), 2) for d in common_idx]
-            ratio = [round(vix3m[i] / vix[i], 3) if vix3m[i] and vix[i] and vix[i] > 0 else None for i in range(len(vix))]
+            _vix3m_idx = closes["^VIX3M"].index
+            ratio = []
+            for i, d in enumerate(common_idx):
+                if d in _vix3m_idx:
+                    _v3m = float(closes["^VIX3M"].loc[d].squeeze() if hasattr(closes["^VIX3M"].loc[d], "squeeze") else closes["^VIX3M"].loc[d])
+                    ratio.append(round(_v3m / vix[i], 3) if vix[i] and vix[i] > 0 else None)
+                else:
+                    ratio.append(None)
+            _n_ratio_ok = sum(1 for r in ratio if r is not None)
+            if _n_ratio_ok < len(common_idx):
+                log.warning(f"  MSE History: VIX3M deckt nur {_n_ratio_ok}/{len(common_idx)} Kern-Tage ab — "
+                            f"vixRatio an den uebrigen Tagen None, VIX/VVIX/SKEW davon NICHT betroffen (s. Fix 30.08.2026)")
         else:
             ratio = [None for _ in common_idx]
 
         result = {"vvix": vvix, "skew": skew, "vix": vix, "vixRatio": ratio, "dates": dates}
-        log.info(f"  MSE History: {len(dates)} Tage | VVIX: {vvix[-1]} | SKEW: {skew[-1] if skew[-1] else chr(8212)} | Ratio: {ratio[-1]}")
+        log.info(f"  MSE History: {len(dates)} Tage | VVIX: {vvix[-1]} | SKEW: {skew[-1] if skew[-1] else chr(8212)} | VIX: {vix[-1]} | Ratio: {ratio[-1]}")
     except Exception as e:
         log.warning(f"  MSE History nicht verfuegbar: {e}")
     return result
