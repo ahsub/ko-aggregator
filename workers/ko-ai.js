@@ -1,7 +1,19 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.14
+ * UnderlyingIQ — KI-Proxy Worker v1.15
+ *
+ * NEU in v1.15 (30.08.2026, Diagnose-Instrumentierung — Axel-Meldung
+ *   "Morning Briefing dauert seit einigen Tagen ~10min statt <3min"):
+ *   - callAnthropic() misst jetzt Start-/Endzeit um den fetch()-Call und
+ *     loggt Modell, max_tokens und Dauer in ms via console.log (sichtbar
+ *     in `wrangler tail`/CF-Dashboard). Reiner Diagnose-Zusatz, KEINE
+ *     Verhaltensänderung, kein Einfluss auf Response/Fehlerpfad.
+ *   - Zweck: unterscheiden, ob die Verlangsamung im Anthropic-Call selbst
+ *     liegt oder in der vorgelagerten Datensammlung (ctx.marktkontext,
+ *     CBOE-Abrufe) — dafür bislang keinerlei Zeitmessung vorhanden.
+ *   - Bewusst als eigener, von der heutigen Coaching-Standard-Änderung
+ *     unabhängiger Versionssprung behandelt (Diagnose-Fix, kein Feature).
  *
  * NEU in v1.14 (29.08.2026, Collar-Live-Test, letzter Fund des Tages):
  *   - 3 neue COMPLIANCE_PATTERNS: HVP-Richtungsfehler ("Volatilitaets-
@@ -746,6 +758,11 @@ async function callAnthropic(apiKey, model, maxTokens, systemPrompt, userMessage
     messages:   [{ role: 'user', content: userMessage }],
   };
 
+  // DIAGNOSE (v1.15, 30.08.2026): reine Zeitmessung um den Anthropic-Call,
+  // um Verlangsamungen (s. Changelog v1.15) vom Rest der Pipeline zu
+  // unterscheiden. Keine Verhaltensänderung.
+  const _t0 = Date.now();
+
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method:  'POST',
     headers: {
@@ -755,6 +772,9 @@ async function callAnthropic(apiKey, model, maxTokens, systemPrompt, userMessage
     },
     body: JSON.stringify(body),
   });
+
+  const _durationMs = Date.now() - _t0;
+  console.log(`[callAnthropic] model=${model} maxTokens=${maxTokens} durationMs=${_durationMs}`);
 
   if (!resp.ok) {
     const err = await resp.text();
