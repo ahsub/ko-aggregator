@@ -469,159 +469,14 @@ def calc_mcm_bull_indicator(market: dict, hist_data: dict, ios_market: dict) -> 
     return round(total_score / max_score * 100)
 
 
-def build_server_market_context(master):
-    """market_context serverseitig — Pendant zu buildMarketContext() im JS-Port.
-    Faktoren (14 + 3 Calendar):
-      vix, vvix, skew, pcr, fear_greed           — direkt aus market-Daten
-      ndx_breadth, intermarket_score,             — v5.13.0 (21.07.2026)
-      treasury_stress, bull_indicator             — server-side calc-Funktionen
-      net_liquidity                               — v5.14.0 (01.08.2026), FRED trend_4w
-      move_index, skew_vvix_div,                  — v5.36.5 (16.08.2026), MCM-
-      breadth_osc, distribution_days              — Paritaet-Nachzug (s. Changelog)
-      fed_window, nfp_window, cpi_window          — macro-calendar
-    ACHTUNG: "MCM-Paritaet vollstaendig" ist eine Momentaufnahme, kein
-    Dauerzustand — bei jedem neuen Client-Registry-Eintrag (ko-indicators.json)
-    hier gegenpruefen, sonst driftet es erneut (s. MCM-PARITAET-KONZEPT.md).
-    """
-    market = master.get("market", {}) or {}
-    meta   = master.get("meta", {}) or {}
-    vt     = market.get("vixTerm", {}) or {}
-    pcr_d  = market.get("pcr", {}) or {}
-    fg     = market.get("fearGreed", {}) or {}
-    zsc    = market.get("zscores", {}) or {}
-
-    regime = master.get("masterShortlist_meta", {}).get("regimeUsed") or meta.get("regimeUsed")
-    # Fallback: regimeUsed liegt strukturell in der Leaderboard-Rueckgabe, nicht in meta
-    # (siehe Bugfix-Kommentar in generate_daily_snapshot). Wird dort korrekt injiziert.
-
-    factors = {}
-    caution, risk = [], []
-
-    def _add(fid, value, rules, label=None):
-        if value is None:
-            return
-        sig = _mcm_eval_signal(rules, value)
-        factors[fid] = {"value": value, "signal": sig}
-        if label:
-            factors[fid]["label"] = label
-        if sig == "caution":
-            caution.append(fid)
-        elif sig == "risk":
-            risk.append(fid)
-
-    _add("vix",        vt.get("vix"),           _MCM_SIGNAL_RULES["vix"])
-    _add("vvix",        (zsc.get("vvix") or {}).get("zscore"), _MCM_SIGNAL_RULES["vvix"])
-    _add("skew",        (zsc.get("skew") or {}).get("percentile"), _MCM_SIGNAL_RULES["skew"])
-    _add("pcr",         pcr_d.get("pcr"),        _MCM_SIGNAL_RULES["pcr"])
-    _add("fear_greed",  fg.get("score"),         _MCM_SIGNAL_RULES["fear_greed"])
-
-    # ── MCM-Parität: 4 neue Server-Faktoren (v5.13.0) ────────────────────────
-    # hist_data wird von main() in master["_hist_data"] injiziert (analog regimeUsed).
-    hist_data  = master.get("_hist_data") or {}
-    ios_market = market.get("iosMarket") or {}
-
-    ndx_b  = calc_mcm_ndx_breadth(hist_data)
-    im_s   = calc_mcm_intermarket_score(hist_data, market)
-    tr_s   = calc_mcm_treasury_stress(market, hist_data)
-    bull_i = calc_mcm_bull_indicator(market, hist_data, ios_market)
-
-    _add("ndx_breadth",       ndx_b,  _MCM_SIGNAL_RULES["ndx_breadth"])
-    _add("intermarket_score", im_s,   _MCM_SIGNAL_RULES["intermarket_score"])
-    _add("treasury_stress",   tr_s,   _MCM_SIGNAL_RULES["treasury_stress"])
-    _add("bull_indicator",    bull_i, _MCM_SIGNAL_RULES["bull_indicator"])
-
-    # net_liquidity: 4W-Trend aus FRED (identische Schwelle wie ko-indicators.json)
-    fred       = market.get("fredMacro", {}) or {}
-    nl         = fred.get("net_liquidity", {}) or {}
-    nl_trend4w = nl.get("trend_4w") if nl.get("ok") else None
-    _add("net_liquidity", nl_trend4w, _MCM_SIGNAL_RULES["net_liquidity"])
-
-    # ── MCM-Paritaet-Nachzug (16.08.2026): 4 Faktoren, die im Client seit
-    # Wochen registriert waren (ko-indicators.json v2.2.0/v2.3.0), aber nie
-    # nach Python portiert wurden — dieser Docstring behauptete "vollstaendig",
-    # das war seit der ersten Client-Erweiterung nicht mehr korrekt. Siehe
-    # MCM-PARITAET-KONZEPT.md fuer die Historie des ersten (04-Faktoren-)
-    # Parity-Sprints vom 21.07. — dieser hier ist die Fortsetzung/Nachtrag.
-    mi = market.get("moveIndex", {}) or {}
-    mi_z = mi.get("zscore") if mi.get("ok") else None
-    _add("move_index", mi_z, _MCM_SIGNAL_RULES["move_index"],
-         label=(f"MOVE Index: {mi.get('current')} (Z={mi_z:+.2f}, P{mi.get('percentile')})" if mi_z is not None else None))
-
-    div = (zsc.get("skew_vvix_divergence") or {})
-    div_val = div.get("value") if div.get("ok") else None
-    _add("skew_vvix_div", div_val, _MCM_SIGNAL_RULES["skew_vvix_div"],
-         label=(f"SKEW/VVIX-Divergenz: {div_val} → {div.get('signal')}" if div_val is not None else None))
-
-    bo = market.get("breadthOsc", {}) or {}
-    bo_val = bo.get("oscillator")
-    _add("breadth_osc", bo_val, _MCM_SIGNAL_RULES["breadth_osc"],
-         label=(f"UIQ Breadth-Oszillator (McClellan): {bo_val} ({bo.get('ema19')}/{bo.get('ema39')} EMA19/39)" if bo_val is not None else None))
-
-    dd = market.get("distributionDays", {}) or {}
-    dd_max_val = dd.get("dd_max")
-    _add("distribution_days", dd_max_val, _MCM_SIGNAL_RULES["distribution_days"],
-         label=(f"Distribution Days (25T, O'Neil/IBD): SPY {dd.get('dd_spy')} / QQQ {dd.get('dd_qqq')} ({dd.get('dd_severity')})" if dd_max_val is not None else None))
-
-    # ── Konjunktur-Indikatoren (17.08.2026, Axel-Anfrage) ────────────────────
-    nfci = fred.get("nfci", {}) or {}
-    nfci_val = nfci.get("current") if nfci.get("ok") else None
-    _add("nfci", nfci_val, _MCM_SIGNAL_RULES["nfci"],
-         label=(f"NFCI (Chicago Fed): {nfci_val:+.3f} (Z={nfci.get('zscore')})" if nfci_val is not None else None))
-
-    cpi = fred.get("core_cpi_yoy", {}) or {}
-    cpi_val = cpi.get("current") if cpi.get("ok") else None
-    _add("core_cpi_yoy", cpi_val, _MCM_SIGNAL_RULES["core_cpi_yoy"],
-         label=(f"US Core CPI YoY: {cpi_val}%" if cpi_val is not None else None))
-
-    unemp = fred.get("unemployment", {}) or {}
-    sahm_val = unemp.get("sahmRule") if unemp.get("ok") else None
-    _add("sahm_rule", sahm_val, _MCM_SIGNAL_RULES["sahm_rule"],
-         label=(f"Sahm-Rule: {sahm_val:+.2f} Pkt (Arbeitslosenrate {unemp.get('current')}%, Trigger ≥0.50)" if sahm_val is not None else None))
-
-    cli = fred.get("oecd_cli", {}) or {}
-    cli_score = cli.get("quadrantScore") if cli.get("ok") else None
-    _add("oecd_cli_score", cli_score, _MCM_SIGNAL_RULES["oecd_cli_score"],
-         label=(f"OECD Composite Leading Indicator (USA): {cli.get('current')} → {cli.get('signal')}" if cli_score is not None else None))
-
-    truck = fred.get("heavy_truck", {}) or {}
-    truck_trend = truck.get("trend_3m_pct") if truck.get("ok") else None
-    _add("heavy_truck_trend", truck_trend, _MCM_SIGNAL_RULES["heavy_truck_trend"],
-         label=(f"Heavy Truck Sales (10M-Schnitt, 3M-Trend): {truck_trend:+.1f}% → {truck.get('signal')}" if truck_trend is not None else None))
-
-    # Rein informativ, kein caution/risk-Signal (Rotationsrichtung ist nicht
-    # per se "gut" oder "schlecht" — Interpretation bleibt der KI-Prosa
-    # überlassen, analog zum bestehenden qqq_markov-Faktor).
-    sd = market.get("stapleDiscretionary", {}) or {}
-    if sd.get("ok"):
-        factors["staples_discretionary"] = {
-            "value": sd.get("trend"), "signal": None,
-            "label": f"Consumer Staples vs. Discretionary (XLP/XLY): {sd.get('ratio')} — 5T {sd.get('chg5d')}% / 20T {sd.get('chg20d')}% ({sd.get('trend')})",
-        }
-    gv = market.get("growthValue", {}) or {}
-    if gv.get("ok"):
-        factors["growth_value"] = {
-            "value": gv.get("trend"), "signal": None,
-            "label": f"Growth vs. Value (IWF/IWD): {gv.get('ratio')} — 5T {gv.get('chg5d')}% / 20T {gv.get('chg20d')}% ({gv.get('trend')})",
-        }
-
-    # Calendar-Faktoren
-    events = _mcm_load_macro_calendar()
-    now_utc = datetime.now(timezone.utc)
-    for fid, cfg in _MCM_CALENDAR_FACTORS.items():
-        r = _mcm_eval_calendar_factor(cfg, events, now_utc)
-        if r:
-            factors[fid] = r
-            if r["signal"] == "caution":
-                caution.append(fid)
-            elif r["signal"] == "risk":
-                risk.append(fid)
-
-    risk_level = "high" if risk else ("elevated" if len(caution) >= 2 else "low")
-    return {
-        "regime": regime,
-        "factors": factors,
-        "summary": {"risk_level": risk_level, "caution_flags": caution, "risk_flags": risk},
-    }
+# build_server_market_context() — DUPLIKAT ENTFERNT (31.08.2026, Cleanup-
+# Fund beim MCM-PARITAET-KONZEPT.md-Review). War hier byte-identisch ein
+# zweites Mal definiert (die spaetere Kopie weiter unten in der Datei war
+# durch Pythons Late-Binding ohnehin die einzig aktive — diese hier war
+# totes, aber funktionsfaehiges Duplikat, folgenlos aber mit Drift-Risiko
+# fuer kuenftige Bearbeitungen). Herkunft unklar (vermutlich ein verlorener
+# Merge/Copy-Paste-Rest aus der MCM-Paritaet-Historie). Aktive Definition
+# jetzt weiter unten in der Datei, s. MCM-PARITAET-KONZEPT.md fuer Kontext.
 
 
 def calc_server_strategy_gates(regime, ctx):
@@ -1290,7 +1145,19 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.40.0"
+AGGREGATOR_VERSION = "5.41.0"
+# v5.41.0 (31.08.2026): Dead-Code-Cleanup — build_server_market_context()
+# war byte-identisch ZWEIMAL definiert (Fund beim MCM-PARITAET-KONZEPT.md-
+# Review, urspruenglicher Sprint 21.07.2026). Pythons Late-Binding nutzte
+# ohnehin durchgaengig die spaetere der beiden Kopien — funktional folgenlos,
+# aber Drift-Risiko: eine kuenftige Bearbeitung nur der ersten Kopie (z.B.
+# weil ein Editor beim Suchen die erste Fundstelle zeigt) haette beide
+# Definitionen unbemerkt auseinanderlaufen lassen, ohne Fehler oder Absturz.
+# Erste Kopie entfernt, durch Verweis-Kommentar ersetzt. Herkunft des
+# Duplikats unklar, vermutlich ein Merge-/Copy-Paste-Rest aus der MCM-
+# Paritaets-Historie (mehrere Nachzug-Runden, s. v5.13.0/v5.14.0/v5.36.5
+# unten). Rein strukturelle Aenderung, keine Verhaltensaenderung.
+#
 # v5.40.0 (31.08.2026): VVIX/SKEW-Kanonisierung (Prioritaet 2 aus Uebergabe-
 # protokoll 30.08. §8/§4.3) — Pendant zum VIX-Fix aus v5.39.0. Der v5.39.0-
 # Root-Cause-Fix (fetch_mse_history()-Intersection-Kopplung) schuetzt VIX/
