@@ -1290,7 +1290,24 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.39.0"
+AGGREGATOR_VERSION = "5.40.0"
+# v5.40.0 (31.08.2026): VVIX/SKEW-Kanonisierung (Prioritaet 2 aus Uebergabe-
+# protokoll 30.08. §8/§4.3) — Pendant zum VIX-Fix aus v5.39.0. Der v5.39.0-
+# Root-Cause-Fix (fetch_mse_history()-Intersection-Kopplung) schuetzt VIX/
+# VVIX/SKEW zwar bereits gemeinsam, aber nur VIX bekam zusaetzlich eine
+# unabhaengige Live-Einzelwert-Kanonisierung in calc_macro_zscores() — VVIX/
+# SKEW hingen fuer 'current' weiterhin ausschliesslich an vals[-1] der
+# 252T-Historie, ohne Gegenprobe. Neue Funktion fetch_vvix_skew_live()
+# (^VVIX/^SKEW einzeln per yfinance, analog fetch_vix_term(), aber ohne
+# Ratio/Spread/Contango-Konzept — nur Einzelwerte). calc_macro_zscores()
+# bekommt neuen optionalen Parameter vvix_skew_term; 'current' fuer beide
+# Serien kommt jetzt kanonisch von dort, Z-Score/Perzentil weiterhin aus der
+# 252T-Verteilung, aber gegen den kanonischen Wert berechnet — identisches
+# Muster wie beim VIX-Fix. Log-Warnung bei >10% Abweichung, nicht
+# blockierend. Kanonisierung laeuft VOR dem SKEW/VVIX-Divergenz-Detektor,
+# der damit ebenfalls auf den kanonischen Z-Scores basiert. Weiterhin offen
+# (§4.3, bewusst nicht Teil dieses Fixes): Client/Server-Aufspaltung
+# #m-vix + ~40 UI-Stellen — separater, groesserer Architektur-Punkt.
 # v5.39.0 (30.08.2026): VIX-Single-Source-of-Truth-Fix (Axel-Fund, MB-Text
 # zitierte "18.77" vs. "14.43" im selben Fliesstext). Root Cause (belegt per
 # GHA-Log vom 29.08.2026 10:25 UTC): fetch_mse_history() bildete die
@@ -6814,7 +6831,7 @@ def fetch_market_snapshot() -> dict:
     }
 
 
-def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = None) -> dict:
+def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = None, vvix_skew_term: dict = None) -> dict:
     """Z-Scores + Perzentile für Makro-Parameter aus der MSE-History.
 
     Abstraktions-Schicht für Deep-Reasoning (Gemini-Empfehlung 09.07.2026):
@@ -6900,6 +6917,32 @@ def calc_macro_zscores(mse_history: dict, pcr: dict = None, vix_term: dict = Non
                 log.warning(f"  VIX-Kanonisierung: Historie-'current' ({_old_current}) wich >10% vom "
                             f"kanonischen Live-Wert ({_canon_vix}) ab — Live-Wert uebernommen, "
                             f"Historie-Frische von fetch_mse_history() bitte pruefen (s. Fix 30.08.2026).")
+
+    # VVIX/SKEW-KANONISIERUNG (31.08.2026, Prioritaet 2 — Pendant zur
+    # VIX-Kanonisierung oben, gleiches Muster: fetch_vvix_skew_live() ist ein
+    # unabhaengiger Live-Einzelwert-Fetch, ab jetzt kanonisch fuer 'current';
+    # Z-Score/Perzentil bleiben aus der 252T-Verteilung, aber gegen den
+    # kanonischen Wert berechnet statt gegen vals[-1] der Intersection-
+    # Historie. Vorher hingen VVIX/SKEW anders als VIX ausschliesslich an der
+    # Historie, ohne unabhaengige Gegenprobe (s. Funktions-Docstring).
+    for _sym, _label in (("vvix", "VVIX"), ("skew", "SKEW")):
+        _canon = (vvix_skew_term or {}).get(_sym)
+        if _canon is not None and result[_sym].get("ok"):
+            _hist_vals = [v for v in hist.get(_sym, []) if v is not None]
+            if len(_hist_vals) >= 20:
+                _old_current = result[_sym]["current"]
+                _mean  = statistics.mean(_hist_vals)
+                _stdev = statistics.stdev(_hist_vals)
+                result[_sym]["current"]    = _canon
+                result[_sym]["zscore"]     = round((_canon - _mean) / _stdev, 2) if _stdev > 0 else 0.0
+                _sorted = sorted(_hist_vals)
+                _below  = sum(1 for v in _sorted if v < _canon)
+                _equal  = sum(1 for v in _sorted if v == _canon)
+                result[_sym]["percentile"] = round((_below + _equal / 2) / len(_sorted) * 100)
+                if _old_current and abs(_canon - _old_current) / max(abs(_old_current), 0.01) > 0.10:
+                    log.warning(f"  {_label}-Kanonisierung: Historie-'current' ({_old_current}) wich >10% vom "
+                                f"kanonischen Live-Wert ({_canon}) ab — Live-Wert uebernommen, "
+                                f"Historie-Frische von fetch_mse_history() bitte pruefen.")
 
     # Divergenz-Detektor: SKEW hoch + VVIX niedrig = verstecktes Tail-Risk
     skew_z = result["skew"].get("zscore")
@@ -7812,6 +7855,40 @@ def fetch_move_index() -> dict:
     except Exception as e:
         log.warning(f"  MOVE Index nicht verfügbar: {e}")
         return {"ok": False, "reason": str(e)[:100]}
+
+
+def fetch_vvix_skew_live():
+    """VVIX/SKEW Live-Einzelwert-Fetch (31.08.2026, Priorität 2 aus
+    Übergabeprotokoll 30.08. §8/§4.3 — Kanonisierungs-Pendant zu
+    fetch_vix_term()).
+
+    Hintergrund: der 30.08.-Root-Cause-Fund (§4.2) betraf ALLE drei Serien
+    VIX/VVIX/SKEW gemeinsam (4-Symbol-Intersection-Bug in
+    fetch_mse_history()) — der fetch_mse_history()-Fix selbst schützt seither
+    alle drei gleichermaßen. Aber nur VIX bekam zusätzlich eine unabhängige
+    Live-Einzelwert-Kanonisierung (calc_macro_zscores(), s.o.) — VVIX/SKEW
+    hingen für 'current' weiterhin ausschließlich an vals[-1] der
+    252T-Historie aus fetch_mse_history(), ohne unabhängige Gegenprobe.
+    Bewusst als eigene, schlanke Funktion (nicht in fetch_vix_term()
+    integriert) — anderer Symbolkreis, kein Ratio/Spread/Contango-Konzept
+    nötig, nur ein Einzelwert je Symbol. Rückgabe None bei Fehler, analog
+    fetch_vix_term() — Aufrufer muss None-Fall behandeln (s.
+    calc_macro_zscores()).
+    """
+    try:
+        vvix = yf.download("^VVIX", period="5d", auto_adjust=True, progress=False)
+        skew = yf.download("^SKEW", period="5d", auto_adjust=True, progress=False)
+        vvix_close = vvix["Close"]
+        skew_close = skew["Close"]
+        if hasattr(vvix_close, "squeeze"): vvix_close = vvix_close.squeeze()
+        if hasattr(skew_close, "squeeze"): skew_close = skew_close.squeeze()
+        vvix_val = float(vvix_close.dropna().iloc[-1]) if hasattr(vvix_close, "dropna") else float(vvix_close)
+        skew_val = float(skew_close.dropna().iloc[-1]) if hasattr(skew_close, "dropna") else float(skew_close)
+        log.info(f"  VVIX (Live): {vvix_val:.2f} | SKEW (Live): {skew_val:.2f}")
+        return {"vvix": round(vvix_val, 2), "skew": round(skew_val, 2)}
+    except Exception as e:
+        log.warning(f"  VVIX/SKEW Live-Fetch nicht verfügbar: {e}")
+    return None
 
 
 def fetch_vix_term():
@@ -9766,6 +9843,7 @@ def main():
     dix_gex  = fetch_dix_gex() or {}   # Fallback auf leeres Dict wenn API nicht verfügbar
     pcr      = fetch_pcr_cboe() or {}   # CBOE-Versuch; Proxy-Fallback nach mse_history (s.u.)
     vix_term    = fetch_vix_term()
+    vvix_skew_term = fetch_vvix_skew_live()
     # ── Market Snapshot: Single Source of Truth für alle Live-Preise ──────────
     log.info(f"  Market Snapshot (SPY/QQQ/Gold/Öl/Krypto/EU-Indizes)…")
     market_snapshot = fetch_market_snapshot()
@@ -9790,7 +9868,7 @@ def main():
 
     # ── Makro Z-Scores: Abstraktions-Schicht für Deep-Reasoning ──────────────
     log.info(f"  Berechne Makro Z-Scores + Perzentile (252T-Kontext)...")
-    macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term)
+    macro_zscores = calc_macro_zscores(mse_history, pcr, vix_term, vvix_skew_term)
 
     # ── FINRA DIX (echt, statt SqueezeMetrics/Heuristik) ─────────────────────
     # v5.34: CSV-Methode (Stufe 2) hat Vorrang — kein OAuth2, volle SP500-Breite
