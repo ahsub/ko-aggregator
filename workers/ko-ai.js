@@ -1,7 +1,23 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.15
+ * UnderlyingIQ — KI-Proxy Worker v1.16
+ *
+ * NEU in v1.16 (31.08.2026, Compliance-Scanner-Regex-Lücke geschlossen —
+ *   Priorität 1 aus Übergabeprotokoll 30.08. §8, zwei unabhängige
+ *   Live-Belege am selben Tag):
+ *   - Pattern 'strukturell unnötig' verlangte zwingend "strukturell" direkt
+ *     vor "unnötig"/"nicht erforderlich" — beide Live-Belege vom 30.08.
+ *     enthielten dieses Präfix NICHT: 1. Beleg "klassifiziert Collar-Setups
+ *     als 'nicht nötig'" (andere Wortform: "nicht nötig" statt "unnötig"),
+ *     2. Beleg "als Regime-Signal 'nicht erforderlich' bewertet" (ohne
+ *     "strukturell" davor). Beide liefen am Compliance-Scanner vorbei.
+ *   - Fix: Pflicht-Präfix entfernt, Pattern auf reine Wortgrenzen-Suche
+ *     nach "unnötig" / "nicht nötig" / "nicht erforderlich" verengt, ohne
+ *     geforderten Vorgänger-Kontext. Gegen den Prompt-Text selbst geprüft
+ *     (ko-prompts.js v2.17.0): keine legitime Verwendung dieser Begriffe
+ *     vorhanden, die jetzt fälschlich anschlagen würde — Scan bleibt
+ *     zudem rein loggend (nicht blockierend), Fehlalarm-Risiko gering.
  *
  * NEU in v1.15 (30.08.2026, Diagnose-Instrumentierung — Axel-Meldung
  *   "Morning Briefing dauert seit einigen Tagen ~10min statt <3min"):
@@ -598,7 +614,7 @@ const COMPLIANCE_PATTERNS = [
   { label: 'reduziert die Gefahr/das Risiko', re: /reduziert\s+(modellseitig\s+)?(die\s+Gefahr|das\s+Risiko)/i },
   { label: 'Modell favorisiert/bevorzugt [Parameter]', re: /Modell\s+(favorisiert|bevorzugt)\s+(hier\s+)?(die|den|eine?)\s+(aggressiv|konservativ|höher|nieder)/i },
   { label: 'HVP-Richtungsfehler (Kompression bei hohem HVP)', re: /(Volatilitäts-?kompression|Volatilitäts-?komprimierung|komprimierte\s+Vol)/i },
-  { label: 'strukturell unnötig', re: /strukturell\s+(unnötig|nicht\s+erforderlich)/i },
+  { label: 'unnötig/nicht erforderlich (Regex-Lücke geschlossen 31.08.2026 — zwei unabhängige Live-Belege 30.08.: "nicht nötig" und "nicht erforderlich" OHNE "strukturell" davor, Pflicht-Präfix griff nicht)', re: /\b(unnötig|nicht\s+n(ö|oe)tig|nicht\s+erforderlich)\b/i },
   { label: 'prämieneffiziente Struktur', re: /prämieneffizient/i },
 ];
 
