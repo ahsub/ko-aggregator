@@ -19,7 +19,24 @@
  *     vorhanden, die jetzt fälschlich anschlagen würde — Scan bleibt
  *     zudem rein loggend (nicht blockierend), Fehlalarm-Risiko gering.
  *
- * NACHTRAG (01.09.2026, Axel + Claude, OWNER_TOKEN-Diagnose, abgeschlossen):
+ * NACHTRAG 2 (01.09.2026, Axel + Claude, isOwner-Verdacht im
+ *   Haupthandler ausgeräumt):
+ *   Nach der zweiten OWNER_TOKEN-Rotation trat ein einzelner
+ *   "KI-Token ungültig"-Fehlschlag auf, obwohl der Wert nachweislich
+ *   identisch (Passwort-Safe, an beiden Stellen — ko-ai UND ko-sync —
+ *   neu gesetzt, redeployed) im Frontend eingetragen war. Verdacht:
+ *   unsichtbares Zeichen in einer der beiden Quellen. Ein temporärer
+ *   Debug-Log direkt nach der isOwner-Zuweisung im Haupt-POST-Handler
+ *   (nur Längen+Boolean, kein Klartext) zeigte beim nächsten
+ *   erfolgreichen Aufruf: token.length=64, owner.length=64 (identisch),
+ *   isOwner=true, matchesStatic=false — kein Zeichenfehler, isOwner
+ *   griff korrekt. Der einzelne Fehlschlag war mit hoher
+ *   Wahrscheinlichkeit eine kurze Cloudflare-Edge-Propagations-
+ *   verzögerung nach dem Redeploy (gleiches Muster wie der
+ *   STATIC_TOKEN-Edge-Delay im 31.08.-Protokoll §3), kein struktureller
+ *   Bug. Debug-Log nach Bestätigung wieder entfernt.
+ *
+ * NACHTRAG 1 (01.09.2026, Axel + Claude, OWNER_TOKEN-Diagnose /logs-Endpunkt):
  *   Nach dem Neusetzen von OWNER_TOKEN/STATIC_TOKEN (verschiedene Werte)
  *   wurde die isOwner-Verzweigung live verifiziert: ein ki_briefing-
  *   Live-Aufruf über das Frontend erschien anschließend NICHT in
