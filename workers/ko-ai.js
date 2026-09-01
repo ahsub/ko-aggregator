@@ -19,6 +19,19 @@
  *     vorhanden, die jetzt fälschlich anschlagen würde — Scan bleibt
  *     zudem rein loggend (nicht blockierend), Fehlalarm-Risiko gering.
  *
+ * ⚠️ TEMPORÄRER DEBUG-PATCH (01.09.2026, Axel + Claude, Token-Diagnose):
+ *   Im /logs-Endpoint wurde direkt vor dem STATIC_TOKEN-Vergleich ein
+ *   einzeiliger console.log ergänzt (NUR Längen + Boolean-Match, KEIN
+ *   Klartext-Token im Log — nach dem Anthropic-Key-Leak vom 31.08. bewusst
+ *   ohne erneutes Klartext-Secret-Logging). Zweck: klären, warum
+ *   /logs?rl=1&token=<STATIC_TOKEN> mit "Unauthorized" (401) antwortete,
+ *   obwohl der Wert augenscheinlich korrekt eingetragen war (isOwner-Logik
+ *   selbst unverändert und laut Code-Review korrekt: Bearer-Token aus
+ *   Authorization-Header vs. env.OWNER_TOKEN für den Hauptendpunkt;
+ *   /logs prüft separat und ausschließlich gegen env.STATIC_TOKEN als
+ *   Query-Parameter ?token=). NACH ABSCHLUSS DER DIAGNOSE WIEDER ENTFERNEN
+ *   und erneut deployen — nicht dauerhaft im Produktivcode belassen.
+ *
  * NEU in v1.15 (30.08.2026, Diagnose-Instrumentierung — Axel-Meldung
  *   "Morning Briefing dauert seit einigen Tagen ~10min statt <3min"):
  *   - callAnthropic() misst jetzt Start-/Endzeit um den fetch()-Call und
@@ -812,6 +825,10 @@ export default {
 
     if (url.pathname === '/logs' && request.method === 'GET') {
       const adminToken = url.searchParams.get('token');
+      // ⚠️ TEMPORÄRER DEBUG-LOG (01.09.2026) — s. Changelog-Kopf.
+      // Nur Längen + Boolean-Match, KEIN Klartext-Token im Log.
+      // Nach Abschluss der Diagnose diese Zeile wieder entfernen.
+      console.log(`[auth-debug /logs] received.length=${adminToken ? adminToken.length : 'null'} expected.length=${env.STATIC_TOKEN ? env.STATIC_TOKEN.length : 'undefined'} match=${adminToken === env.STATIC_TOKEN}`);
       if (!env.STATIC_TOKEN || adminToken !== env.STATIC_TOKEN) {
         return new Response('Unauthorized', { status: 401, headers: corsHeaders(origin) });
       }
