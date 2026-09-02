@@ -632,7 +632,7 @@ async function logRequest(env, token, action, origin, cfRay, success, compliance
 // Public-Mode-Antworten relevant (expert_mode-Antworten sind bewusst
 // direktiv, s. SUITE.md №65/№66).
 const COMPLIANCE_PATTERNS = [
-  { label: 'attraktiv',            re: /\battraktiv(?:e|er|es|en)?\b/i },
+  { label: 'attraktiv',            re: /\battraktiv\w*/i },
   { label: 'strukturell günstig',  re: /strukturell\s+(günstig|attraktiv)/i },
   { label: 'Prämienerwartung',     re: /Prämienerwartung/i },
   { label: 'optimal',              re: /\boptimal(?:e|er|es|en|erweise)?\b/i },
