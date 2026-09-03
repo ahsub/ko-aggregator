@@ -647,7 +647,7 @@ const COMPLIANCE_PATTERNS = [
   { label: 'ist für dich nicht geeignet', re: /ist\s+für\s+dich\s+nicht\s+geeignet/i },
   { label: 'günstiges Prämien-/Volatilitäts-Umfeld', re: /günstiges?\s+(Prämien|Volatilitäts)-?Umfeld/i },
   { label: 'reduziert die Gefahr/das Risiko', re: /reduziert\s+(modellseitig\s+)?(die\s+Gefahr|das\s+Risiko)/i },
-  { label: 'Modell favorisiert/bevorzugt [Parameter]', re: /Modell\s+(favorisiert|bevorzugt)\s+(hier\s+)?(die|den|eine?)\s+(aggressiv|konservativ|höher|nieder)/i },
+  { label: 'Modell favorisiert/bevorzugt [Parameter] (Regex verbreitert 03.09.2026 — alte Fassung verlangte "die/den/eine" + Adjektiv direkt danach, ließ "Modell bevorzugt trotzdem die Kombination aus..." durch)', re: /Modell\s+(favorisiert|bevorzugt)/i },
   { label: 'HVP-Richtungsfehler (Kompression bei hohem HVP)', re: /(Volatilitäts-?kompression|Volatilitäts-?komprimierung|komprimierte\s+Vol)/i },
   { label: 'unnötig/nicht erforderlich (Regex-Lücke geschlossen 31.08.2026 — zwei unabhängige Live-Belege 30.08.: "nicht nötig" und "nicht erforderlich" OHNE "strukturell" davor, Pflicht-Präfix griff nicht)', re: /\b(unnötig|nicht\s+n(ö|oe)tig|nicht\s+erforderlich)\b/i },
   { label: 'prämieneffiziente Struktur', re: /prämieneffizient/i },
@@ -657,7 +657,7 @@ const COMPLIANCE_PATTERNS = [
   { label: 'ATM-orientiert (Strategy-Fit-Moneyness-Verwechslung, ggf. False-Positive bei atmna selbst)', re: /ATM-orientiert/i },
   { label: 'verdichtet(e) Volatilität (Synonym-Umgehung von komprimiert)', re: /verdichtete?\s+Volatilit/i },
   { label: 'nicht strukturell gehemmt (Synonym-Umgehung von Hemmnisse)', re: /nicht\s+strukturell\s+gehemmt/i },
-  { label: 'Strike-Annäherung/Strike-Niveau aus Underlying-Signal', re: /Strike-(Ann(ä|ae)herung|Niveau)/i },
+  { label: 'Strike-Annäherung/Strike-Niveau aus Underlying-Signal (Regex präzisiert 03.09.2026 — flaggt nur die kausale Verknüpfung, nicht den erwünschten "...kann UIQ ohne Optionskettendaten nicht beurteilen"-Vorbehalt im selben Satz)', re: /Strike-(Ann(ä|ae)herung|Niveau)(?![^.]{0,100}beurteilen)/i },
 ];
 
 function scanForComplianceViolations(text) {
