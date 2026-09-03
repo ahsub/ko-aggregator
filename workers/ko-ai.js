@@ -651,6 +651,8 @@ const COMPLIANCE_PATTERNS = [
   { label: 'HVP-Richtungsfehler (Kompression bei hohem HVP)', re: /(Volatilitäts-?kompression|Volatilitäts-?komprimierung|komprimierte\s+Vol)/i },
   { label: 'unnötig/nicht erforderlich (Regex-Lücke geschlossen 31.08.2026 — zwei unabhängige Live-Belege 30.08.: "nicht nötig" und "nicht erforderlich" OHNE "strukturell" davor, Pflicht-Präfix griff nicht)', re: /\b(unnötig|nicht\s+n(ö|oe)tig|nicht\s+erforderlich)\b/i },
   { label: 'prämieneffiziente Struktur', re: /prämieneffizient/i },
+  { label: 'maximiert/optimiert (Verbform, Zielkonflikt-Superlativ)', re: /\b(maximiert|optimiert)\b/i },
+  { label: 'Andienungs-/Ausübungswahrscheinlichkeit', re: /(Andienungs|Ausübungs)wahrscheinlichkeit/i },
 ];
 
 function scanForComplianceViolations(text) {
