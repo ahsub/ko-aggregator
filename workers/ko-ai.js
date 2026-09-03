@@ -655,6 +655,9 @@ const COMPLIANCE_PATTERNS = [
   { label: 'Andienungs-/Ausübungswahrscheinlichkeit', re: /(Andienungs|Ausübungs)wahrscheinlichkeit/i },
   { label: 'keine strukturellen Hemmnisse', re: /keine\s+strukturellen\s+Hemmnisse/i },
   { label: 'ATM-orientiert (Strategy-Fit-Moneyness-Verwechslung, ggf. False-Positive bei atmna selbst)', re: /ATM-orientiert/i },
+  { label: 'verdichtet(e) Volatilität (Synonym-Umgehung von komprimiert)', re: /verdichtete?\s+Volatilit/i },
+  { label: 'nicht strukturell gehemmt (Synonym-Umgehung von Hemmnisse)', re: /nicht\s+strukturell\s+gehemmt/i },
+  { label: 'Strike-Annäherung/Strike-Niveau aus Underlying-Signal', re: /Strike-(Ann(ä|ae)herung|Niveau)/i },
 ];
 
 function scanForComplianceViolations(text) {
