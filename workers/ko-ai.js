@@ -653,6 +653,8 @@ const COMPLIANCE_PATTERNS = [
   { label: 'prämieneffiziente Struktur', re: /prämieneffizient/i },
   { label: 'maximiert/optimiert (Verbform, Zielkonflikt-Superlativ)', re: /\b(maximiert|optimiert)\b/i },
   { label: 'Andienungs-/Ausübungswahrscheinlichkeit', re: /(Andienungs|Ausübungs)wahrscheinlichkeit/i },
+  { label: 'keine strukturellen Hemmnisse', re: /keine\s+strukturellen\s+Hemmnisse/i },
+  { label: 'ATM-orientiert (Strategy-Fit-Moneyness-Verwechslung, ggf. False-Positive bei atmna selbst)', re: /ATM-orientiert/i },
 ];
 
 function scanForComplianceViolations(text) {
