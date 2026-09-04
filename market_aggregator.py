@@ -3,6 +3,25 @@
 # Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
 # Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
 
+# ── CHANGELOG-Ergänzung (04.09.2026) ─────────────────────────────────────────
+# NEU: process_ticker() liefert jetzt ein Feld "homeMarket" (US/DE/FR/NL/IT/
+# CH/UK/DK/SE/AU), abgeleitet aus dem Ticker-Suffix via _derive_home_market().
+# Hintergrund: KO-5-Guardrail ("Gap-/Overnight-Risiko bei US-Titeln",
+# ko-prompts.js v2.22.4) verlangte vom Sprach-Modell, die US-Zugehoerigkeit
+# eines Tickers selbst aus dem Symbol zu erschliessen (z.B. "DE" = Deere & Co.,
+# NYSE, nicht zu verwechseln mit dem Laenderkuerzel Deutschland) — im ersten
+# echten 9-Punkte-Live-Test (04.09.2026, KO-Trading, Kandidaten DE/SIRI/SLDE)
+# ist genau das nicht zuverlaessig gelungen: KO-5 blieb im Output komplett aus,
+# obwohl alle drei Kandidaten auf US-Boersen (NYSE/NASDAQ) handeln. Fix liefert
+# die Handelsboerse jetzt als Fakt statt als Inferenz — analog zum bestehenden
+# "sectors"-Feld (TICKER_SECTOR_TAG). Wichtig: massgeblich ist die HANDELSZEIT
+# (Boerse), nicht der Firmensitz — die meisten "EU-Titel" im UIQ-Universum
+# (EU_ADR_TICKERS, z.B. SAP, ASML, LVMUY, RIO, NVO) sind ADRs, die selbst auf
+# NYSE/NASDAQ handeln und damit ebenfalls dem DE/US-Zeitzonen-Gap-Risiko
+# unterliegen. Nur Titel mit explizitem Heimatboersen-Suffix (RHM.DE, BA.L,
+# SAAB-B.ST, HO.PA, LDO.MI, ORG.AX) handeln tatsaechlich ausserhalb der
+# US-Handelszeiten.
+
 # ══════════════════════════════════════════════════════════════════════════
 # MARKET CONTEXT MODULE (MCM) — Python-Port (14.07.2026)
 # ══════════════════════════════════════════════════════════════════════════
@@ -5866,6 +5885,31 @@ def _calc_squeeze_risk_df(closes: list, volumes: list, hvp: int, rsi: float) -> 
     return max(0, min(100, score))
 
 
+# ── Home-Market-Ableitung (04.09.2026, KO-5-Fix) ────────────────────────────
+# Massgeblich fuer Gap-/Overnight-Risiko (KO-Zertifikate) ist die HANDELSZEIT
+# (Boerse), NICHT der Firmensitz. Ohne Suffix = Handel auf US-Boerse (NYSE/
+# NASDAQ/OTC) — das gilt genauso fuer originaer US-amerikanische Titel wie
+# fuer ADRs nicht-amerikanischer Konzerne (SAP, ASML, RIO, NVO, ...), die
+# selbst waehrend US-Handelszeiten gehandelt werden. Nur Titel mit explizitem
+# Heimatboersen-Suffix handeln tatsaechlich ausserhalb US-Handelszeiten.
+_NON_US_EXCHANGE_SUFFIXES = {
+    ".DE": "DE", ".PA": "FR", ".AS": "NL", ".MI": "IT",
+    ".SW": "CH", ".L": "UK", ".CO": "DK", ".ST": "SE", ".AX": "AU",
+}
+
+
+def _derive_home_market(ticker: str) -> str:
+    """Leitet die Handelsboerse aus dem Ticker-Suffix ab.
+    Rueckgabe z.B. 'US', 'DE', 'UK' — siehe _NON_US_EXCHANGE_SUFFIXES.
+    Standardfall (kein bekannter Suffix) = 'US' (NYSE/NASDAQ/OTC), da das
+    UIQ-Ticker-Universum (EU_ADR_TICKERS, INTL_TIER1 etc.) ueberwiegend aus
+    US-gelisteten ADRs bzw. originaer US-amerikanischen Titeln besteht."""
+    for suffix, market in _NON_US_EXCHANGE_SUFFIXES.items():
+        if ticker.endswith(suffix):
+            return market
+    return "US"
+
+
 def process_ticker(ticker, hist_df):
     """Berechnet alle Indikatoren für einen Ticker."""
     try:
@@ -6088,6 +6132,9 @@ def process_ticker(ticker, hist_df):
                 "tvaRegime": None, "tvaRegimeConf": None, "chopIndex": None, "chopLabel": None}),
             # Sektor-Tags (automatisch aus SECTOR_WATCHLISTS invertiert — nie manuell editieren)
             "sectors":       TICKER_SECTOR_TAG.get(ticker, []),
+            # Handelsboerse/-zeit, aus Ticker-Suffix abgeleitet (04.09.2026, KO-5-Fix,
+            # s. Changelog-Kommentar am Dateianfang) — NICHT manuell editieren.
+            "homeMarket":    _derive_home_market(ticker),
         }
 
         # ── Earnings Calendar (August 2026) ──────────────────────────────────
