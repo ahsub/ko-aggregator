@@ -3,6 +3,33 @@
 # Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
 # Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
 
+# ── CHANGELOG-Ergänzung (06.09.2026) ─────────────────────────────────────────
+# NEU: Leaderboard-Datenpfad (build_leaderboards()) um homeMarket/tightnessPct
+# ergaenzt — nachdem index.html v491 runAlphaLbKI() auf KoPrompts.get() (9-
+# Punkte-Schema) umgestellt hatte, zeigte der erste dividend-Live-Test, dass
+# diese Felder (und stillschweigend auch sma150/rsRating) trotz vorhandener
+# Rohdaten in process_ticker() nie den KI-Prompt erreichten. ZWEI GETRENNTE
+# LUECKEN gefunden: (1) scored.append() (Zeile ~5153) ist ein handverlesenes
+# Dict, das homeMarket/tightnessPct/sma150/rsRating NIE aufnahm, obwohl
+# top20()s _core-Liste (Zeile ~5228) sie laengst referenzierte — top20()
+# bekam dadurch fuer diese vier Felder immer None, fuer ALLE 11 "generischen"
+# Leaderboards (long_minervini, long_swing, long_mr, long_breakout,
+# short_breakdown, short_fading, ko_long, options_csp, options_cc,
+# vcp_setups). Betrifft insbesondere ko_longs Gap-/Overnight-Risiko-
+# Guardrail (KO-5, homeMarket) und breakout/vcps Tightness-Kriterium
+# (tightnessPct). (2) long_dividend/long_value werden nach dem Fundamental-
+# Enrichment KOMPLETT NEU gebaut (_rebuild_fundamental_lb(), Zeile ~10347)
+# mit einem noch kleineren, separaten Feldsatz — bisher NUR sym/score/price/
+# grade/rsi + Fundamentaldaten, KEINE der generischen technischen Kern-
+# Felder (ATR/MACD/OBV/HVP/EMA50/200/etc.) — live bestaetigt im ersten
+# dividend-Test (06.09.2026): der Output enthielt ausschliesslich Fundamental-
+# kennzahlen, obwohl STRATEGIES.dividend.focus in ko-prompts.js explizit
+# technische Kriterien verlangt ("EMA200-Position, RSI nicht ueberhitzt").
+# BEIDE Stellen jetzt auf dieselbe _core-Feldliste umgestellt, damit alle
+# 14 Leaderboards gleich datenreich sind. Isoliert mit Python-Logiktests
+# verifiziert (inkl. Edge-Case: fehlendes Feld im Rohdatensatz liefert None
+# statt KeyError).
+
 # ── CHANGELOG-Ergänzung (04.09.2026) ─────────────────────────────────────────
 # NEU: process_ticker() liefert jetzt ein Feld "homeMarket" (US/DE/FR/NL/IT/
 # CH/UK/DK/SE/AU), abgeleitet aus dem Ticker-Suffix via _derive_home_market().
@@ -5218,6 +5245,23 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "rsScore":        r.get("rsScore"),
             "rsGrade":        r.get("rsGrade"),
             "rsNewHigh":      r.get("rsNewHigh"),
+            # NACHGETRAGEN (06.09.2026, Axel-Fund — homeMarket/tightnessPct-
+            # Lücke aus dem index.html-v491-Umbau): beide Felder liegen in
+            # process_ticker()s Rueckgabe-Dict r bereits vor, wurden aber nie
+            # in dieses handverlesene scored-Dict aufgenommen — top20()s
+            # _core-Liste referenzierte sie zwar (Zeile ~5230), bekam damit
+            # aber immer None. homeMarket faehrt KO-Longs Gap-/Overnight-
+            # Risiko-Guardrail (ko-prompts.js REASONING-GUARDRAILS/KO-5);
+            # tightnessPct wird von breakout/vcp benoetigt (Minervini-
+            # "Tight"-Kriterium).
+            "homeMarket":     r.get("homeMarket"),
+            "tightnessPct":   r.get("tightnessPct"),
+            # NACHGETRAGEN (06.09.2026, beim Beheben des homeMarket/tightnessPct-
+            # Funds zusätzlich entdeckt — dieselbe Kategorie Lücke): sma150 und
+            # rsRating wurden von _core (Zeile ~5232) ebenfalls seit jeher
+            # referenziert, aber nie in dieses Dict aufgenommen.
+            "sma150":         r.get("sma150"),
+            "rsRating":       r.get("rsRating"),
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
@@ -5225,11 +5269,14 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # Kern-Felder: für alle Strategien relevant für KI-Analyse
         # (v5.18.0, 22.07.2026): MACD, OBV, volRatio, HVP, EMA50/200, pctFromHigh52
         # ergänzt — waren bisher nicht im LB-Eintrag, KI-Prompt sagte "Daten fehlen"
+        # NACHGETRAGEN (06.09.2026): homeMarket, tightnessPct — s. Kommentar bei
+        # scored.append() oben.
         _core = ["sym", "score", "price", "grade", "rsi", "atr",
                  "macdHist", "obvTrend", "volRatio", "hvp",
                  "ema50", "ema200", "pctFromHigh52", "dist200",
                  "bbPos", "sma150", "rsRating", "avgVol20",
-                 "high52", "low52", "overheat"]
+                 "high52", "low52", "overheat",
+                 "homeMarket", "tightnessPct"]
         return [
             {**{f: x.get(f) for f in _core},
              **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
@@ -10346,6 +10393,22 @@ def main():
 
     def _rebuild_fundamental_lb(score_fn, key, min_score, extra_fields):
         """Mini-Leaderboard aus results[] nach Enrichment."""
+        # ERWEITERT (06.09.2026, Axel-Fund nach erstem dividend-Live-Test):
+        # dieses Leaderboard hatte bislang nur sym/score/price/grade/rsi +
+        # die Fundamental-Felder — KEINE der generischen technischen
+        # Kern-Felder (ATR/MACD/OBV/HVP/EMA/etc.), die top20() ueber _core
+        # an alle anderen 11 Leaderboards liefert. Der Live-Test zeigte
+        # entsprechend nur Fundamentaldaten, obwohl dividend/values eigene
+        # focus[]-Kriterien in ko-prompts.js explizit technische Checks
+        # verlangen ("EMA200-Position, RSI nicht überhitzt (≤70)"). Jetzt
+        # dieselbe _core-Feldliste wie top20() verwendet, damit beide
+        # Leaderboard-Typen gleich datenreich sind.
+        _core = ["sym", "score", "price", "grade", "rsi", "atr",
+                 "macdHist", "obvTrend", "volRatio", "hvp",
+                 "ema50", "ema200", "pctFromHigh52", "dist200",
+                 "bbPos", "sma150", "rsRating", "avgVol20",
+                 "high52", "low52", "overheat",
+                 "homeMarket", "tightnessPct"]
         _entries = []
         for _r in results:
             if _r.get("error") or not _r.get("price"):
@@ -10353,14 +10416,8 @@ def main():
             _s = score_fn(_r)
             if _s < min_score:
                 continue
-            _entry = {
-                "sym":   _r.get("sym"),
-                "score": _r.get("score"),
-                "price": _r.get("price"),
-                "grade": _r.get("grade"),
-                "rsi":   _r.get("rsi"),
-                key:     _s,
-            }
+            _entry = {f: _r.get(f) for f in _core}
+            _entry[key] = _s
             for _f in (extra_fields or []):
                 _entry[_f] = _r.get(_f)
             _entries.append(_entry)
