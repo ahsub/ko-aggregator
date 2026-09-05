@@ -1,7 +1,39 @@
 /**
  * ko-ai.ahildebrand.workers.dev
  * ══════════════════════════════════════════════════════════════════
- * UnderlyingIQ — KI-Proxy Worker v1.16
+ * UnderlyingIQ — KI-Proxy Worker v1.17
+ *
+ * NEU in v1.17 (06.09.2026, Axel-Entscheidung nach viertem Wiederholungs-
+ *   fund trotz Prompt-Härtung — "Konzept statt Wortliste kann nicht alles
+ *   lösen, das muessen wir serverseitig loesen"):
+ *   - COMPLIANCE_PATTERNS um vier neue Einträge ergänzt (Zeitreihen-/
+ *     Dauerhaftigkeits-Zuschreibung aus Snapshot-Werten, s. ko-prompts.js
+ *     REASONING-GUARDRAILS Punkt e): "stabil"/"stabilisiert"/"Stabilität"/
+ *     "Stabilisierung", "Trendfestigkeit"/"festigt", "vorhersehbar"/
+ *     "vorhersagbar"/"berechenbar", "verankert"/"gefestigt". Bewusst NICHT
+ *     aufgenommen: "nachhaltig" — legitimer, hochfrequenter Gebrauch bei
+ *     dividend/value ("nachhaltige Ausschüttung" ist die im Strategie-
+ *     prinzip selbst geforderte Formulierung), würde das Signal-Rausch-
+ *     Verhältnis des Logs zerstören.
+ *   - NEUE, eigenständige Funktion scanForTickerScopeViolations() (plus
+ *     Helper extractTickerCandidates()): strukturelle Prüfung, ob in
+ *     Abschnitt 4-9 des 9-Punkte-Schemas ein Ticker genannt wird, der
+ *     nicht bereits in Abschnitt 3 eingeführt wurde (REASONING-GUARDRAILS
+ *     Punkt f, "Ticker-Scope-Sperre") — VIERFACH belegter Wiederholungs-
+ *     fund trotz vier Prompt-Verteidigungsschichten (BA/HII/LHX 05.09.,
+ *     PPRUY 05.09., BE 06.09. Swing-Retest, BMY 06.09. dividend-Erstest).
+ *     Heuristischer Großbuchstaben-Ticker-Scan mit Stoppliste bekannter
+ *     Nicht-Ticker-Akronyme; Abschnitts-Überschriftenzeilen werden vor der
+ *     Extraktion entfernt (sonst Fehlalarme wie "TRADE"/"OFF"/"UND" aus
+ *     Überschriften wie "STRATEGISCHER TRADE-OFF" — beim isolierten
+ *     Funktionstest selbst entdeckt und gefixt, bevor Deployment). Beide
+ *     neuen Scans laufen wie der bestehende Compliance-Scan rein loggend
+ *     (nicht blockierend) und fliessen in dasselbe complianceFlags-Feld
+ *     im bestehenden /logs-Endpunkt — keine neue Infrastruktur nötig.
+ *   - Kontext: dies ist die serverseitige "zweite Verteidigungslinie" für
+ *     genau die zwei Fundtypen, bei denen mehrfache Prompt-Härtung
+ *     (ko-prompts.js, 04.-06.09.2026) an eine Grenze stiess — Axel-
+ *     Entscheidung, keine weitere Prompt-Iteration mehr zu versuchen.
  *
  * NEU in v1.16 (31.08.2026, Compliance-Scanner-Regex-Lücke geschlossen —
  *   Priorität 1 aus Übergabeprotokoll 30.08. §8, zwei unabhängige
@@ -658,6 +690,23 @@ const COMPLIANCE_PATTERNS = [
   { label: 'verdichtet(e) Volatilität (Synonym-Umgehung von komprimiert)', re: /verdichtete?\s+Volatilit/i },
   { label: 'nicht strukturell gehemmt (Synonym-Umgehung von Hemmnisse)', re: /nicht\s+strukturell\s+gehemmt/i },
   { label: 'Strike-Annäherung/Strike-Niveau aus Underlying-Signal (Regex präzisiert 03.09.2026 — flaggt nur die kausale Verknüpfung, nicht den erwünschten "...kann UIQ ohne Optionskettendaten nicht beurteilen"-Vorbehalt im selben Satz)', re: /Strike-(Ann(ä|ae)herung|Niveau)(?![^.]{0,100}beurteilen)/i },
+  // ── NEU (06.09.2026, Axel-Entscheidung — "Konzept statt Wortliste"-Prinzip
+  // aus ko-prompts.js/REASONING-GUARDRAILS e, hier als Wortliste umgesetzt,
+  // weil ein reiner Regex-Scan kein "Bezieht sich das auf einen Snapshot-
+  // Wert?"-Konzept prüfen kann — nur die bekannten, mehrfach belegten
+  // Wortformen. Vierfach belegter Wiederholungsfund trotz Prompt-Härtung:
+  // "stabil"/"stabilisiert" (cc/collar-Live-Tests, 04.-05.09.2026).
+  { label: 'stabil/stabilisiert (Zeitreihen-/Dauerhaftigkeits-Zuschreibung aus Snapshot-Wert, s. ko-prompts.js REASONING-GUARDRAILS e)', re: /\bstabil(e|er|es)?\b|\bstabilisiert(e)?\b|\bStabilisierung\b|\bStabilität\b/i },
+  { label: 'Trendfestigkeit/festigt', re: /Trendfestigkeit|\bfestigt\b/i },
+  { label: 'vorhersehbar/vorhersagbar/berechenbar', re: /vorhersehbar\w*|vorhersagbar\w*|\bberechenbar\w*/i },
+  { label: 'verankert/gefestigt (Zeitreihen-Kontext)', re: /\bverankert(e|er|es)?\b|\bgefestigt(e|er|es)?\b/i },
+  // BEWUSST NICHT AUFGENOMMEN: "nachhaltig" — hat einen legitimen, hoch-
+  // frequenten Gebrauch bei dividend/value ("nachhaltige Ausschüttung" ist
+  // die im Strategieprinzip selbst geforderte, korrekte Formulierung) —
+  // würde nahezu jede dividend-Antwort fälschlich flaggen und das Signal-
+  // Rausch-Verhältnis des Logs zerstören. Bei Verdacht auf Fehlgebrauch
+  // (z.B. "nachhaltiger Trend" statt "nachhaltige Ausschüttung") nur
+  // manuell im Einzelfall prüfen, nicht automatisiert scannen.
 ];
 
 function scanForComplianceViolations(text) {
@@ -667,6 +716,67 @@ function scanForComplianceViolations(text) {
     if (p.re.test(text)) hits.push(p.label);
   }
   return hits;
+}
+
+// ── TICKER-SCOPE-SCAN (v1.13, 06.09.2026) ───────────────────────────────────
+// Ergänzt scanForComplianceViolations() um eine STRUKTURELLE Prüfung, die
+// sich nicht als einfacher Text-Regex ausdrücken lässt: wird in Abschnitt
+// 4-9 des 9-Punkte-Schemas ein Ticker genannt, der nicht bereits in
+// Abschnitt 3 eingeführt wurde? (ko-prompts.js REASONING-GUARDRAILS Punkt f,
+// "Ticker-Scope-Sperre"). VIERFACH belegter Wiederholungsfund trotz vier
+// Prompt-Verteidigungsschichten (BA/HII/LHX 05.09., PPRUY 05.09., BE
+// 06.09. Swing-Retest, BMY 06.09. dividend-Erstest) — Axel-Entscheidung:
+// keine weitere Prompt-Härtung, stattdessen serverseitige Sichtbarkeit.
+// HEURISTIK, KEIN GARANTIERT VOLLSTÄNDIGER PARSER: Ticker werden über ein
+// einfaches Großbuchstaben-Muster (1-5 Buchstaben, optional .XX-Suffix wie
+// GLEN.L) erkannt und gegen eine Stoppliste bekannter Nicht-Ticker-Akronyme
+// abgeglichen. Kann sowohl echte Ticker übersehen (False Negative, z.B.
+// wenn ein Akronym zufällig mit einem echten Ticker kollidiert) als auch
+// seltene Nicht-Ticker-Großschreibungen fälschlich als Ticker werten (False
+// Positive). Dient der Sichtbarkeit/dem Review über den /logs-Endpoint,
+// NICHT der automatischen Korrektur — genau wie scanForComplianceViolations().
+const TICKER_SCOPE_STOPWORDS = new Set([
+  'RSI','MACD','OBV','SEPA','EMA','ATR','HVP','CSP','KO','UIQ','VIX','QQQ',
+  'BULL','BEAR','FLAT','SIDE','ADR','ROE','ROI','ROIC','FCF','PE','PB',
+  'DTE','ITM','OTM','WPHG','GAAP','VCP','MA','MA50','MA200','EMA50','EMA200',
+  'IBD','AI','USD','EUR','GBP','CHF','US','EU','DE','TOP','BBPOS','RS',
+  'MSE','TNX','HY','ETF','SKEW','VVIX','GEX','DIX','PCR','OI','FLAT_STOP',
+]);
+
+function extractTickerCandidates(str) {
+  if (!str) return new Set();
+  const matches = str.match(/\b[A-Z]{1,5}(\.[A-Z]{1,3})?\b/g) || [];
+  return new Set(matches.filter(function(t) {
+    const base = t.split('.')[0];
+    return base.length >= 2 && !TICKER_SCOPE_STOPWORDS.has(base);
+  }));
+}
+
+function scanForTickerScopeViolations(text) {
+  if (!text) return [];
+  // Abschnitt 3 (Kandidatenliste) extrahieren — von "3." bis zum
+  // nächsten "4." am Zeilenanfang. Kein Treffer = kein erkennbares
+  // 9-Punkte-Format, Scan wird übersprungen statt falsch positiv zu warnen.
+  const sec3Match = text.match(/(?:^|\n)\s*3\.[^\n]*\n([\s\S]*?)(?=\n\s*4\.)/);
+  if (!sec3Match) return [];
+  const allowedTickers = extractTickerCandidates(sec3Match[1]);
+  // Abschnitte 4 bis Ende (9 + Fusszeile eingeschlossen — Fusszeile enthält
+  // typischerweise keine Ticker, daher unschädlich, sie mit einzuschliessen)
+  const sec49Match = text.match(/(?:^|\n)\s*4\.[^\n]*\n([\s\S]*)/);
+  if (!sec49Match) return [];
+  // WICHTIG: alle weiteren Abschnitts-Überschriften (5. GEGENARGUMENTE...,
+  // 6. STRATEGISCHER TRADE-OFF, ...) sind selbst grossgeschrieben und
+  // erzeugten sonst Fehlalarme ("TRADE", "OFF", "UND" als Pseudo-Ticker,
+  // belegter Fund beim isolierten Funktionstest 06.09.2026) — Überschriften-
+  // zeilen (Ziffer+Punkt am Zeilenanfang, Rest der Zeile) vor der Ticker-
+  // Extraktion entfernen, nur den Fliesstext scannen.
+  const bodyOnly = sec49Match[1].replace(/^\s*[4-9]\.\s+[^\n]*$/gm, '');
+  const usedTickers = extractTickerCandidates(bodyOnly);
+  const violations = [];
+  usedTickers.forEach(function(t) {
+    if (!allowedTickers.has(t)) violations.push('TICKER-SCOPE:' + t);
+  });
+  return violations;
 }
 
 // ── EXTRA-TICKER HELPERS ──────────────────────────────────────────────────────
@@ -1037,7 +1147,12 @@ export default {
 
       // Compliance-Scan nur im Public-Modus (expert_mode ist bewusst
       // direktiv, s. SUITE.md №65/№66) — nicht blockierend, nur geloggt.
-      const complianceFlags = expert_mode ? [] : scanForComplianceViolations(text);
+      // ERWEITERT (06.09.2026): plus struktureller Ticker-Scope-Scan (s.
+      // scanForTickerScopeViolations() oben) — beide Scans zusammengeführt,
+      // damit /logs weiterhin ein einziges complianceFlags-Feld sieht.
+      const complianceFlags = expert_mode
+        ? []
+        : scanForComplianceViolations(text).concat(scanForTickerScopeViolations(text));
       if (complianceFlags.length) {
         console.warn('[COMPLIANCE]', action, complianceFlags.join(', '));
       }
