@@ -3,6 +3,33 @@
 # Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
 # Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
 
+# ── CHANGELOG-Ergänzung (07.09.2026) ─────────────────────────────────────────
+# NEU: echte IV-Perzentil-Daten integriert (fetch_iv_percentile_data(), neue
+# Felder ivpPercentile/ivpDays/ivpCurIv/ivpHv20/ivpHv50/ivpHv100). Quelle:
+# github.com/ahsub/options-vol-data (Fork von github.com/lvg77/options-vol-data,
+# dessen Original-Scraper seit 03.08.2025 defekt war — von Axel/Claude repariert
+# und als eigener Fork betrieben, 06./07.09.2026). Liefert fuer ~5.400 Titel
+# (inkl. ADRs) die implizite-Volatilitaets-Perzentil-Kennzahl "days_percentile"
+# (z.B. "597/45%ile" = aktuelle IV hoeher als 45% der letzten 597 Tageswerte)
+# — eine ECHTE IV-Perzentil-Kennzahl, im Unterschied zum bestehenden "hvp"-Feld
+# (calc_hv_percentile(), Perzentil der HISTORISCHEN/realisierten Volatilitaet).
+# Ergaenzung, kein Ersatz: hvp bleibt fuer alle Ticker aktiv, die die externe
+# Quelle nicht abdeckt (kein 1:1-identisches Universum, z.B. SAP fehlt). Ein
+# einziger Bulk-Fetch pro Aggregator-Lauf (analog zum RS-Rating-Stufe-2-Muster),
+# nicht pro Ticker. Neue Felder durch alle drei bereits bekannten Ebenen
+# durchgereicht (scored.append(), top20()s _core-Liste, _rebuild_fundamental_lb()s
+# _core-Liste) — dieselben drei Stellen, die beim homeMarket/tightnessPct-Fund
+# vom Vortag identifiziert wurden. Fetch-Fehler (Netzwerk, kaputte/leere CSV,
+# unerwartetes Spaltenformat, verdaechtig wenige geparste Zeilen) brechen den
+# Aggregator-Lauf NIEMALS ab — alle Ticker bekommen dann durchgaengig None fuer
+# die neuen Felder, hvp bleibt ueberall als Fallback aktiv. Isoliert getestet
+# (Parsing-Logik gegen synthetische Beispiele UND gegen den echten Live-Fork:
+# 5.463 von 5.463 Zeilen fehlerfrei geparst, inkl. Nachbesserung fuer Waehrungs-/
+# Index-Futures mit Dezimal-HV-Werten). NOCH OFFEN: ko-prompts.js-Guardrail-Texte
+# (REASONING-GUARDRAILS und STRATEGIES.*.risikenText), die HVP bisher als reine
+# Notloesung fuer implizite Volatilitaet rahmen, muessen an die neue Datenlage
+# angepasst werden — separater naechster Schritt, noch nicht Teil dieses Fixes.
+
 # ── CHANGELOG-Ergänzung (06.09.2026) ─────────────────────────────────────────
 # NEU: Leaderboard-Datenpfad (build_leaderboards()) um homeMarket/tightnessPct
 # ergaenzt — nachdem index.html v491 runAlphaLbKI() auf KoPrompts.get() (9-
@@ -5262,6 +5289,15 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             # referenziert, aber nie in dieses Dict aufgenommen.
             "sma150":         r.get("sma150"),
             "rsRating":       r.get("rsRating"),
+            # NEU (07.09.2026): echte IV-Perzentil-Daten (s. fetch_iv_percentile_data()
+            # weiter unten in dieser Datei) — Ergaenzung zu hvp (historische statt
+            # implizite Volatilitaet), None fuer Ticker ausserhalb der externen Quelle.
+            "ivpPercentile":  r.get("ivpPercentile"),
+            "ivpDays":        r.get("ivpDays"),
+            "ivpCurIv":       r.get("ivpCurIv"),
+            "ivpHv20":        r.get("ivpHv20"),
+            "ivpHv50":        r.get("ivpHv50"),
+            "ivpHv100":       r.get("ivpHv100"),
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
@@ -5271,12 +5307,15 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # ergänzt — waren bisher nicht im LB-Eintrag, KI-Prompt sagte "Daten fehlen"
         # NACHGETRAGEN (06.09.2026): homeMarket, tightnessPct — s. Kommentar bei
         # scored.append() oben.
+        # NACHGETRAGEN (07.09.2026): ivpPercentile/ivpDays/ivpCurIv/ivpHv20/50/100 —
+        # echte IV-Perzentil-Daten, s. fetch_iv_percentile_data().
         _core = ["sym", "score", "price", "grade", "rsi", "atr",
                  "macdHist", "obvTrend", "volRatio", "hvp",
                  "ema50", "ema200", "pctFromHigh52", "dist200",
                  "bbPos", "sma150", "rsRating", "avgVol20",
                  "high52", "low52", "overheat",
-                 "homeMarket", "tightnessPct"]
+                 "homeMarket", "tightnessPct",
+                 "ivpPercentile", "ivpDays", "ivpCurIv", "ivpHv20", "ivpHv50", "ivpHv100"]
         return [
             {**{f: x.get(f) for f in _core},
              **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
@@ -7259,6 +7298,118 @@ def fetch_finra_dix() -> dict:
         log.warning(f"  FINRA regShoDaily Fehler: {e}")
         return {"ok": False, "reason": str(e)[:200]}
 
+
+
+def fetch_iv_percentile_data() -> dict:
+    """Echte implizite-Volatilitaets-Perzentil-Daten aus einem oeffentlichen,
+    woechentlich aktualisierten Fork (github.com/ahsub/options-vol-data).
+
+    Herkunft: urspruenglich github.com/lvg77/options-vol-data, ein Scraper von
+    https://www.optionstrategist.com/calculators/free-volatility-data. Der
+    Original-Scraper war seit 03.08.2025 defekt (Quellseite rendert den
+    Datenblock jetzt als <pre id="volContainer"> statt <pre>, zusaetzlich
+    zeigt die Seite die Kopfzeile jetzt zweimal). Von Axel/Claude repariert
+    und als eigener Fork betrieben (06./07.09.2026).
+
+    CSV-Format (Header: update,symbol,hv20,hv50,hv100,date,cur_iv,
+    days_percentile,close): die Spalte "days_percentile" liegt als Text vor,
+    z.B. "597/ 45%ile" = die aktuelle implizite Volatilitaet ist hoeher als
+    45% der letzten 597 Tageswerte. Wird hier in zwei numerische Felder
+    zerlegt (days, percentile).
+
+    Deckt ca. 5.400 Titel ab (inkl. Indizes mit $-Praefix, Futures mit
+    @-Praefix, und zahlreiche ADRs) — kein 1:1-identisches Universum zu
+    UIQs eigenem Ticker-Set. Nicht enthaltene Ticker bekommen hier keinen
+    Eintrag; der Aufrufer (main()) laesst dafuer UIQs eigenes "hvp"-Feld
+    (historische statt implizite Volatilitaet) als Fallback aktiv.
+
+    Rueckgabe: {symbol: {"percentile": int, "days": int, "cur_iv": float,
+    "hv20": int, "hv50": int, "hv100": int, "update": str}} oder {} bei
+    Fehlschlag (Netzwerk, leere/kaputte CSV) — ruft NIEMALS eine Exception
+    nach aussen durch, main() muss den leeren Fallback-Fall ohnehin schon
+    fuer "Quelle down" behandeln.
+
+    Source: https://raw.githubusercontent.com/ahsub/options-vol-data/main/iv.csv
+    """
+    import re as _re
+
+    URL = "https://raw.githubusercontent.com/ahsub/options-vol-data/main/iv.csv"
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (compatible; UIQ-Aggregator/5.0)",
+        "Accept": "text/csv,text/plain,*/*",
+    }
+
+    try:
+        r = requests.get(URL, headers=HEADERS, timeout=20)
+        if r.status_code != 200 or len(r.text) < 100:
+            log.warning(f"  IV-Perzentil-CSV: HTTP {r.status_code} oder leer "
+                        f"({len(r.text) if r.text else 0} Bytes) — übersprungen")
+            return {}
+    except Exception as e:
+        log.warning(f"  IV-Perzentil-CSV: Abruf fehlgeschlagen: {e}")
+        return {}
+
+    lines = r.text.strip().splitlines()
+    if len(lines) < 2:
+        log.warning("  IV-Perzentil-CSV: keine Datenzeilen (nur Header oder leer)")
+        return {}
+
+    header = [h.strip() for h in lines[0].split(",")]
+    expected = ["update", "symbol", "hv20", "hv50", "hv100", "date",
+                "cur_iv", "days_percentile", "close"]
+    if header != expected:
+        log.warning(f"  IV-Perzentil-CSV: unerwartetes Spaltenformat {header} "
+                    f"— Quelle hat sich vermutlich geändert, übersprungen")
+        return {}
+
+    lookup = {}
+    parsed_ok = 0
+    parsed_skip = 0
+    for line in lines[1:]:
+        parts = line.strip().split(",")
+        if len(parts) != 9:
+            parsed_skip += 1
+            continue
+        update, symbol, hv20, hv50, hv100, date, cur_iv, days_pct, close = parts
+        # "597/ 45%ile" -> days=597, percentile=45
+        m = _re.match(r"\s*(\d+)\s*/\s*(\d+)\s*%ile\s*", days_pct)
+        if not m:
+            parsed_skip += 1
+            continue
+        try:
+            lookup[symbol] = {
+                "days":       int(m.group(1)),
+                "percentile": int(m.group(2)),
+                "cur_iv":     float(cur_iv),
+                # float() statt int(): Waehrungs-/Index-Futures ($XDB, @BZU etc.)
+                # liefern HV-Werte als Dezimalzahl (z.B. "4.9") statt Ganzzahl —
+                # betrifft nur Nicht-Aktien-Symbole, die UIQs Ticker-Universum
+                # ohnehin nie nachschlaegt, aber sauberer als 273 Zeilen still
+                # zu verwerfen (belegt beim Live-Test gegen den echten Fork,
+                # 07.09.2026).
+                "hv20":       round(float(hv20)),
+                "hv50":       round(float(hv50)),
+                "hv100":      round(float(hv100)),
+                "update":     update,
+            }
+            parsed_ok += 1
+        except (ValueError, TypeError):
+            parsed_skip += 1
+            continue
+
+    log.info(f"  IV-Perzentil-CSV: {parsed_ok} Ticker geparst, "
+             f"{parsed_skip} Zeilen übersprungen (Format/Wert ungültig)")
+    if parsed_ok < 1000:
+        # Grober Plausibilitäts-Gate: die Quelle liefert normalerweise ~5.400
+        # Zeilen. Ein deutlich zu kleines Ergebnis deutet auf ein erneutes,
+        # bisher unbekanntes Scraper-Problem in der Quelle selbst hin (nicht
+        # hier reparierbar) — lieber leer zurückgeben als mit einem
+        # verdächtig unvollständigen Datensatz weiterarbeiten.
+        log.warning(f"  IV-Perzentil-CSV: nur {parsed_ok} Ticker geparst "
+                    f"(erwartet >1000) — Quelle vermutlich fehlerhaft, "
+                    f"gebe leeres Ergebnis zurück statt unvollständiger Daten")
+        return {}
+    return lookup
 
 
 def fetch_finra_dix_csv(sp500_tickers: list = None) -> dict:
@@ -9772,6 +9923,63 @@ def main():
     log.info(f"   [Earnings] ✅ {_earn_ok} Dates gefunden, {_earn_skip} ohne Datum")
     # ── Ende Earnings Calendar ────────────────────────────────────────────────────────────────
 
+    # ── IV-PERZENTIL-DATEN (06./07.09.2026, Axel-Fund) ──────────────────────────────────────
+    # Echte implizite-Volatilitaets-Perzentil-Daten aus einem taeglich/woechentlich
+    # aktualisierten oeffentlichen Fork (github.com/ahsub/options-vol-data, urspruenglich
+    # github.com/lvg77/options-vol-data — Scraper war seit 03.08.2025 defekt, von Axel/Claude
+    # repariert und geforkt). Liefert fuer ~5.400 Titel (inkl. ADRs) die Spalte
+    # "days_percentile" im Format "597/45%ile" — d.h. die aktuelle implizite Volatilitaet
+    # ist hoeher als 45% der letzten 597 Tageswerte. Das ist eine ECHTE IV-Perzentil-Kennzahl,
+    # im Unterschied zu UIQs eigenem "hvp"-Feld (calc_hv_percentile(), Zeile ~6166), das ein
+    # Perzentil der HISTORISCHEN (realisierten) Volatilitaet ist, nicht der impliziten.
+    # WICHTIG: dies ist eine ERGAENZUNG, kein Ersatz — "hvp" bleibt unveraendert bestehen und
+    # dient weiterhin als Fallback fuer alle Ticker, die in der externen Quelle nicht enthalten
+    # sind (die Quelle deckt kein 1:1-identisches Universum ab). Neue Felder bewusst mit "ivp"-
+    # Praefix benannt, um jede Verwechslung mit dem bestehenden "hvp"-Feld auszuschliessen.
+    # Ein einzelner Bulk-Fetch fuer ALLE Ticker (nicht pro Ticker), analog zum RS-Rating-Muster.
+    log.info(f"\n📈 IV-Perzentil-Daten abrufen (externe Quelle, ein Bulk-Fetch)...")
+    _ivp_lookup = fetch_iv_percentile_data()
+    _ivp_ok = 0
+    _ivp_skip = 0
+    if _ivp_lookup:
+        for _r in results:
+            _sym = _r.get("sym")
+            _ivp = _ivp_lookup.get(_sym)
+            if _ivp:
+                _r["ivpPercentile"] = _ivp.get("percentile")
+                _r["ivpDays"]       = _ivp.get("days")
+                _r["ivpCurIv"]      = _ivp.get("cur_iv")
+                _r["ivpHv20"]       = _ivp.get("hv20")
+                _r["ivpHv50"]       = _ivp.get("hv50")
+                _r["ivpHv100"]      = _ivp.get("hv100")
+                _r["ivpUpdate"]     = _ivp.get("update")
+                _ivp_ok += 1
+            else:
+                _r["ivpPercentile"] = None
+                _r["ivpDays"]       = None
+                _r["ivpCurIv"]      = None
+                _r["ivpHv20"]       = None
+                _r["ivpHv50"]       = None
+                _r["ivpHv100"]      = None
+                _r["ivpUpdate"]     = None
+                _ivp_skip += 1
+        log.info(f"   [IVP] ✅ {_ivp_ok} Ticker mit echten IV-Perzentil-Daten, "
+                 f"{_ivp_skip} ohne Treffer (hvp bleibt dort als Fallback aktiv)")
+    else:
+        # Fetch fehlgeschlagen (Netzwerk, leere/kaputte CSV, Quelle down) — NIEMALS den
+        # gesamten Aggregator-Lauf deswegen abbrechen. Alle Ticker bekommen None fuer die
+        # neuen Felder, hvp bleibt ueberall als Fallback aktiv, wie schon vor dieser Aenderung.
+        for _r in results:
+            _r["ivpPercentile"] = None
+            _r["ivpDays"]       = None
+            _r["ivpCurIv"]      = None
+            _r["ivpHv20"]       = None
+            _r["ivpHv50"]       = None
+            _r["ivpHv100"]      = None
+            _r["ivpUpdate"]     = None
+        log.warning("   [IVP] Abruf fehlgeschlagen oder leer — alle Ticker auf hvp-Fallback")
+    # ── Ende IV-Perzentil-Daten ──────────────────────────────────────────────────────────────
+
     # ── DISTRIBUTION DAYS (IOS Konzept-Integration, August 2026) ─────────────────────────
     # O'Neil/IBD: Index fällt >0.2% bei höherem Vol = institutionelles Verkaufen.
     # 4–5 DD in 25 Tagen = Watch, ≥6 DD = Danger.
@@ -10403,12 +10611,16 @@ def main():
         # verlangen ("EMA200-Position, RSI nicht überhitzt (≤70)"). Jetzt
         # dieselbe _core-Feldliste wie top20() verwendet, damit beide
         # Leaderboard-Typen gleich datenreich sind.
+        # NACHGETRAGEN (07.09.2026): ivpPercentile/ivpDays/ivpCurIv/ivpHv20/50/100 —
+        # echte IV-Perzentil-Daten, wichtig gerade fuer dividend/value als optionale
+        # CSP-Unterlegung (STRATEGIES.dividend.focus in ko-prompts.js).
         _core = ["sym", "score", "price", "grade", "rsi", "atr",
                  "macdHist", "obvTrend", "volRatio", "hvp",
                  "ema50", "ema200", "pctFromHigh52", "dist200",
                  "bbPos", "sma150", "rsRating", "avgVol20",
                  "high52", "low52", "overheat",
-                 "homeMarket", "tightnessPct"]
+                 "homeMarket", "tightnessPct",
+                 "ivpPercentile", "ivpDays", "ivpCurIv", "ivpHv20", "ivpHv50", "ivpHv100"]
         _entries = []
         for _r in results:
             if _r.get("error") or not _r.get("price"):
