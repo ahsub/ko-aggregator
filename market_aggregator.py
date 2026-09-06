@@ -5516,6 +5516,35 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "f_dist_atr":    c.get("f_dist_atr"),
             "f_strike":      c.get("f_strike"),
             "f_lvls":        c.get("f_lvls"),
+            # NACHGETRAGEN (07.09.2026, Axel-Fund — VCP-Live-Test zeigte trotz
+            # ALLER bisherigen Fixes weiterhin "0x, kein vollst. VCP"): masterShortlist
+            # ist eine NEUNTE unabhaengige, handgepflegte Feldliste — komplett getrennt
+            # von master["tickers"]=results (das volle Universum, dort bereits korrekt).
+            # loadScannerFromKV() (Scanner-Tab) laedt tatsaechlich AUS masterShortlist,
+            # nicht aus dem vollen Ticker-Array — deshalb griffen alle bisherigen Fixes
+            # an topResults.push()/kvDataToTickerData()/buildParameterPool()/tickerList
+            # nicht, wenn der Scanner-Tab ueber DIESEN Pfad laedt.
+            "homeMarket":       c.get("homeMarket"),
+            "tightnessPct":     c.get("tightnessPct"),
+            "sma150":           c.get("sma150"),
+            "rsRating":         c.get("rsRating"),
+            "vcpDetected":      c.get("vcpDetected"),
+            "vcpContractions":  c.get("vcpContractions"),
+            "vcpLastPct":       c.get("vcpLastPct"),
+            "vcpAvgPrevPct":    c.get("vcpAvgPrevPct"),
+            "vcpVolContraction":c.get("vcpVolContraction"),
+            "vcpBreakoutVol":   c.get("vcpBreakoutVol"),
+            "ivpPercentile":    c.get("ivpPercentile"),
+            "ivpDays":          c.get("ivpDays"),
+            "ivpCurIv":         c.get("ivpCurIv"),
+            "ivpHv20":          c.get("ivpHv20"),
+            "ivpHv50":          c.get("ivpHv50"),
+            "ivpHv100":         c.get("ivpHv100"),
+            "sBreakout":        c.get("sBreakout"),
+            "sVcp":             c.get("sVcp"),
+            "sKoLong":          c.get("sKoLong"),
+            "sDividend":        c.get("sDividend"),
+            "sValue":           c.get("sValue"),
         }
         for c in master_shortlist_raw
     ]
