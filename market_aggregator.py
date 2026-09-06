@@ -5352,13 +5352,24 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # scored.append() oben.
         # NACHGETRAGEN (07.09.2026): ivpPercentile/ivpDays/ivpCurIv/ivpHv20/50/100 —
         # echte IV-Perzentil-Daten, s. fetch_iv_percentile_data().
+        # ERGAENZT (uiq_field_audit.py-Fund): VCP-Detailfelder und alle zehn
+        # Strategie-Scores fehlten hier komplett, obwohl top20()/_rebuild_
+        # fundamental_lb() dieselbe _core-Liste teilen (bewusste Kopie, kein
+        # gemeinsamer Konstante — Option B/strukturelle Vereinheitlichung ist
+        # zurueckgestellt). Betraf insbesondere das vcp_setups-Leaderboard,
+        # das VCP-Detailfelder ohne diese Ergaenzung nie erhalten haette.
+        # Axel-Entscheidung: nicht beabsichtigt, ergaenzen.
         _core = ["sym", "score", "price", "grade", "rsi", "atr",
                  "macdHist", "obvTrend", "volRatio", "hvp",
                  "ema50", "ema200", "pctFromHigh52", "dist200",
                  "bbPos", "sma150", "rsRating", "avgVol20",
                  "high52", "low52", "overheat",
                  "homeMarket", "tightnessPct",
-                 "ivpPercentile", "ivpDays", "ivpCurIv", "ivpHv20", "ivpHv50", "ivpHv100"]
+                 "ivpPercentile", "ivpDays", "ivpCurIv", "ivpHv20", "ivpHv50", "ivpHv100",
+                 "vcpDetected", "vcpContractions", "vcpLastPct", "vcpAvgPrevPct",
+                 "vcpVolContraction", "vcpBreakoutVol",
+                 "sMinervini", "sSwing", "sMrLong", "sBreakout", "sBreakdown",
+                 "sFading", "sVcp", "sKoLong", "sDividend", "sValue"]
         return [
             {**{f: x.get(f) for f in _core},
              **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
@@ -10703,13 +10714,24 @@ def main():
         # NACHGETRAGEN (07.09.2026): ivpPercentile/ivpDays/ivpCurIv/ivpHv20/50/100 —
         # echte IV-Perzentil-Daten, wichtig gerade fuer dividend/value als optionale
         # CSP-Unterlegung (STRATEGIES.dividend.focus in ko-prompts.js).
+        # ERGAENZT (uiq_field_audit.py-Fund): VCP-Detailfelder und alle zehn
+        # Strategie-Scores fehlten hier komplett, obwohl top20()/_rebuild_
+        # fundamental_lb() dieselbe _core-Liste teilen (bewusste Kopie, kein
+        # gemeinsamer Konstante — Option B/strukturelle Vereinheitlichung ist
+        # zurueckgestellt). Betraf insbesondere das vcp_setups-Leaderboard,
+        # das VCP-Detailfelder ohne diese Ergaenzung nie erhalten haette.
+        # Axel-Entscheidung: nicht beabsichtigt, ergaenzen.
         _core = ["sym", "score", "price", "grade", "rsi", "atr",
                  "macdHist", "obvTrend", "volRatio", "hvp",
                  "ema50", "ema200", "pctFromHigh52", "dist200",
                  "bbPos", "sma150", "rsRating", "avgVol20",
                  "high52", "low52", "overheat",
                  "homeMarket", "tightnessPct",
-                 "ivpPercentile", "ivpDays", "ivpCurIv", "ivpHv20", "ivpHv50", "ivpHv100"]
+                 "ivpPercentile", "ivpDays", "ivpCurIv", "ivpHv20", "ivpHv50", "ivpHv100",
+                 "vcpDetected", "vcpContractions", "vcpLastPct", "vcpAvgPrevPct",
+                 "vcpVolContraction", "vcpBreakoutVol",
+                 "sMinervini", "sSwing", "sMrLong", "sBreakout", "sBreakdown",
+                 "sFading", "sVcp", "sKoLong", "sDividend", "sValue"]
         _entries = []
         for _r in results:
             if _r.get("error") or not _r.get("price"):
