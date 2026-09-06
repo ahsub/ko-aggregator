@@ -10337,6 +10337,13 @@ def main():
             "ivpPercentile": r.get("ivpPercentile"),
             "ivpDays":       r.get("ivpDays"),
             "ivpCurIv":      r.get("ivpCurIv"),
+            # ERGAENZT (Feld-Audit-Vollcheck, echter Fund): ema200 stand direkt
+            # daneben im Diagnose-Log dieser Funktion ("ema200={r.get('ema200')}"),
+            # wurde aber nie ins Dict selbst uebernommen — ohne den rohen Wert
+            # kann der EIC-Master-Prompt (§23, Strike-Berechnung) keinen konkreten
+            # $-Strike nennen, ohne dass das Modell aus dist200 (%) selbst
+            # zurueckrechnen muesste.
+            "ema200":        r.get("ema200"),
             # Bester Score fuer Sortierung
             "optsScore":   max(s_csp, s_cc, s_spread, s_collar),
         })
