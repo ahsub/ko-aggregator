@@ -5267,8 +5267,24 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "sCsp":          s_csp,
             "sCc":           s_cc,
             "sVcp":          s_vcp,
+            # GEFUNDEN (07.09.2026, Axel-Fund — VCP zeigte trotz ALLER bisherigen
+            # Fixes an masterShortlist/ko-kv-state.js/index.html weiterhin "0x,
+            # kein vollst. VCP"): vcpDetected selbst fehlte HIER, in scored.append()
+            # — der eigentlichen Quelle fuer shortlist_dict/master_shortlist. Nur
+            # vcpContractions/vcpLastPct waren (aus unbekanntem Grund, vermutlich
+            # ein frueherer Teil-Fix) bereits vorhanden, vcpDetected selbst nie.
+            # process_ticker()s eigenes Rueckgabe-Dict (r, spaeter results[]) hatte
+            # vcpDetected schon immer korrekt (bestaetigt per GHA-Log-Diagnose) —
+            # deshalb funktionierte Alpha Desk (liest direkt aus results[] via
+            # top20()) die ganze Zeit ueber korrekt, nur der scored/masterShortlist/
+            # Scanner-Tab-Pfad nicht. Jetzt ergaenzt, inkl. der zwei bisher auch
+            # fehlenden Rest-Felder (vcpAvgPrevPct, vcpVolContraction, vcpBreakoutVol).
+            "vcpDetected":     r.get("vcpDetected"),
             "vcpContractions": r.get("vcpContractions"),
             "vcpLastPct":      r.get("vcpLastPct"),
+            "vcpAvgPrevPct":   r.get("vcpAvgPrevPct"),
+            "vcpVolContraction": r.get("vcpVolContraction"),
+            "vcpBreakoutVol":    r.get("vcpBreakoutVol"),
             "sKoLong":       s_ko_long,
             "sDividend":     s_dividend,   # Backlog #13b, 28.07.2026
             "sValue":        s_value,      # Backlog #13b, 28.07.2026
