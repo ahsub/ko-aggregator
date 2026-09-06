@@ -3,6 +3,33 @@
 # Beta-Tester lesen KV-Key "daily_market_snapshot" - kein eigener Anthropic-Call.
 # Architektur: Option A (SUITE.md, Sprints) - ein KV-Key, kein neuer Worker.
 
+
+# ── CHECKLISTE: NEUES TICKER-FELD HINZUFÜGEN (07.09.2026) ────────────────────
+# WICHTIG: ein neues Feld in process_ticker()s Rueckgabe-Dict erreicht NICHT
+# automatisch den KI-Prompt. Es gibt (Stand 07.09.2026) SIEBEN unabhaengige,
+# handgepflegte Feldlisten ueber zwei Dateien/Sprachen hinweg — jede davon
+# muss beim Hinzufuegen eines neuen Feldes einzeln ergaenzt werden, sonst
+# geht das Feld irgendwo auf dem Weg zum Modell verloren (genau DAS ist
+# fuenfmal in Folge passiert: homeMarket, tightnessPct, sma150, rsRating,
+# VCP-Felder, zuletzt ivpPercentile — jedes Mal an einer anderen der sieben
+# Stellen). Bis ein struktureller Fix (Option B, zurueckgestellt bis das
+# System sich stabil bewaehrt hat — s. /areas/uiq.md) diese sieben Listen
+# durch eine einzige gemeinsame Quelle ersetzt, gilt diese Checkliste:
+#
+# market_aggregator.py (diese Datei):
+#   1. scored.append({...})              — die eigentliche Quelle
+#   2. top20()s _core-Liste              — generische Leaderboards
+#   3. _rebuild_fundamental_lb()s _core  — dividend/value-Leaderboard
+#
+# axel-scanner/index.html:
+#   4. kvDataToTickerData()              — Scanner-Tab-Live-Scan-Pfad
+#   5. topResults.push() in openKiBriefing() — Scanner-Tab-KI-Briefing
+#   6. buildParameterPool()              — gemeinsamer Pool-Builder
+#   7. runAlphaLbKI()s tickerLines-Bauschleife — Alpha-Desk-eigener Pfad
+#
+# Bei jedem neuen Feld: alle sieben Stellen durchgehen, nicht nur die,
+# die gerade im Fokus steht.
+
 # ── CHANGELOG-Ergänzung (07.09.2026) ─────────────────────────────────────────
 # NEU: echte IV-Perzentil-Daten integriert (fetch_iv_percentile_data(), neue
 # Felder ivpPercentile/ivpDays/ivpCurIv/ivpHv20/ivpHv50/ivpHv100). Quelle:
@@ -10237,6 +10264,15 @@ def main():
             # nicht sichtbar -> Boost-Wirkung liess sich nicht isoliert pruefen).
             "fSetup":      r.get("f_setup"),
             "fScore":      r.get("f_score"),
+            # NEU (07.09.2026, Axel-Fund — Options-Desk-Live-Test zeigte gar
+            # keinen IVP-Bezug, obwohl der Aggregator und Alpha-Desk-Pfad
+            # bereits funktionierten): ACHTE unabhaengige Fundstelle desselben
+            # Musters — diese options_candidates-Konstruktion (Quelle fuer den
+            # options_watchlist-KV-Key, den runOptionsKiBriefing() im Options-
+            # Desk-Tab liest) hatte NIE die neuen ivp*-Felder uebernommen.
+            "ivpPercentile": r.get("ivpPercentile"),
+            "ivpDays":       r.get("ivpDays"),
+            "ivpCurIv":      r.get("ivpCurIv"),
             # Bester Score fuer Sortierung
             "optsScore":   max(s_csp, s_cc, s_spread, s_collar),
         })
