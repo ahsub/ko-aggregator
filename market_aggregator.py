@@ -6075,6 +6075,14 @@ def process_ticker(ticker, hist_df):
         # ── VCP Detection (Sprint 1+2, Preis-Struktur + Volumen, 22.07.2026) ──
         ema150v_for_vcp = sma150v  # sma150 als Trend-Proxy verwendet (bereits berechnet)
         vcp = calc_vcp(closes, highs, lows, ema150=ema150v_for_vcp, volumes=volumes)
+        # DIAGNOSE (07.09.2026, Axel-Fund — VOD/GLEN.L/VLO zeigten im Live-Prompt
+        # "VCP-Felder nicht verfuegbar", obwohl eine unabhaengige Reproduktion von
+        # calc_vcp() mit denselben Daten/Parametern vcpDetected=True lieferte.
+        # Diese Log-Zeile zeigt den tatsaechlich im GHA-Lauf berechneten Wert fuer
+        # eine kleine Stichprobe bekannter Ticker — ersetzt Vermutungen durch einen
+        # direkten Beleg. Kann nach Diagnose-Abschluss wieder entfernt werden.
+        if ticker in ("VOD", "GLEN.L", "VLO"):
+            log.info(f"  [VCP-DIAG] {ticker}: vcp={vcp}")
         regime, p_bull2bear, bull_pct, warn_level = calc_markov(closes)
 
         # ── KSI: Kinetic Slippage Index (HPotter, 12.07.2026) ────────────────
