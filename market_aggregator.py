@@ -5413,6 +5413,22 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "short_fading":   top20("sFading",    35),
         "ko_long":        top20("sKoLong",    50),
         "options_csp":    top20("sCsp",       50),
+        # ERGÄNZT (09.09.2026, Axel-Entscheidung "Weg 1" statt Frontend-
+        # Workaround, nach Fading-Short-lbKey-Debugging vom selben Tag):
+        # atmna/weekly_income/collar teilen sich dieselbe CSP-taugliche
+        # Kandidatenmenge wie csp_wheel (identische Screening-Kriterien:
+        # HVP, Kurs, Liquidität — die Strategien unterscheiden sich in der
+        # Strukturierung, nicht in der Titelauswahl). Bewusst als eigene,
+        # echte Leaderboard-Eintraege angelegt statt als Frontend-Alias,
+        # damit KoPrompts.stratFromLb() weiterhin eine echte 1:1-Aufloesung
+        # bleibt — WICHTIG als Vorbild fuer die geplanten Spread-Strategien
+        # (Bull Put Spread, Iron Condor, Calendar Spread), die eine eigene
+        # Scoring-Logik (OPTIONS_VOL_CONTEXT) brauchen werden und deshalb
+        # ohnehin echte, eigene Leaderboard-Eintraege benoetigen — dieselbe
+        # Grundstruktur, hier nur mit identischem statt neuem Score-Feld.
+        "options_atmna":  top20("sCsp",       50),
+        "options_weekly": top20("sCsp",       50),
+        "options_collar": top20("sCsp",       50),
         "options_cc":     top20("sCc",        30),
         "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct", "vcpVolContraction", "vcpBreakoutVol"]),
         "long_dividend":  top20("sDividend",  35, extra_fields=["divYield", "payoutRatio", "fcfYield", "roe"]),   # Backlog #13b
