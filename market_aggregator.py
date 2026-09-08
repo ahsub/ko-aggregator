@@ -5121,6 +5121,20 @@ def enrich_with_fundamentals(sym: str, price: float, sector: str = None) -> dict
     ausreichenden kausalen Einfluss auf 2-30-Tage-Setups und wurden
     bewusst entfernt (80/20-Entscheidung, Gemini + Claude Review 01.07.2026).
     Bei Bedarf: on-demand im DeepDive-Button laden, nicht im Nachtlauf.
+
+    ERGÄNZT (09.09.2026, Axel-Anfrage — Owner-Earnings-Konzept, Buffett
+    Berkshire-Aktionärsbrief 1986): zusätzlicher Fetch von .cashflow und
+    .financials (schwerer als .info, gegen Stichprobe verifiziert — MSFT,
+    HRB, UAN, SAP.DE liefern alle sauber Capital Expenditure, Depreciation
+    And Amortization, Net Income; ca. 0.53s/Ticker fuer beide zusammen,
+    ca. 6.5min fuer das volle ~735-Ticker-Universum unparallelisiert).
+    Erhaltungs-Capex ist kein Bilanzposten, sondern eine Schaetzung — hier
+    ueber min(D&A, Total-Capex) angenaehert: liegt der tatsaechliche Capex
+    UNTER den Abschreibungen, gilt er komplett als Erhaltungsinvestition;
+    liegt er DARUEBER, wird der Abzug auf die Abschreibungshoehe gedeckelt
+    (der Ueberschuss gilt als Wachstumsinvestition, wird NICHT von Owner
+    Earnings abgezogen). Das ist eine gaengige, aber explizit ANGENAEHERTE
+    Vereinfachung, keine exakte Erhaltungs-/Wachstums-Trennung.
     """
     _STRUCTURAL_HIGH_DEBT_SECTORS = {"utilities", "real estate", "reits"}
     try:
@@ -5164,15 +5178,38 @@ def enrich_with_fundamentals(sym: str, price: float, sector: str = None) -> dict
         pb       = round(pb_raw, 2) if pb_raw and pb_raw > 0 else None
         roe_raw  = info.get("returnOnEquity")        # z.B. 0.18 = 18%
         roe      = round(roe_raw * 100, 1) if roe_raw else None
+
+        # Owner-Earnings-Yield (ERGÄNZT 09.09.2026) — separater try-Block,
+        # damit ein Fehlschlag hier NICHT die restlichen (bereits
+        # etablierten) Fundamentalfelder gefährdet.
+        oe_yield = None
+        try:
+            t_full = yf.Ticker(sym)
+            cf  = t_full.cashflow
+            fin = t_full.financials
+            if cf is not None and not cf.empty and fin is not None and not fin.empty and mcap and mcap > 0:
+                capex_raw = cf.loc["Capital Expenditure"].iloc[0] if "Capital Expenditure" in cf.index else None
+                da_raw    = cf.loc["Depreciation And Amortization"].iloc[0] if "Depreciation And Amortization" in cf.index else None
+                ni_raw    = fin.loc["Net Income"].iloc[0] if "Net Income" in fin.index else None
+                if capex_raw is not None and da_raw is not None and ni_raw is not None:
+                    total_capex = abs(capex_raw)   # yfinance weist Capex negativ aus
+                    maint_capex = min(da_raw, total_capex)  # Naeherung, s. Docstring
+                    owner_earnings = ni_raw + da_raw - maint_capex
+                    oe_yield = round(owner_earnings / mcap * 100, 2)
+        except Exception as e:
+            log.debug(f"  Owner-Earnings-Fetch {sym}: {e}")
+            oe_yield = None
+
         return {
-            "analystUpside":  upside,
-            "fcfYield":       fcf_yield,
-            "debtToEquity":   d_eq,
-            "divYield":       div_yield,   # % (z.B. 3.2)
-            "payoutRatio":    payout,      # % (z.B. 45.0)
-            "peForward":      pe_fwd,      # z.B. 18.5
-            "pb":             pb,          # Price/Book z.B. 2.1
-            "roe":            roe,         # % (z.B. 18.0)
+            "analystUpside":     upside,
+            "fcfYield":          fcf_yield,
+            "debtToEquity":      d_eq,
+            "divYield":          div_yield,   # % (z.B. 3.2)
+            "payoutRatio":       payout,      # % (z.B. 45.0)
+            "peForward":         pe_fwd,      # z.B. 18.5
+            "pb":                pb,          # Price/Book z.B. 2.1
+            "roe":               roe,         # % (z.B. 18.0)
+            "ownerEarningsYield": oe_yield,   # % (ERGÄNZT 09.09.2026, kann None sein)
         }
     except Exception as e:
         log.warning(f"  Fundamental-Fetch {sym}: {e}")
@@ -5431,8 +5468,8 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "options_collar": top20("sCsp",       50),
         "options_cc":     top20("sCc",        30),
         "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct", "vcpVolContraction", "vcpBreakoutVol"]),
-        "long_dividend":  top20("sDividend",  35, extra_fields=["divYield", "payoutRatio", "fcfYield", "roe"]),   # Backlog #13b
-        "long_value":     top20("sValue",     35, extra_fields=["peForward", "pb", "fcfYield", "roe", "analystUpside"]),  # Backlog #13b
+        "long_dividend":  top20("sDividend",  35, extra_fields=["divYield", "payoutRatio", "fcfYield", "roe", "ownerEarningsYield"]),   # Backlog #13b, ownerEarningsYield ERGAENZT 09.09.2026
+        "long_value":     top20("sValue",     35, extra_fields=["peForward", "pb", "fcfYield", "roe", "analystUpside", "ownerEarningsYield"]),  # Backlog #13b, ownerEarningsYield ERGAENZT 09.09.2026
     }
 
     # ── REGIME-ADAPTIVER MASTER-SHORTLIST ALGORITHMUS v2 (Gemini-Review Fix C+F) ──
@@ -10771,11 +10808,11 @@ def main():
 
     leaderboards_obj["long_dividend"] = _rebuild_fundamental_lb(
         score_long_dividend, "sDividend", 35,
-        ["divYield", "payoutRatio", "fcfYield", "roe", "debtToEquity"]
+        ["divYield", "payoutRatio", "fcfYield", "roe", "debtToEquity", "ownerEarningsYield"]  # ownerEarningsYield ERGAENZT 09.09.2026
     )
     leaderboards_obj["long_value"] = _rebuild_fundamental_lb(
         score_long_value, "sValue", 35,
-        ["peForward", "pb", "fcfYield", "roe", "analystUpside"]
+        ["peForward", "pb", "fcfYield", "roe", "analystUpside", "ownerEarningsYield"]  # ownerEarningsYield ERGAENZT 09.09.2026
     )
     log.info(f"  [#13b] long_dividend: {len(leaderboards_obj['long_dividend'])} | "
              f"long_value: {len(leaderboards_obj['long_value'])} Kandidaten "
