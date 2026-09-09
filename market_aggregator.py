@@ -8513,6 +8513,8 @@ def fetch_mse_history(days: int = 30) -> dict:
     return result
 
 
+def _json_safe(obj): return (None if isinstance(obj, float) and (obj != obj or obj in (float("inf"), float("-inf"))) else ({k: _json_safe(v) for k, v in obj.items()} if isinstance(obj, dict) else ([_json_safe(v) for v in obj] if isinstance(obj, (list, tuple)) else obj)))  # ERGAENZT 09.09.2026: NaN/Infinity -> None, s. Fund Public-Digest-Pipeline-Test
+
 def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
     """Pusht JSON-Daten in Cloudflare KV. Mit einem Retry bei transienten Fehlern
     (Fix 30.06.2026: der separate "options_watchlist"-Key schlug gelegentlich
@@ -8535,7 +8537,7 @@ def push_to_cloudflare_kv(data, key="master_market_data", retries=1):
         "Authorization": f"Bearer {api_token}",
         "Content-Type":  "application/json",
     }
-    payload = json.dumps(data, ensure_ascii=False)
+    payload = json.dumps(_json_safe(data), ensure_ascii=False)
     log.info(f"  Upload zu Cloudflare KV ({len(payload)/1024:.1f} KB)... key={key}")
 
     attempt = 0
@@ -11019,7 +11021,7 @@ def main():
 
     # 7. Lokales Backup
     with open("master_market_data.json", "w", encoding="utf-8") as f:
-        json.dump(master, f, ensure_ascii=False, separators=(",", ":"))
+        json.dump(_json_safe(master), f, ensure_ascii=False, separators=(",", ":"))
     log.info(f"   💾 Lokal gespeichert: master_market_data.json")
 
     # 7b. Rolling-Window-Archiv: master_market_data gzip'd ins data/snapshots/ Verzeichnis
@@ -11034,7 +11036,7 @@ def main():
         os.makedirs(_snap_dir, exist_ok=True)
         _now_utc = _dt_snap.now(_tz_snap.utc)
         _snap_name = f"{_snap_dir}/{_now_utc.strftime('%Y-%m-%d_%H')}.json.gz"
-        _snap_bytes = json.dumps(master, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        _snap_bytes = json.dumps(_json_safe(master), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         with gzip.open(_snap_name, "wb", compresslevel=6) as gz:
             gz.write(_snap_bytes)
         _snap_kb = len(_snap_bytes) / 1024
