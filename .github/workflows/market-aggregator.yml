@@ -1,3 +1,26 @@
+# Workflow-Version: v1.1 (vorheriger, unversionierter Stand = implizit v1.0)
+#
+# CHANGELOG (neueste zuerst):
+# v1.1 (10.09.2026, Axel + Claude): AI_delivery_public — drei neue Steps
+#      ("Checkout UIQ-Suite (Public Recommendations Script)", "Node.js
+#      Setup", "Generate Public Recommendations") zwischen "Run Market
+#      Aggregator" und "Track-Record Backup" eingefuegt, s. Uebergabe-
+#      protokoll 09.09./10.09.2026 Punkt 6/10. Ruft
+#      UIQ-Suite/scripts/generate_public_recommendations.js auf (Node,
+#      liest master_market_data.json aus dem Checkout-Root). Neuer
+#      Job-level env MORNING_RUN_CRON bindet alle drei Steps an Lauf 1
+#      (03:37 UTC, vor Xetra) + workflow_dispatch — verhindert, dass der
+#      Job (2x/Tag) versehentlich 2x/Tag statt der beschlossenen 1x/Tag-
+#      Frequenz einen Public Digest erzeugt (Frequenz-Entscheidung s.
+#      Uebergabeprotokoll Punkt 10). Bewusst OHNE continue-on-error fuer
+#      den Start — Pruefpunkt nach 10 fehlerfreien Handelstags-Laeufen
+#      (~2 Wochen), dann auf continue-on-error: true umstellen, damit
+#      das Feature den Track-Record-Lauf nie blockieren kann.
+# v1.0 (Datum unbekannt — Datei war bisher unversioniert, dieser
+#      Changelog-Kopf wurde erst mit v1.1 eingefuehrt): Basis-Workflow
+#      (Checkout, Python-Setup, Aggregator-Lauf, Track-Record-Backup,
+#      Archiv-Commit, Artifact-Upload).
+
 name: KO-Scanner Market Aggregator
 
 permissions:
@@ -22,6 +45,13 @@ jobs:
   aggregate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # AI_delivery_public (10.09.2026): muss exakt der ersten Cron-Zeile oben
+      # entsprechen (Lauf 1, 03:37 UTC, vor Xetra) — einzige Stelle, die bei
+      # einer künftigen Cron-Änderung noch von Hand mitgepflegt werden muss.
+      # Alle "if"-Bedingungen unten referenzieren diese eine Variable statt
+      # den String mehrfach zu wiederholen.
+      MORNING_RUN_CRON: '37 03 * * 1-6'
 
     steps:
       - name: Checkout
@@ -65,6 +95,39 @@ jobs:
           PYTHONUNBUFFERED:     "1"
         run: |
           python market_aggregator.py
+          echo "Exit Code: $?"
+
+      - name: Checkout UIQ-Suite (Public Recommendations Script)
+        # UIQ-Suite ist ein oeffentliches Repo -> kein zusaetzliches PAT-Secret
+        # noetig, der Default-GITHUB_TOKEN reicht fuer den Checkout.
+        if: github.event.schedule == env.MORNING_RUN_CRON || github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          repository: ahsub/UIQ-Suite
+          path: uiq-suite
+
+      - name: Node.js Setup
+        if: github.event.schedule == env.MORNING_RUN_CRON || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate Public Recommendations
+        # PRUEFPUNKT (Axel-Entscheidung, 10.09.2026): nach 10 fehlerfreien
+        # Handelstags-Laeufen (~2 Wochen) auf `continue-on-error: true`
+        # umstellen — das Public-Digest-Feature ist dauerhaft nachrangig
+        # zum Track-Record-Lauf und soll ihn langfristig nie blockieren
+        # koennen. Bis dahin bewusst OHNE continue-on-error, damit Fehler
+        # in diesem neuen Codepfad sofort auffallen statt still zu
+        # verschwinden.
+        if: github.event.schedule == env.MORNING_RUN_CRON || github.event_name == 'workflow_dispatch'
+        env:
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN:         ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID:          ${{ secrets.CF_KV_NS_ID }}
+        run: |
+          node uiq-suite/scripts/generate_public_recommendations.js
           echo "Exit Code: $?"
 
       - name: Track-Record Backup (nur samstags aktiv)
