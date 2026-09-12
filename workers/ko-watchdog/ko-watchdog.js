@@ -1,28 +1,27 @@
 /**
  * ko-watchdog — Cloudflare Worker
  * =====================================
- * Cron Trigger: 04:15 UTC Mo–Sa (nach GHA-Cron 03:37 UTC, Lauf 1/Xetra)
- *               13:45 UTC Mo–Fr (nach GHA-Cron 13:30 UTC, Lauf 2/NYSE)
+ * Cron Trigger: 22:45 UTC Mo–Fr (nach GHA-Cron 22:00 UTC, EOD-Lauf)
  *
- * Logik (FIX 09.09.2026 — Dual-Slot Freshness Check):
- *   Der alte Freshness-Check verglich nur das Datum von master_market_data
- *   gegen "heute" — das erkannte einen ausgefallenen Lauf 2 (nachmittags)
- *   NICHT, wenn Lauf 1 (morgens) bereits durchgelaufen war, weil beide
- *   Läufe denselben Tagesstempel setzen.
- *
- *   Neu: anhand von event.cron wird erkannt, welcher der beiden Tagesläufe
- *   gerade geprüft wird, und der Freshness-Check verlangt zusätzlich, dass
- *   der KV-Zeitstempel NACH der jeweils zugehörigen GHA-Cron-Uhrzeit liegt
- *   (nicht nur "irgendwann heute"). Ein durchgekommener Morgenlauf macht
- *   damit den Nachmittags-Check nicht mehr fälschlich "frisch".
+ * Logik (FIX 09.09.2026 — Dual-Slot Freshness Check; VEREINFACHT 11.09.2026
+ * — nur noch EIN Slot, seit market-aggregator.yml v1.2 auf einen einzigen
+ * Nachbörsen-Lauf statt zwei Vor-Schluss-Läufe umgestellt hat):
+ *   Der urspruenglich einfache Freshness-Check verglich nur das Datum von
+ *   master_market_data gegen "heute" — das reichte fuer einen einzelnen
+ *   Lauf/Tag nicht aus, um einen ausgefallenen Lauf zuverlaessig zu
+ *   erkennen (unterschied nicht zwischen "gar kein Lauf heute" und
+ *   "Lauf lief, aber vor der erwarteten Uhrzeit"). Der Slot-genaue Check
+ *   (generated >= erwartete Cron-Uhrzeit, nicht nur "irgendwann heute")
+ *   bleibt daher auch fuer den Single-Run-Fall bestehen — nur die
+ *   RUN_SCHEDULES-Map hat jetzt nur noch einen Eintrag statt zwei.
  *
  *   1. Liest master_market_data aus KV → meta.generated (ISO-Timestamp)
  *   2. Bestimmt anhand von event.cron die erwartete Mindest-Uhrzeit
- *      (Lauf 1 → heute 03:37 UTC, Lauf 2 → heute 13:30 UTC)
+ *      (EOD-Lauf → heute 22:00 UTC)
  *   3. Prüft ob generated >= dieser Schwelle
  *   4. JA  → GHA hat diesen Lauf geliefert, nichts tun
- *   5. NEIN → GHA-Cron für diesen Lauf ausgefallen/verzögert,
- *             workflow_dispatch via GitHub API triggern
+ *   5. NEIN → GHA-Cron ausgefallen/verzögert, workflow_dispatch via
+ *      GitHub API triggern
  *
  * Secrets (CF Worker Environment):
  *   KV_BINDING        — KV Namespace Binding (Name: "KV")
@@ -31,11 +30,12 @@
  *   GH_WORKFLOW       — "market-aggregator.yml"
  */
 
-// Ordnet die beiden Watchdog-Cron-Ausdrücke (aus wrangler.toml) ihrem
-// jeweiligen GHA-Aggregator-Lauf und dessen erwarteter Cron-Uhrzeit (UTC) zu.
+// Ordnet den (seit 11.09.2026 einzigen) Watchdog-Cron-Ausdruck (aus
+// wrangler.toml) dem GHA-Aggregator-Lauf und dessen erwarteter Cron-Uhrzeit
+// (UTC) zu. Als Map belassen (statt einzelner Konstanten), damit ein
+// kuenftiger zweiter Slot ohne Strukturaenderung ergaenzt werden kann.
 const RUN_SCHEDULES = {
-  "15 04 * * 1-6": { label: "Lauf 1 (Xetra-Morgen)", thresholdHHMM: "03:37" },
-  "45 13 * * 1-5": { label: "Lauf 2 (NYSE-Nachmittag)", thresholdHHMM: "13:30" }
+  "45 22 * * 1-5": { label: "EOD-Lauf (Nachbörse)", thresholdHHMM: "22:00" }
 };
 
 export default {
@@ -49,12 +49,12 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/status") {
-      // Optional ?slot=1 oder ?slot=2, um gezielt einen der beiden
-      // Tagesläufe zu prüfen (wie der jeweilige Cron es täte).
-      // Ohne Parameter: alter, einfacher "irgendwann heute"-Check
-      // (rein informativ, keine Entscheidungsgrundlage mehr für Dispatches).
+      // Ohne Parameter: alter, einfacher "irgendwann heute"-Check (rein
+      // informativ, keine Entscheidungsgrundlage mehr für Dispatches).
+      // Optional ?slot=1, um den (seit 11.09.2026 einzigen) Tageslauf
+      // gezielt zu pruefen, wie der Cron es taete.
       const slot = url.searchParams.get("slot");
-      const cronForSlot = slot === "1" ? "15 04 * * 1-6" : slot === "2" ? "45 13 * * 1-5" : null;
+      const cronForSlot = slot === "1" ? "45 22 * * 1-5" : null;
       const thresholdISO = cronForSlot ? buildThresholdISO(RUN_SCHEDULES[cronForSlot]) : null;
       const result = await checkFreshness(env, thresholdISO);
       return Response.json(result);
@@ -66,7 +66,7 @@ export default {
       return Response.json(result);
     }
 
-    return new Response("ko-watchdog — GET /status[?slot=1|2] | /trigger", { status: 200 });
+    return new Response("ko-watchdog — GET /status[?slot=1] | /trigger", { status: 200 });
   }
 };
 
