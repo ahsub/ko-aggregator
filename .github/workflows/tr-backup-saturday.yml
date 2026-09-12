@@ -1,0 +1,59 @@
+# Workflow-Version: v1.0 (11.09.2026, Axel + Claude)
+#
+# Hintergrund: market-aggregator.yml lief bis v1.1 auch samstags (Lauf 1,
+# wegen Xetra-Bezug), wodurch tr_backup.py — das intern nur an Samstagen
+# aktiv wird (isoweekday()==6) — einmal woechentlich mitlief. Seit
+# market-aggregator.yml v1.2 (Umstellung auf einen einzigen Nachbörsen-Lauf,
+# Mo-Fr, s. dortiger Changelog) faellt der Samstag im Hauptworkflow komplett
+# weg — ohne diesen separaten Workflow wuerde das woechentliche Backup der
+# nicht-regenerierbaren tr:*/fin:*-Daten (laut RUNBOOK.md "kommerzielles
+# Kernasset") stillschweigend aufhoeren zu laufen.
+#
+# Bewusst schlank gehalten: KEIN market_aggregator.py, KEINE yfinance-/
+# Anthropic-Calls, KEINE Tests — tr_backup.py liest ausschliesslich bereits
+# vorhandene KV-Daten (vom letzten reguraeren Wochentags-Lauf) und
+# archiviert sie. Laufzeit im Sekundenbereich, keine API-Kosten.
+
+name: TR-Backup (Samstag)
+
+permissions:
+  contents: write   # committet backups/tr_backup_latest.json (RUNBOOK §7.3)
+
+on:
+  schedule:
+    - cron: '00 00 * * 6'   # Samstag 00:00 UTC — sicherer Puffer nach dem Freitags-Nachbörsen-Lauf (22:00 UTC)
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 Setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Track-Record Backup
+        # TR_BACKUP_FORCE=1: dieser Workflow existiert ausschliesslich fuer
+        # den Samstags-Fall — der interne isoweekday()==6-Guard in
+        # tr_backup.py wuerde zwar an einem echten Samstag ohnehin greifen,
+        # aber TR_BACKUP_FORCE macht das explizit und robust gegen
+        # Zeitzonen-Randfaelle bei UTC-Mitternacht.
+        env:
+          CF_ACCOUNT_ID:    ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN:     ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID:      ${{ secrets.CF_KV_NS_ID }}
+          TR_BACKUP_FORCE:  '1'
+        run: python tr_backup.py
+
+      - name: Archive committen (tr-Backup)
+        if: always()
+        run: |
+          git config user.name "uiq-nightly"
+          git config user.email "actions@users.noreply.github.com"
+          [ -f backups/tr_backup_latest.json ] && git add backups/tr_backup_latest.json || true
+          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup (Samstag) $(date -u +%F)" && git push)
