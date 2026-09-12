@@ -1,6 +1,30 @@
-# Workflow-Version: v1.1 (vorheriger, unversionierter Stand = implizit v1.0)
+# Workflow-Version: v1.2 (vorheriger, unversionierter Stand = implizit v1.0)
 #
 # CHANGELOG (neueste zuerst):
+# v1.2 (11.09.2026, Axel + Claude): Umstellung von zwei Vor-Handelsschluss-
+#      Läufen (Lauf 1: 03:37 UTC vor Xetra, Lauf 2: 13:30 UTC bei NYSE-
+#      Öffnung) auf EINEN einzigen Lauf NACH US-Börsenschluss (22:00 UTC
+#      Mo-Fr). Root-Cause-Fund: `get_last_trading_day()` liest die letzte
+#      SPY-Tageskerze — die erscheint bei yfinance erst nach Börsenschluss
+#      (20:00 UTC EDT / 21:00 UTC EST). Beide alten Läufe lagen davor, der
+#      Public Digest war dadurch strukturell IMMER auf den Vortag datiert,
+#      nie auf den tatsächlichen Handelstag. 22:00 UTC liegt ganzjährig
+#      sicher nach Schluss (Puffer für Nachbörsenhandel + Datenverfügbar-
+#      keit). Samstag entfällt (war nur wegen Xetra-Bezug in Lauf 1 nötig,
+#      s. `* * 1-6`) — dadurch würde das wöchentliche Track-Record-Backup
+#      (`tr_backup.py`, prüft intern `isoweekday()==6`) nie mehr laufen;
+#      als eigener, schlanker Workflow ausgelagert: `tr-backup-saturday.yml`
+#      (kein voller Aggregator-Lauf, keine KI-/yfinance-Kosten, nur Backup +
+#      Commit). Env `MORNING_RUN_CRON` → `EOD_RUN_CRON` umbenannt (war beim
+#      Public-Digest-Gate ohnehin nur noch ein einziger Cron-Wert, Name
+#      spiegelt jetzt den tatsächlichen Zweck). Mit dieser Änderung
+#      gekoppelt (separate Deploys, nicht Teil dieser Datei): `ko-watchdog`
+#      (wrangler.toml + ko-watchdog.js, RUN_SCHEDULES auf einen Eintrag
+#      reduziert) und `ko-cron-trigger` (wrangler.toml, Redundanz-Trigger
+#      auf 22:00 UTC verschoben) — beide müssen synchron zu dieser Cron-Zeit
+#      bleiben, sonst laufen sie am alten (jetzt falschen) Zeitpunkt weiter
+#      und lösen dabei via workflow_dispatch ungewollt wieder einen
+#      Vor-Schluss-Digest aus.
 # v1.1 (10.09.2026, Axel + Claude): AI_delivery_public — drei neue Steps
 #      ("Checkout UIQ-Suite (Public Recommendations Script)", "Node.js
 #      Setup", "Generate Public Recommendations") zwischen "Run Market
@@ -28,8 +52,7 @@ permissions:
 
 on:
   schedule:
-    - cron: '37 03 * * 1-6'   # Lauf 1: 03:37 UTC = 05:37 MEZ (vor Xetra-Öffnung 09:00)
-    - cron: '30 13 * * 1-5'   # Lauf 2: 13:30 UTC = 15:30 MEZ (vor NYSE-Öffnung 15:30)
+    - cron: '00 22 * * 1-5'   # Nachbörsen-Lauf: 22:00 UTC = 00:00 MESZ/01:00 MEZ (nach NYSE-Schluss 20:00/21:00 UTC)
   workflow_dispatch:
     inputs:
       force_backup:
@@ -46,12 +69,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # AI_delivery_public (10.09.2026): muss exakt der ersten Cron-Zeile oben
-      # entsprechen (Lauf 1, 03:37 UTC, vor Xetra) — einzige Stelle, die bei
-      # einer künftigen Cron-Änderung noch von Hand mitgepflegt werden muss.
-      # Alle "if"-Bedingungen unten referenzieren diese eine Variable statt
-      # den String mehrfach zu wiederholen.
-      MORNING_RUN_CRON: '37 03 * * 1-6'
+      # AI_delivery_public (10.09.2026, umbenannt 11.09.2026 v1.2): muss exakt
+      # der Cron-Zeile oben entsprechen — einzige Stelle, die bei einer
+      # künftigen Cron-Änderung noch von Hand mitgepflegt werden muss. Alle
+      # "if"-Bedingungen unten referenzieren diese eine Variable statt den
+      # String mehrfach zu wiederholen. Umbenannt von MORNING_RUN_CRON, da
+      # es seit v1.2 kein "Morgen-Lauf" mehr ist, sondern der einzige,
+      # nachbörsliche Lauf.
+      EOD_RUN_CRON: '00 22 * * 1-5'
 
     steps:
       - name: Checkout
@@ -100,14 +125,14 @@ jobs:
       - name: Checkout UIQ-Suite (Public Recommendations Script)
         # UIQ-Suite ist ein oeffentliches Repo -> kein zusaetzliches PAT-Secret
         # noetig, der Default-GITHUB_TOKEN reicht fuer den Checkout.
-        if: github.event.schedule == env.MORNING_RUN_CRON || github.event_name == 'workflow_dispatch'
+        if: github.event.schedule == env.EOD_RUN_CRON || github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v4
         with:
           repository: ahsub/UIQ-Suite
           path: uiq-suite
 
       - name: Node.js Setup
-        if: github.event.schedule == env.MORNING_RUN_CRON || github.event_name == 'workflow_dispatch'
+        if: github.event.schedule == env.EOD_RUN_CRON || github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -120,7 +145,7 @@ jobs:
         # koennen. Bis dahin bewusst OHNE continue-on-error, damit Fehler
         # in diesem neuen Codepfad sofort auffallen statt still zu
         # verschwinden.
-        if: github.event.schedule == env.MORNING_RUN_CRON || github.event_name == 'workflow_dispatch'
+        if: github.event.schedule == env.EOD_RUN_CRON || github.event_name == 'workflow_dispatch'
         env:
           ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
           CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
@@ -130,7 +155,14 @@ jobs:
           node uiq-suite/scripts/generate_public_recommendations.js
           echo "Exit Code: $?"
 
-      - name: Track-Record Backup (nur samstags aktiv)
+      - name: Track-Record Backup (nur samstags aktiv, ODER force_backup)
+        # Seit v1.2 (11.09.2026): dieser Workflow laeuft nur noch Mo-Fr, der
+        # interne Samstag-Guard in tr_backup.py (isoweekday()==6) greift hier
+        # also im Regelfall NIE mehr — das woechentliche Backup kommt seither
+        # aus dem separaten `tr-backup-saturday.yml`. Dieser Step bleibt
+        # trotzdem bestehen, rein als manueller Force-Pfad (workflow_dispatch
+        # mit force_backup=true) fuer Ad-hoc-Backups ausserhalb des
+        # Samstags-Rhythmus.
         if: always()
         env:
           CF_ACCOUNT_ID:    ${{ secrets.CF_ACCOUNT_ID }}
