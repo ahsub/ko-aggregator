@@ -3,10 +3,14 @@ main = "ko-watchdog.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Cron: 04:15 UTC Mo–Sa (38 Minuten nach GHA-Cron 03:37 UTC)
-# Puffer: GHA braucht ~15-20 Min → bei 03:37 Start fertig ~03:55 → 04:15 sicher
+# Cron: 22:45 UTC Mo-Fr (45 Minuten nach GHA-Cron 22:00 UTC)
+# Puffer: GHA braucht bis zu 30 Min (timeout-minutes: 30) -> bei 22:00 Start
+# spaetestens fertig 22:30 -> 22:45 sicher.
+# Seit v1.2 (11.09.2026, market-aggregator.yml): nur noch EIN taeglicher Lauf
+# (Nachbörse statt Xetra-Vor-/NYSE-Oeffnungs-Lauf) -> nur noch ein Cron-
+# Trigger noetig, kein Dual-Slot-Check mehr (s. ko-watchdog.js).
 [triggers]
-crons = ["15 04 * * 1-6", "45 13 * * 1-5"]
+crons = ["45 22 * * 1-5"]
 
 # KV Namespace Binding
 [[kv_namespaces]]
