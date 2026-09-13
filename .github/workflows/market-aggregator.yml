@@ -1,6 +1,18 @@
-# Workflow-Version: v1.2 (vorheriger, unversionierter Stand = implizit v1.0)
+# Workflow-Version: v1.3 (vorheriger, unversionierter Stand = implizit v1.0)
 #
 # CHANGELOG (neueste zuerst):
+# v1.3 (13.09.2026, Claude + Axel): neue Workflow-Eingabe `force_regenerate`,
+#      verdrahtet den bestehenden FORCE_REGENERATE-Escape-Hatch in
+#      generate_public_recommendations.js (Trading-Day-Skip-Check, v1.2/
+#      v1.3 dort) als Dropdown im "Run workflow"-Dialog, analog zu
+#      `force_backup`. Fund: nach einem Code-Fix an
+#      generate_public_recommendations.js am selben Handelstag (13.09.2026,
+#      neuer public/ai_output/latest/{strategy}-Pointer fuer Digest-Cache-
+#      First) lieferte ein manueller Testlauf (#302) trotz Erfolg keine
+#      neuen Daten — der Skip-Check erkannte korrekt "kein neuer Handelstag
+#      seit letztem Digest (2026-09-11)" und liess ALLE Anthropic-Calls
+#      aus, obwohl der Code sich geaendert hatte. Vorher war der Escape-
+#      Hatch nur per YAML-Bearbeitung erreichbar — jetzt bequem als Eingabe.
 # v1.2 (11.09.2026, Axel + Claude): Umstellung von zwei Vor-Handelsschluss-
 #      Läufen (Lauf 1: 03:37 UTC vor Xetra, Lauf 2: 13:30 UTC bei NYSE-
 #      Öffnung) auf EINEN einzigen Lauf NACH US-Börsenschluss (22:00 UTC
@@ -57,6 +69,14 @@ on:
     inputs:
       force_backup:
         description: 'TR-Backup erzwingen (überschreibt Samstag-Guard)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      force_regenerate:
+        description: 'AI_delivery_public erzwingen (Anthropic-Calls auch bei unveraendertem Handelstag, s. generate_public_recommendations.js Trading-Day-Skip-Check)'
         required: false
         default: 'false'
         type: choice
@@ -151,6 +171,15 @@ jobs:
           CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN:         ${{ secrets.CF_API_TOKEN }}
           CF_KV_NS_ID:          ${{ secrets.CF_KV_NS_ID }}
+          # NEU (13.09.2026, Claude+Axel): verdrahtet den bestehenden
+          # FORCE_REGENERATE-Escape-Hatch (generate_public_recommendations.js,
+          # Trading-Day-Skip-Check) als Workflow-Eingabe, analog zu
+          # force_backup oben — vorher nur per YAML-Bearbeitung setzbar.
+          # Default 'false': das taegliche Kostenschutz-Verhalten bleibt
+          # unveraendert, nur bewusstes manuelles Erzwingen (z.B. nach einem
+          # Code-Fix am selben Handelstag, wie hier am 13.09.2026 noetig)
+          # wird jetzt ueber das "Run workflow"-Dropdown moeglich.
+          FORCE_REGENERATE:     ${{ github.event.inputs.force_regenerate == 'true' && 'true' || 'false' }}
         run: |
           node uiq-suite/scripts/generate_public_recommendations.js
           echo "Exit Code: $?"
