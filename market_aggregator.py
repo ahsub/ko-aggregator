@@ -1410,15 +1410,30 @@ def validate_data_freshness(results):
     """
     Prüft ob die geladenen Daten vom letzten Handelstag stammen.
     Warnt wenn Daten veraltet sind (z.B. nach Feiertag).
+
+    FIX (13.09.2026, Claude+Axel, Fund waehrend Verifikation von Run #301):
+    frueher wurde hier gegen r['updated'] verglichen — das ist aber der
+    Verarbeitungszeitpunkt (datetime.now(utc) beim process_ticker()-Aufruf,
+    s. process_ticker()), NICHT das Datum der zugrunde liegenden Kursdaten.
+    Dadurch konnte diese Funktion strukturell nie echte Datenstaende pruefen
+    (ein Ticker mit veralteten Kerzen bekommt trotzdem ein druck-frisches
+    'updated', da das Feld unabhaengig vom Kerzeninhalt gesetzt wird) UND
+    schlug an jedem Nicht-Handelstags-Lauf (Wochenende/manueller Trigger)
+    fuer JEDEN Ticker gleichzeitig fehl, da 'now' dann nie mit last_trading_day
+    uebereinstimmt (0/735 aktuell am 13.09.2026 bei einem Sonntagslauf, obwohl
+    die Daten selbst in Ordnung waren). Jetzt gegen r['_dataAsOf'] verglichen
+    (echtes Datum der letzten Kerze aus hist_df, s. process_ticker()) — das
+    ist wetterunabhaengig vom Verarbeitungszeitpunkt und prueft damit
+    tatsaechlich, was die Funktion laut Docstring pruefen soll.
     """
     last_trading_day = get_last_trading_day()
     stale_count = 0
     fresh_count = 0
 
     for r in results:
-        if 'updated' in r:
+        if r.get('_dataAsOf'):
             try:
-                data_date = r['updated'][:10]  # YYYY-MM-DD
+                data_date = r['_dataAsOf'][:10]  # YYYY-MM-DD
                 if data_date == str(last_trading_day):
                     fresh_count += 1
                 else:
@@ -6349,6 +6364,16 @@ def process_ticker(ticker, hist_df):
             "hvp":           calc_hv_percentile(closes),
             "hv10":          calc_hv_percentile(closes, window=10, lookback=90),
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            # NEU (13.09.2026, Claude+Axel): "updated" oben ist bewusst der
+            # Verarbeitungszeitpunkt und bleibt UNVERAENDERT — index.html
+            # nutzt ihn fuer die kvAge-Stunden-Berechnung (Date.now()-updated)
+            # und die "Stand: DD.MM"-Anzeige, beides live genutzt, daher hier
+            # nicht anfassen. Fuer eine echte Datenstand-Pruefung (s.
+            # validate_data_freshness()) braucht es stattdessen das
+            # tatsaechliche Datum der letzten Kerze aus hist_df — daher
+            # separates, rein backend-internes Feld:
+            "_dataAsOf":     (hist_df.index[-1].strftime("%Y-%m-%d")
+                               if hist_df is not None and len(hist_df) > 0 else None),
             # NEU (01.07.2026): Squeeze-Risiko direkt in process_ticker berechnet,
             # wo hist_df verfügbar ist — Gemini-Blueprint: direktionaler Volumen-
             # Check (Spike an grünem Tag) ist präziser als nicht-direktionales
