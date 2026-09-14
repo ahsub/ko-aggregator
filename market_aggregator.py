@@ -30,6 +30,27 @@
 # Bei jedem neuen Feld: alle sieben Stellen durchgehen, nicht nur die,
 # die gerade im Fokus steht.
 
+# ── CHANGELOG-Ergänzung (14.09.2026, Teil 3) ──────────────────────────────────
+# NEU: score_underlying_assignment_quality() — "Underlying Assignment
+# Quality" (UAQ), UIQ Spec v1.2 §2.1. Eigenständiger Score, ob ein Titel bei
+# tatsächlicher CSP-Zuteilung ein guter Übernahme-Kandidat wäre — getrennt
+# vom bestehenden Premium-Score (score_options_csp()), der die Prämien-
+# Attraktivität misst (dort ist hohe Vola gut, hier bewusst umgekehrt
+# gewichtet). Ausschließlich Fundamental-/Bewertungs-/Regime-/Stabilitäts-
+# felder, KEINE IV/IV-Rank-Daten. Neues Feld "sUaq" in scored.append() +
+# beiden _core-Listen (analog §3). "csp_underlying" als neuer Key in der
+# REGIME_FIT-Tabelle (§1.1), aktuell neutral (1.0).
+#
+# Contract Assignment Quality (CAQ, Kontrakt-Ebene: Strike/DTE/echte IV)
+# BEWUSST NICHT implementiert (Axel+Reviewer-Entscheidung, 14.09.2026):
+# UIQ hat keine echten Optionsketten-Daten (s. bereits bestehende
+# Dokumentation bei calc_multileg_season(), "Stufe 2, wartet auf CapTrader").
+# Eine CAQ auf Basis von hvp-Näherungen oder den KI-vorgeschlagenen Feldern
+# (strikeSuggestion/dte/deltaTarget, s. KI_SENSITIVE_OPTIONS_LEGACY) wäre
+# Scheingenauigkeit. Wird nachgezogen, sobald echte Optionsketten-Daten
+# verfügbar sind — UAQ bleibt dann unverändert bestehen (kontrakt-
+# unabhängig), CAQ ergänzt als zweite, separate Ebene.
+
 # ── CHANGELOG-Ergänzung (14.09.2026, Teil 2) ──────────────────────────────────
 # NEU: "sectors"/"sectorTagVersion" in scored.append() UND top20()s/_rebuild_
 # fundamental_lb()s _core-Liste ergaenzt (UIQ Spec v1.2, §3) — dieselbe
@@ -2468,6 +2489,101 @@ def score_options_csp(r: dict) -> int:
     # Earnings-Malus (weich, 8-14T): -20 Pkt Vorsichtsabschlag
     if _eg_sev == "soft":
         s = max(0, s - 20)
+
+    return max(0, min(100, s))
+
+
+def score_underlying_assignment_quality(r: dict, market_regime: str = "NEUTRAL") -> int:
+    """
+    Underlying Assignment Quality (UAQ), 0-100 — UIQ Spec v1.2 §2.1 (14.09.2026,
+    Axel + Reviewer + Claude).
+
+    Beantwortet: "Wie gut wäre dieser Titel, wenn ich ihn tatsächlich per
+    CSP-Assignment übernehmen müsste?" — unabhängig vom konkreten Kontrakt
+    (Strike/DTE/IV). Die Kontrakt-Ebene ("Contract Assignment Quality", CAQ)
+    ist bewusst NICHT Teil dieser Funktion und wird nicht implementiert,
+    solange UIQ keine echten Optionsketten-Daten hat (Strike/DTE/Bid-Ask/
+    echte IV) — s. bereits bestehende Dokumentation bei calc_multileg_season()
+    ("Stufe 2, wartet auf CapTrader-Architekturentscheidung"). Eine CAQ auf
+    Basis von hvp (Näherung, keine echte IV) oder den KI-vorgeschlagenen
+    Feldern (strikeSuggestion/dte/deltaTarget, s. KI_SENSITIVE_OPTIONS_LEGACY)
+    wäre Scheingenauigkeit, keine Berechnung — bewusst unterlassen.
+
+    Bewusst GEGENTEILIG zum bestehenden Premium-Score (score_options_csp())
+    gewichtet: hohe historische Vola macht dort die Prämie attraktiver, macht
+    hier aber die Aktie NICHT zu einem besseren Übernahme-Kandidaten.
+
+    Ausschließlich Fundamental-/Bewertungs-/Regime-/Stabilitätsfelder, die
+    bereits in UIQ vorhanden sind — keine IV/IV-Rank-Daten.
+    """
+    price = r.get("price", 0) or 0
+    if not price or price <= 0:
+        return 0
+
+    pe_fwd    = r.get("peForward")
+    pb        = r.get("pb")
+    fcf_yield = r.get("fcfYield")
+    roe       = r.get("roe")
+    oe_yield  = r.get("ownerEarningsYield")
+    d_eq      = r.get("debtToEquity")
+    hvp       = r.get("hvp", 0) or 0
+
+    # Gate: mindestens ein Bewertungs-/Qualitätsanker muss vorhanden sein
+    if pe_fwd is None and pb is None and fcf_yield is None and oe_yield is None:
+        return 0
+
+    s = 0
+
+    # ── Fundamentale Qualität ────────────────────────────────────────────────
+    if fcf_yield is not None:
+        if   fcf_yield >= 8: s += 20
+        elif fcf_yield >= 5: s += 14
+        elif fcf_yield >= 3: s += 8
+        elif fcf_yield >= 0: s += 2
+        else:                s -= 15   # Negativer FCF — kein Übernahme-Kandidat
+
+    if roe is not None:
+        if   roe >= 20: s += 15
+        elif roe >= 12: s += 10
+        elif roe >= 5:  s += 3
+        elif roe <  0:  s -= 15
+
+    if oe_yield is not None:
+        if   oe_yield >= 8: s += 15
+        elif oe_yield >= 5: s += 10
+        elif oe_yield >= 3: s += 5
+
+    # ── Bewertung (nicht überteuert übernehmen) ──────────────────────────────
+    if pe_fwd is not None:
+        if   pe_fwd <= 15: s += 15
+        elif pe_fwd <= 20: s += 10
+        elif pe_fwd <= 25: s += 3
+        elif pe_fwd <= 35: s -= 5
+        else:              s -= 15
+
+    if pb is not None:
+        if   pb <= 1.5: s += 10
+        elif pb <= 2.5: s += 5
+        elif pb <= 4.0: s += 0
+        else:           s -= 8
+
+    # ── Verschuldung ──────────────────────────────────────────────────────────
+    if d_eq is not None:
+        if   d_eq <= 0.5: s += 10
+        elif d_eq <= 1.0: s += 5
+        elif d_eq >  2.0: s -= 10
+
+    # ── Stabilität (Gegenteil von score_options_csp(): niedrige Vola = gut) ───
+    if hvp:
+        if   hvp <= 25: s += 15
+        elif hvp <= 40: s += 8
+        elif hvp <= 60: s += 0
+        else:           s -= 10   # Sehr volatil — Übernahme-Risiko hoch
+
+    # ── Regime-Fit (dieselbe REGIME_FIT-Infrastruktur wie §1.1, neutral bis
+    #    kalibriert — s. dortigen Kommentar; "csp_underlying" als neuer Key) ──
+    regime_upper = (market_regime or "NEUTRAL").upper()
+    s = round(s * regime_fit(regime_upper, "csp_underlying"))
 
     return max(0, min(100, s))
 
@@ -5300,6 +5416,9 @@ REGIME_FIT = {
     ("BULL_FRAGILE", "long_swing"):     1.0,  # TODO: kalibrieren
     ("BULL_QUIET",   "short_fading"):   1.0,
     ("BULL_FRAGILE", "short_fading"):   1.0,  # TODO: kalibrieren
+    # NEU (14.09.2026, UIQ Spec v1.2 §2.1): Underlying Assignment Quality
+    ("BULL_QUIET",   "csp_underlying"): 1.0,
+    ("BULL_FRAGILE", "csp_underlying"): 1.0,  # TODO: kalibrieren
 }
 
 
@@ -5332,6 +5451,11 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         s_breakdown = score_short_breakdown(r)
         s_fading    = score_short_fading(r)
         s_csp       = score_options_csp(r)
+        # NEU (14.09.2026, UIQ Spec v1.2 §2.1): Underlying Assignment Quality —
+        # separat vom Premium-Score, s. Docstring bei score_underlying_
+        # assignment_quality(). market_regime ist hier bereits als Parameter
+        # von build_leaderboards() verfuegbar.
+        s_uaq       = score_underlying_assignment_quality(r, market_regime)
         s_cc        = score_options_covered_call(r)
         s_vcp       = score_vcp(r)
         s_dividend  = score_long_dividend(r)   # Backlog #13b, 28.07.2026
@@ -5482,6 +5606,10 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             # verwenden soll.
             "sectors":        r.get("sectors"),
             "sectorTagVersion": r.get("sectorTagVersion"),
+            # NEU (14.09.2026, UIQ Spec v1.2 §2.1): eigenstaendiges Feld, NICHT
+            # in sCsp gemischt — s. Docstring bei score_underlying_assignment_
+            # quality() fuer die bewusste Trennung Premium vs. Underlying-Qualitaet.
+            "sUaq":           s_uaq,
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
@@ -5514,7 +5642,10 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
                  # NEU (14.09.2026, UIQ Spec v1.2 §3): sectors/sectorTagVersion
                  # fehlten hier trotz Vorhandensein in scored[] (Luecke heute
                  # zusammen mit scored.append() geschlossen).
-                 "sectors", "sectorTagVersion"]
+                 "sectors", "sectorTagVersion",
+                 # NEU (14.09.2026, UIQ Spec v1.2 §2.1): Underlying Assignment
+                 # Quality — s. Docstring bei score_underlying_assignment_quality().
+                 "sUaq"]
         return [
             {**{f: x.get(f) for f in _core},
              **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
@@ -10922,7 +11053,10 @@ def main():
                  "sFading", "sVcp", "sKoLong", "sDividend", "sValue",
                  # NEU (14.09.2026, UIQ Spec v1.2 §3): dieselbe Ergaenzung wie
                  # bei top20()s _core-Liste oben (bewusste Kopie, s. Kommentar).
-                 "sectors", "sectorTagVersion"]
+                 "sectors", "sectorTagVersion",
+                 # NEU (14.09.2026, UIQ Spec v1.2 §2.1): dieselbe Ergaenzung
+                 # wie bei top20()s _core-Liste oben.
+                 "sUaq"]
         _entries = []
         for _r in results:
             if _r.get("error") or not _r.get("price"):
