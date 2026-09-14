@@ -30,6 +30,22 @@
 # Bei jedem neuen Feld: alle sieben Stellen durchgehen, nicht nur die,
 # die gerade im Fokus steht.
 
+# ── CHANGELOG-Ergänzung (14.09.2026, Teil 2) ──────────────────────────────────
+# NEU: "sectors"/"sectorTagVersion" in scored.append() UND top20()s/_rebuild_
+# fundamental_lb()s _core-Liste ergaenzt (UIQ Spec v1.2, §3) — dieselbe
+# Kategorie Luecke wie bei homeMarket/tightnessPct/sma150/rsRating (s.
+# Checkliste am Dateianfang): process_ticker()s Rueckgabe-Dict hatte
+# "sectors" (aus SECTOR_WATCHLISTS/TICKER_SECTOR_TAG) schon immer, erreichte
+# aber weder scored[] noch die Leaderboards. Zusaetzlich neue Konstante
+# SECTOR_WATCHLISTS_VERSION ("4.7") als echtes, abfragbares Versionsfeld
+# ("sectorTagVersion" pro Ticker) statt der bisherigen rein informellen
+# Datums-Kommentare bei SECTOR_WATCHLISTS. Bewusst KEINE neue Cluster-
+# Taxonomie (z.B. ein einzelnes "AI_INFRASTRUCTURE"-Label) eingefuehrt —
+# die vorhandene Multi-Tag-Liste (ein Ticker kann mehreren Sektoren
+# angehoeren, z.B. NVDA: AI_TECH+SEMIS+ROBOTICS+PICKS_SHOVELS) deckt den in
+# der Spec beschriebenen Anwendungsfall bereits ab, eine erzwungene
+# Einzelkategorie waere zusaetzliche Komplexitaet ohne Informationsgewinn.
+
 # ── CHANGELOG-Ergänzung (14.09.2026) ─────────────────────────────────────────
 # NEU: REGIME_FIT-Tabelle + regime_fit()-Helper (UIQ Spec v1.2, §1.1) —
 # build_leaderboards()s is_bull-Zweig behandelte BULL_QUIET und BULL_FRAGILE
@@ -1871,6 +1887,17 @@ TICKER_SECTOR_TAG = {}
 for _sector, _tickers in SECTOR_WATCHLISTS.items():
     for _t in _tickers:
         TICKER_SECTOR_TAG.setdefault(_t, []).append(_sector)
+
+# ── SECTOR_WATCHLISTS-VERSION (UIQ Spec v1.2, §3, 14.09.2026, Claude+Axel) ─────
+# Ersetzt die bisherigen informellen Datums-Kommentare ("v4.2", "v4.7" im
+# Kommentartext oben) durch eine tatsaechlich abfragbare Version, die pro
+# Ticker mitgefuehrt wird (Feld "sectorTagVersion", s. process_ticker()).
+# Zweck: nachvollziehen koennen, unter welcher Kategorisierung ein Ticker
+# an einem bestimmten Datum eingestuft wurde -- wichtig, sobald
+# SECTOR_WATCHLISTS sich aendert (Ticker verschoben/ergaenzt/entfernt),
+# damit historische Daten nicht rueckwirkend semantisch umgedeutet werden.
+# Bei jeder inhaltlichen Aenderung an SECTOR_WATCHLISTS hochzaehlen.
+SECTOR_WATCHLISTS_VERSION = "4.7"
 
 # ── RS-REFERENZ ETFs fuer Sektor Relative-Staerke ─────────────────────────────
 RS_SECTOR_ETFS = [
@@ -5447,6 +5474,14 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
             "ivpHv20":        r.get("ivpHv20"),
             "ivpHv50":        r.get("ivpHv50"),
             "ivpHv100":       r.get("ivpHv100"),
+            # NEU (14.09.2026, UIQ Spec v1.2 §3 — dieselbe Kategorie Luecke wie
+            # bei homeMarket/tightnessPct/sma150/rsRating: process_ticker()s
+            # Rueckgabe-Dict r hatte "sectors"/"sectorTagVersion" schon immer,
+            # dieses handverlesene scored-Dict nahm sie aber nie auf, obwohl
+            # top20()s _core-Liste (unten, ebenfalls heute ergaenzt) sie
+            # verwenden soll.
+            "sectors":        r.get("sectors"),
+            "sectorTagVersion": r.get("sectorTagVersion"),
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
@@ -5475,7 +5510,11 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
                  "vcpDetected", "vcpContractions", "vcpLastPct", "vcpAvgPrevPct",
                  "vcpVolContraction", "vcpBreakoutVol",
                  "sMinervini", "sSwing", "sMrLong", "sBreakout", "sBreakdown",
-                 "sFading", "sVcp", "sKoLong", "sDividend", "sValue"]
+                 "sFading", "sVcp", "sKoLong", "sDividend", "sValue",
+                 # NEU (14.09.2026, UIQ Spec v1.2 §3): sectors/sectorTagVersion
+                 # fehlten hier trotz Vorhandensein in scored[] (Luecke heute
+                 # zusammen mit scored.append() geschlossen).
+                 "sectors", "sectorTagVersion"]
         return [
             {**{f: x.get(f) for f in _core},
              **({f: x.get(f) for f in extra_fields} if extra_fields else {})}
@@ -6445,6 +6484,10 @@ def process_ticker(ticker, hist_df):
                 "tvaRegime": None, "tvaRegimeConf": None, "chopIndex": None, "chopLabel": None}),
             # Sektor-Tags (automatisch aus SECTOR_WATCHLISTS invertiert — nie manuell editieren)
             "sectors":       TICKER_SECTOR_TAG.get(ticker, []),
+            # NEU (14.09.2026, UIQ Spec v1.2 §3): Version der SECTOR_WATCHLISTS-
+            # Kategorisierung zum Zeitpunkt dieses Laufs — s. Kommentar bei
+            # SECTOR_WATCHLISTS_VERSION oben.
+            "sectorTagVersion": SECTOR_WATCHLISTS_VERSION,
             # Handelsboerse/-zeit, aus Ticker-Suffix abgeleitet (04.09.2026, KO-5-Fix,
             # s. Changelog-Kommentar am Dateianfang) — NICHT manuell editieren.
             "homeMarket":    _derive_home_market(ticker),
@@ -10876,7 +10919,10 @@ def main():
                  "vcpDetected", "vcpContractions", "vcpLastPct", "vcpAvgPrevPct",
                  "vcpVolContraction", "vcpBreakoutVol",
                  "sMinervini", "sSwing", "sMrLong", "sBreakout", "sBreakdown",
-                 "sFading", "sVcp", "sKoLong", "sDividend", "sValue"]
+                 "sFading", "sVcp", "sKoLong", "sDividend", "sValue",
+                 # NEU (14.09.2026, UIQ Spec v1.2 §3): dieselbe Ergaenzung wie
+                 # bei top20()s _core-Liste oben (bewusste Kopie, s. Kommentar).
+                 "sectors", "sectorTagVersion"]
         _entries = []
         for _r in results:
             if _r.get("error") or not _r.get("price"):
