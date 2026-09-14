@@ -30,6 +30,22 @@
 # Bei jedem neuen Feld: alle sieben Stellen durchgehen, nicht nur die,
 # die gerade im Fokus steht.
 
+# ── CHANGELOG-Ergänzung (14.09.2026) ─────────────────────────────────────────
+# NEU: REGIME_FIT-Tabelle + regime_fit()-Helper (UIQ Spec v1.2, §1.1) —
+# build_leaderboards()s is_bull-Zweig behandelte BULL_QUIET und BULL_FRAGILE
+# bisher identisch (beide matchen den "is_bull"-Substring-Match), obwohl
+# BULL_FRAGILE als Regime-Label bereits seit classify_regime_v2() existiert
+# und bei score_options_collar() schon differenziert genutzt wird — Fund
+# waehrend Verifikation einer Reviewer-Spec 13./14.09.2026. Jetzt:
+# masterScore = BaseScore * regime_fit(regime, strategy) statt einer harten
+# Ausschlussregel. WICHTIG: alle Werte in REGIME_FIT stehen aktuell auf 1.0
+# (neutral) — echte Kalibrierung (welche Strategie in BULL_FRAGILE tat-
+# saechlich ueber-/unterperformt) ist eine Backtest-Frage (ahsub/regime-test),
+# keine Annahme ohne empirische Grundlage. Verhalten heute nachweislich
+# identisch zu vorher (x * 1.0 == x), nur die Struktur fuer eine spaetere
+# Kalibrierung ist jetzt vorhanden. Siehe REGIME_FIT-Kommentar vor
+# build_leaderboards() fuer Details.
+
 # ── CHANGELOG-Ergänzung (07.09.2026) ─────────────────────────────────────────
 # NEU: echte IV-Perzentil-Daten integriert (fetch_iv_percentile_data(), neue
 # Felder ivpPercentile/ivpDays/ivpCurIv/ivpHv20/ivpHv50/ivpHv100). Quelle:
@@ -5231,6 +5247,44 @@ def enrich_with_fundamentals(sym: str, price: float, sector: str = None) -> dict
         return {}
 
 
+# ── REGIME-FIT-FAKTOR (UIQ Spec v1.2, §1.1, 14.09.2026, Claude+Axel) ───────
+# Multiplikativer statt exklusiver Regime-Einfluss auf die Master-Shortlist:
+# MasterScore = BaseScore * RegimeFit, statt einer harten Ausschlussregel
+# ("BULL_FRAGILE -> High Beta raus"). Grund: ein hoher Beta-Wert kann bei
+# aussergewoehnlich starkem Earnings-Momentum/relativer Staerke trotzdem
+# gerechtfertigt sein -- eine feste Ausschlussregel wuerde solche Faelle
+# fälschlich aussortieren.
+#
+# WICHTIG: Alle Werte hier sind bewusst NEUTRAL (1.0) belassen. Diese
+# Tabelle ist die STRUKTUR fuer eine spaetere Kalibrierung, keine fertige
+# Kalibrierung selbst -- welche Strategie in welchem Regime tatsaechlich
+# ueber-/unterperformt, ist eine Backtest-Frage (ahsub/regime-test,
+# Walk-Forward/DSR/Persistenz-Baseline-Methodik dort), keine Annahme, die
+# ohne empirische Grundlage in einer einzelnen Coding-Session gesetzt
+# werden sollte. Bis zur Kalibrierung aendert diese Aenderung also NICHTS
+# am tatsaechlichen Verhalten (Multiplikation mit 1.0) -- nur die
+# bisher fehlende Unterscheidung BULL_QUIET/BULL_FRAGILE (vorher per
+# Substring-Match "is_bull" identisch behandelt, s. Fund 13./14.09.2026)
+# wird strukturell moeglich.
+REGIME_FIT = {
+    ("BULL_QUIET",   "long_minervini"): 1.0,
+    ("BULL_FRAGILE", "long_minervini"): 1.0,  # TODO: kalibrieren, s. ahsub/regime-test
+    ("BULL_QUIET",   "long_swing"):     1.0,
+    ("BULL_FRAGILE", "long_swing"):     1.0,  # TODO: kalibrieren
+    ("BULL_QUIET",   "short_fading"):   1.0,
+    ("BULL_FRAGILE", "short_fading"):   1.0,  # TODO: kalibrieren
+}
+
+
+def regime_fit(regime: str, strategy: str) -> float:
+    """Liefert den RegimeFit-Multiplikator fuer (Regime, Strategie), s.
+    REGIME_FIT-Kommentar oben. Faellt auf 1.0 (neutral, keine Wirkung)
+    zurueck, wenn keine spezifische Kalibrierung vorliegt -- z.B. bei
+    Regimes ausserhalb BULL_QUIET/BULL_FRAGILE (NEUTRAL, STRESS_UNSTABLE,
+    POST_PANIC_REVERSION etc.), die diese Tabelle bewusst nicht abdeckt."""
+    return REGIME_FIT.get((regime, strategy), 1.0)
+
+
 def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
     """
     Berechnet alle 5 Strategie-Scores und erstellt sortierte Leaderboards.
@@ -5509,18 +5563,22 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     elif is_bull:
         # Bullenmarkt: Minervini + Swing primär, Fading-Shorts selektiv
+        # REGIME-FIT (Spec v1.2 §1.1, 14.09.2026): BULL_QUIET/BULL_FRAGILE
+        # waren hier bisher identisch behandelt (beide matchen "is_bull"
+        # oben) -- jetzt ueber regime_fit() multiplikativ unterschieden,
+        # aktuell noch neutral (1.0), s. REGIME_FIT-Kommentar oben.
         for x in scored:
             if x["sMinervini"] >= 75:
                 shortlist_dict[x["sym"]] = {**x,
-                    "masterScore": x["sMinervini"],
+                    "masterScore": min(100, x["sMinervini"] * regime_fit(regime_upper, "long_minervini")),
                     "masterStrategy": "long_minervini"}
             elif x["sSwing"] >= 70 and x["sym"] not in shortlist_dict:
                 shortlist_dict[x["sym"]] = {**x,
-                    "masterScore": x["sSwing"],
+                    "masterScore": min(100, x["sSwing"] * regime_fit(regime_upper, "long_swing")),
                     "masterStrategy": "long_swing"}
             elif x["sFading"] >= 70 and x["sym"] not in shortlist_dict:
                 shortlist_dict[x["sym"]] = {**x,
-                    "masterScore": x["sFading"],
+                    "masterScore": min(100, x["sFading"] * regime_fit(regime_upper, "short_fading")),
                     "masterStrategy": "short_fading"}
 
     else:
