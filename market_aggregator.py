@@ -30,7 +30,7 @@
 # Bei jedem neuen Feld: alle sieben Stellen durchgehen, nicht nur die,
 # die gerade im Fokus steht.
 
-# ── CHANGELOG-Ergänzung (15.09.2026, Teil 3) ──────────────────────────────────
+# ── CHANGELOG-Ergänzung (14.09.2026, Teil 3) ──────────────────────────────────
 # NEU: score_underlying_assignment_quality() — "Underlying Assignment
 # Quality" (UAQ), UIQ Spec v1.2 §2.1. Eigenständiger Score, ob ein Titel bei
 # tatsächlicher CSP-Zuteilung ein guter Übernahme-Kandidat wäre — getrennt
@@ -51,7 +51,7 @@
 # verfügbar sind — UAQ bleibt dann unverändert bestehen (kontrakt-
 # unabhängig), CAQ ergänzt als zweite, separate Ebene.
 
-# ── CHANGELOG-Ergänzung (15.09.2026, Teil 2) ──────────────────────────────────
+# ── CHANGELOG-Ergänzung (14.09.2026, Teil 2) ──────────────────────────────────
 # NEU: "sectors"/"sectorTagVersion" in scored.append() UND top20()s/_rebuild_
 # fundamental_lb()s _core-Liste ergaenzt (UIQ Spec v1.2, §3) — dieselbe
 # Kategorie Luecke wie bei homeMarket/tightnessPct/sma150/rsRating (s.
@@ -67,7 +67,7 @@
 # der Spec beschriebenen Anwendungsfall bereits ab, eine erzwungene
 # Einzelkategorie waere zusaetzliche Komplexitaet ohne Informationsgewinn.
 
-# ── CHANGELOG-Ergänzung (15.09.2026) ─────────────────────────────────────────
+# ── CHANGELOG-Ergänzung (14.09.2026) ─────────────────────────────────────────
 # NEU: REGIME_FIT-Tabelle + regime_fit()-Helper (UIQ Spec v1.2, §1.1) —
 # build_leaderboards()s is_bull-Zweig behandelte BULL_QUIET und BULL_FRAGILE
 # bisher identisch (beide matchen den "is_bull"-Substring-Match), obwohl
