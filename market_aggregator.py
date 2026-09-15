@@ -11011,6 +11011,42 @@ def main():
     else:
         log.info("  Fundamental-Enrichment: keine Kandidaten (alle ETF/Krypto)")
 
+    # ── sUaq nach Enrichment neu berechnen (Bugfix 15.09.2026, Live-Daten-Fund) ─
+    # ROOT CAUSE: score_underlying_assignment_quality() wird in build_leaderboards()
+    # aufgerufen, BEVOR das Fundamental-Enrichment oben läuft — zu diesem Zeitpunkt
+    # sind peForward/pb/fcfYield/ownerEarningsYield für JEDEN Ticker noch None, der
+    # Gate der Funktion (mindestens ein Bewertungsanker nötig) schlägt deshalb
+    # strukturell IMMER zu (sUaq=0 für alle Kandidaten, unabhängig von echten
+    # später vorhandenen Fundamentaldaten — verifiziert an echten Live-Daten:
+    # 253/253 Leaderboard-Einträge exakt 0; OXY hätte mit seinen echten Werten
+    # (peForward=15.3, pb=1.85, fcfYield=6.13, roe=10.6, debtToEquity=34.5,
+    # hvp=20) rechnerisch ~37 ergeben). Zusätzlich wurde s_uaq nie auf r/
+    # results[] selbst geschrieben, nur in die separate scored[]-Kopie innerhalb
+    # build_leaderboards() — dadurch blieb sUaq bei long_dividend/long_value
+    # (die per _rebuild_fundamental_lb() unten aus results[] neu gebaut werden)
+    # sogar None statt 0.
+    #
+    # Fix, analog zum bereits bestehenden #13b-Muster ("Scorer nach Enrichment
+    # neu aufrufen"): sUaq für ALLE Ergebnisse hier neu berechnen (reine
+    # Berechnung, kein zusätzlicher API-Call/Kosten) und auf r selbst
+    # schreiben — _rebuild_fundamental_lb() liest ohnehin frisch aus results[],
+    # profitiert also ab sofort automatisch, kein Zusatzcode dort nötig. Die
+    # bereits VOR dem Enrichment (in build_leaderboards()) gebauten 13
+    # top20()-Leaderboards in leaderboards_obj sind dagegen Snapshots und
+    # müssen separat nachsynchronisiert werden (zweiter Block direkt danach).
+    for _r in results:
+        _r["sUaq"] = score_underlying_assignment_quality(_r, market_regime_str)
+
+    _sUaq_by_sym = {_r["sym"]: _r.get("sUaq") for _r in results}
+    for _lb_key, _lb_entries in leaderboards_obj.items():
+        if not isinstance(_lb_entries, list):
+            continue
+        for _entry in _lb_entries:
+            if "sUaq" in _entry and _entry.get("sym") in _sUaq_by_sym:
+                _entry["sUaq"] = _sUaq_by_sym[_entry["sym"]]
+    log.info(f"  [sUaq-Fix 15.09.2026] sUaq für {len(results)} Ticker neu berechnet "
+             f"und in {len(leaderboards_obj)} Leaderboards nachsynchronisiert.")
+
     # ── Dividend + Value Leaderboards nach Enrichment neu berechnen (#13b) ───
     # build_leaderboards() lief vor Enrichment — Fundamental-Felder waren noch None.
     # Jetzt sind divYield/peForward/etc. in results[] → Scorer neu aufrufen.
