@@ -1,0 +1,72 @@
+name: Version-Lint (AGGREGATOR_VERSION)
+
+# Erzwingt das Muster aus Option 2 (15.09.2026, Axel-Entscheidung): eine
+# Aenderung an market_aggregator.py OHNE begleitenden AGGREGATOR_VERSION-
+# Bump wird als roter Check sichtbar, statt sich (wie zuvor mehrfach
+# passiert — s. Warnkommentar direkt ueber der Konstante im Code, zuletzt
+# v5.31.0-v5.36.0 UND der sUaq-/max_tokens-Fix vom 15.09.2026) nur auf
+# einen Kommentar zu verlassen, den jemand lesen und befolgen muesste.
+#
+# Bewusst als EIGENER, schlanker Workflow (nicht als Zusatz-Step in
+# market-aggregator.yml): laeuft sofort bei jedem Push/PR, der die Datei
+# beruehrt, ohne yfinance/pytest-Setup, und blockiert den eigentlichen
+# taeglichen Aggregator-Lauf nicht (komplett getrennte Workflows).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'market_aggregator.py'
+  pull_request:
+    paths:
+      - 'market_aggregator.py'
+
+jobs:
+  check-version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mit voller Historie
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # noetig, um den vorherigen Commit fuer den Diff zu haben
+
+      - name: Prüfe, ob AGGREGATOR_VERSION mitgezogen wurde
+        run: |
+          set -e
+
+          # BASE_SHA: bei Push der Vorgaenger-Commit, bei PR der Base-Branch-Stand.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+          HEAD_SHA="${{ github.sha }}"
+
+          # Erster Push auf einen neuen Branch / all-zero SHA: kein sinnvoller
+          # Vergleichs-Commit vorhanden -> Check ueberspringen statt falsch-positiv
+          # failen (z.B. Branch-Neuanlage aus einem bestehenden Stand).
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            echo "⚠️  Kein gültiger Vergleichs-Commit (BASE_SHA='$BASE_SHA') — Check übersprungen."
+            exit 0
+          fi
+
+          DIFF=$(git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" -- market_aggregator.py)
+
+          if [ -z "$DIFF" ]; then
+            echo "ℹ️  Keine inhaltliche Änderung an market_aggregator.py in diesem Diff."
+            exit 0
+          fi
+
+          if echo "$DIFF" | grep -qE '^\+AGGREGATOR_VERSION = "'; then
+            NEW_VERSION=$(echo "$DIFF" | grep -oE '^\+AGGREGATOR_VERSION = "[^"]+"' | head -1)
+            echo "✅ AGGREGATOR_VERSION wurde mitgezogen: $NEW_VERSION"
+          else
+            echo "❌ market_aggregator.py wurde geändert, aber AGGREGATOR_VERSION NICHT angepasst."
+            echo ""
+            echo "   Bitte AGGREGATOR_VERSION bumpen und direkt darunter einen Changelog-"
+            echo "   Eintrag ergänzen (Format: s. bestehende Einträge im Code direkt unter"
+            echo "   der Konstante). Dieses Muster (Codeänderung ohne Versionsbump) ist"
+            echo "   bereits mehrfach passiert (v5.31.0–v5.36.0, sowie 15.09.2026) —"
+            echo "   deshalb dieser Check."
+            exit 1
+          fi
