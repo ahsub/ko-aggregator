@@ -30,7 +30,7 @@
 # Bei jedem neuen Feld: alle sieben Stellen durchgehen, nicht nur die,
 # die gerade im Fokus steht.
 
-# ── CHANGELOG-Ergänzung (14.09.2026, Teil 3) ──────────────────────────────────
+# ── CHANGELOG-Ergänzung (15.09.2026, Teil 3) ──────────────────────────────────
 # NEU: score_underlying_assignment_quality() — "Underlying Assignment
 # Quality" (UAQ), UIQ Spec v1.2 §2.1. Eigenständiger Score, ob ein Titel bei
 # tatsächlicher CSP-Zuteilung ein guter Übernahme-Kandidat wäre — getrennt
@@ -51,7 +51,7 @@
 # verfügbar sind — UAQ bleibt dann unverändert bestehen (kontrakt-
 # unabhängig), CAQ ergänzt als zweite, separate Ebene.
 
-# ── CHANGELOG-Ergänzung (14.09.2026, Teil 2) ──────────────────────────────────
+# ── CHANGELOG-Ergänzung (15.09.2026, Teil 2) ──────────────────────────────────
 # NEU: "sectors"/"sectorTagVersion" in scored.append() UND top20()s/_rebuild_
 # fundamental_lb()s _core-Liste ergaenzt (UIQ Spec v1.2, §3) — dieselbe
 # Kategorie Luecke wie bei homeMarket/tightnessPct/sma150/rsRating (s.
@@ -67,7 +67,7 @@
 # der Spec beschriebenen Anwendungsfall bereits ab, eine erzwungene
 # Einzelkategorie waere zusaetzliche Komplexitaet ohne Informationsgewinn.
 
-# ── CHANGELOG-Ergänzung (14.09.2026) ─────────────────────────────────────────
+# ── CHANGELOG-Ergänzung (15.09.2026) ─────────────────────────────────────────
 # NEU: REGIME_FIT-Tabelle + regime_fit()-Helper (UIQ Spec v1.2, §1.1) —
 # build_leaderboards()s is_bull-Zweig behandelte BULL_QUIET und BULL_FRAGILE
 # bisher identisch (beide matchen den "is_bull"-Substring-Match), obwohl
@@ -1298,7 +1298,30 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.42.0"
+AGGREGATOR_VERSION = "5.42.1"
+# v5.42.1 (15.09.2026): Options-KI JSON-Fence-Fix. Nach dem max_tokens-Fix
+# (v5.42.0) sank die Options-Watchlist-Fehlerquote von 12/50 auf 6/50, blieb
+# aber bestehen — Live-Log zeigte bei ALLEN verbleibenden Fehlern dasselbe
+# Muster: "Extra data: line 7 column 1", nahezu identischer Char-Offset
+# (93-96) UNABHAENGIG vom Ticker (MSFT/DE/NOW/NUE/NICE/IYW). Root Cause:
+# enrich_options_watchlist_with_ai()s Fence-Stripping
+# (`if text.startswith("```"): text.split('\n')[1:-1]`) entfernte eine
+# Markdown-Fence nur, wenn Text MIT einer oeffnenden Fence begann UND eine
+# schliessende als letzte Zeile hatte — beides zusammen zwingend. Die
+# betroffenen Antworten hatten trotz expliziter Prompt-Anweisung ("kein
+# Markdown") offenbar NUR eine schliessende ```-Zeile ohne oeffnende Fence;
+# die alte Bedingung griff nicht, json.loads() parste das valide JSON
+# korrekt, stiess danach aber auf die uebrig gebliebene Fence-Zeile. NICHT
+# gegen den rohen API-Response-Text verifiziert (nur gegen das Fehlerbild
+# rekonstruiert) — daher als Hypothese mit starker Indizienlage behandelt,
+# nicht als bestaetigter Fakt. Fix: neue _strip_json_fence()-Hilfsfunktion,
+# entfernt oeffnende und schliessende Fence unabhaengig voneinander (beide
+# optional), lokal getestet gegen alle vier Kombinationen (keine/nur-
+# oeffnend/nur-schliessend/beide). NOCH NICHT LIVE VERIFIZIERT — deshalb
+# zusaetzlich Diagnose-Logging ergaenzt: bei einem verbleibenden Parse-
+# Fehler wird jetzt der rohe Response-Text (bis 500 Zeichen) mitgeloggt,
+# bevor die Exception weitergereicht wird — damit ein naechster Fund (falls
+# einer bleibt) auf echtem Text statt einer weiteren Hypothese basiert.
 # v5.42.0 (15.09.2026): ZWEI Fixes nachtraeglich versioniert — beide bereits
 # committet/live, aber ohne diese Konstante mitzuziehen (exakt das in der
 # Warnung unten beschriebene Wiederholungsmuster, hier zum dritten Mal
@@ -5973,7 +5996,30 @@ async def enrich_options_watchlist_with_ai(watchlist: list, market_data: dict,
         log.warning("  Options-KI-Enrichment: kein API-Key oder leere Watchlist — uebersprungen")
         return watchlist
 
-    import json as json_mod, urllib.request, urllib.error
+    import json as json_mod, re as _re, urllib.request, urllib.error
+
+    def _strip_json_fence(raw: str) -> str:
+        """Entfernt eine ggf. vorhandene Markdown-Code-Fence rund um eine
+        JSON-Antwort — Bugfix 15.09.2026 (Live-Log-Fund, s. Kommentar bei
+        AGGREGATOR_VERSION). Die alte Logik
+        (`if text.startswith("```"): text.split('\\n')[1:-1]`) entfernte nur
+        dann etwas, wenn Text mit einer OEFFNENDEN Fence begann, und verlangte
+        dann zwingend eine schliessende Fence als letzte Zeile — beides
+        zusammen. Live-Beobachtung: mehrere Kandidaten (MSFT/DE/NOW/NUE/NICE/
+        IYW im 15.09.-Lauf) lieferten trotz expliziter Prompt-Anweisung
+        ("Antworte NUR mit dem JSON-Objekt — kein Markdown") eine schliessende
+        ```-Zeile OHNE oeffnende Fence davor — die alte Bedingung griff dann
+        nicht, json.loads() parste das valide JSON-Objekt korrekt, stiess
+        danach aber auf die uebrig gebliebene ```-Zeile -> "Extra data: line 7
+        column 1", konsistent ueber alle betroffenen Ticker hinweg (Signatur
+        einer ueberschuessigen Fence-Zeile, nicht einer Trunkierung). Fix:
+        oeffnende und schliessende Fence UNABHAENGIG voneinander entfernen,
+        beide optional.
+        """
+        s = raw.strip()
+        s = _re.sub(r'^```(?:json)?\s*\n?', '', s)
+        s = _re.sub(r'\n?```\s*$', '', s)
+        return s.strip()
 
     enriched = []
     top15 = watchlist[:15]
@@ -6072,10 +6118,18 @@ Gib zurück:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 resp_data = json_mod.loads(resp.read().decode())
                 text = resp_data.get("content", [{}])[0].get("text", "")
-                text = text.strip()
-                if text.startswith("```"):
-                    text = '\n'.join(text.split('\n')[1:-1])
-                ki_params = json_mod.loads(text)
+                text = _strip_json_fence(text)
+                try:
+                    ki_params = json_mod.loads(text)
+                except json_mod.JSONDecodeError:
+                    # Diagnose-Log 15.09.2026: der bisherige Fence-Fix ist eine
+                    # anhand des Fehlerbilds rekonstruierte Hypothese, nicht
+                    # gegen den rohen Response-Text verifiziert. Falls trotzdem
+                    # noch etwas durchrutscht, hier der echte Text (bis 500
+                    # Zeichen, reicht i.d.R. um die Struktur zu sehen) statt
+                    # erneut zu raten.
+                    log.warning(f"    Options-KI {sym} RAW-Response nach Parse-Fehler: {text[:500]!r}")
+                    raise
 
                 # fitLabel/conclusion serverseitig aus fitScore ableiten statt der KI zu
                 # überlassen (Konsistenz-Garantie, vgl. Bucketing-Vorgabe).
@@ -6100,10 +6154,13 @@ basierend auf Strategie "{ki_params.get('strategy')}", Kurs {price} USD, HVP {hv
                              "anthropic-version": "2023-06-01"}, method="POST")
                 with urllib.request.urlopen(req2, timeout=15) as resp2:
                     resp2_data = json_mod.loads(resp2.read().decode())
-                    text2 = resp2_data.get("content", [{}])[0].get("text", "").strip()
-                    if text2.startswith("```"):
-                        text2 = '\n'.join(text2.split('\n')[1:-1])
-                    ki_eic = json_mod.loads(text2)
+                    text2 = resp2_data.get("content", [{}])[0].get("text", "")
+                    text2 = _strip_json_fence(text2)
+                    try:
+                        ki_eic = json_mod.loads(text2)
+                    except json_mod.JSONDecodeError:
+                        log.warning(f"    Options-KI {sym} (EIC-Layer) RAW-Response nach Parse-Fehler: {text2[:500]!r}")
+                        raise
 
                 enriched.append({**c, "ki": ki_params, "ki_eic": ki_eic})
                 log.info(f"    Options-KI {sym}: Strategie={ki_params.get('strategy')} | "
