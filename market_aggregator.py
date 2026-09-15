@@ -1298,8 +1298,40 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.41.0"
-# v5.41.0 (31.08.2026): Dead-Code-Cleanup — build_server_market_context()
+AGGREGATOR_VERSION = "5.42.0"
+# v5.42.0 (15.09.2026): ZWEI Fixes nachtraeglich versioniert — beide bereits
+# committet/live, aber ohne diese Konstante mitzuziehen (exakt das in der
+# Warnung unten beschriebene Wiederholungsmuster, hier zum dritten Mal
+# passiert: v5.31.0-v5.36.0, dann diese beiden). Uebergabeprotokoll-Header
+# wird um einen expliziten Versionierungs-Pflicht-Hinweis ergaenzt (Axel-
+# Entscheidung, 15.09.2026), um das strukturell abzustellen.
+#   1. sUaq-Fix (Commit a49c4576, mittags): score_underlying_assignment_
+#      quality() lief in build_leaderboards() vor dem Fundamental-Enrichment
+#      -> sUaq war fuer 100% der Kandidaten in allen 13 top20()-basierten
+#      Leaderboards hart 0 (Gate schlug immer zu, da peForward/pb/fcfYield/
+#      ownerEarningsYield zu diesem Zeitpunkt noch None), zusaetzlich nie
+#      auf results[] zurueckgeschrieben -> bei long_dividend/long_value
+#      sogar None statt 0. Fix: sUaq nach dem Enrichment fuer alle
+#      results[] neu berechnen und auf r selbst schreiben, bereits gebaute
+#      Leaderboard-Eintraege nachsynchronisieren. LIVE VERIFIZIERT (zwei
+#      unabhaengige GHA-Laeufe, 15.09. 12:56 und 14:46 Uhr, jeweils gegen
+#      die heruntergeladene master_market_data.json geprueft: echte
+#      Wertstreuung 0/10/13/14/18/25/28/31/37/38/43/46/52/53/55 statt
+#      durchgaengig 0).
+#   2. Options-KI max_tokens-Fix (Commit folgt): enrich_options_watchlist_
+#      with_ai() nutzte max_tokens=500 fuer ein Antwortschema (bis zu 4
+#      positiveFactors + 3 riskFactors + 3 requiredChecks + modelParamRange
+#      + note, deutschsprachig), das im echten Lauf regelmaessig abriss —
+#      12/50 Kandidaten (24%) scheiterten am json.loads() mit "Unterminated
+#      string"/"Extra data"/"Expecting value" (Log-Fund 15.09., 14:52-14:54
+#      Uhr: ACAD/UNP/NSC/DUK/PLD/VICI/ADBE/PYPL/SHW/ODFL/VOD/ENGIY),
+#      Kandidat blieb dann ganz ohne ki/ki_eic-Feld im Output. Fix:
+#      max_tokens auf 1000 angehoben (max_tokens ist eine Obergrenze, kein
+#      Zielwert — Kosten steigen nur fuer die zuvor abgeschnittenen Faelle).
+#      NOCH NICHT LIVE VERIFIZIERT — naechster force_regenerate-Lauf sollte
+#      die Fehlerquote gegen 0 zeigen.
+#
+
 # war byte-identisch ZWEIMAL definiert (Fund beim MCM-PARITAET-KONZEPT.md-
 # Review, urspruenglicher Sprint 21.07.2026). Pythons Late-Binding nutzte
 # ohnehin durchgaengig die spaetere der beiden Kopien — funktional folgenlos,
@@ -6013,7 +6045,18 @@ Gib zurück:
         try:
             req_body = json_mod.dumps({
                 "model": "claude-sonnet-4-6",
-                "max_tokens": 500,
+                # ERHOEHT 15.09.2026 (Bugfix, Live-Log-Fund): war 500, zu knapp fuer
+                # das volle Antwort-Schema (bis zu 4 positiveFactors + 3 riskFactors +
+                # 3 requiredChecks + modelParamRange + note, auf Deutsch mit
+                # Finanzfachsprache) — 24% der Kandidaten (12/50) brachen im echten
+                # Lauf mitten im JSON ab ("Unterminated string"/"Extra data"/
+                # "Expecting value" beim json_mod.loads() unten), Kandidat blieb dann
+                # komplett ohne ki/ki_eic-Feld im Output. max_tokens ist eine
+                # Obergrenze, kein Zielwert — Kosten steigen nur fuer die zuvor
+                # abgeschnittenen Faelle, nicht fuer die ohnehin schon darunter
+                # fertigen ~76%. Analog zur bereits behobenen ANTHROPIC_MAX_TOKENS-
+                # Truncation in generate_public_recommendations.js (09.09.2026).
+                "max_tokens": 1000,
                 "messages": [{"role": "user", "content": prompt}]
             }).encode()
             req = urllib.request.Request(
