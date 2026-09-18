@@ -1,0 +1,73 @@
+# Workflow-Version: v1.0 (18.09.2026, Axel + Claude)
+#
+# Eigener, kleiner GHA-Job für den CoT-Data-Collector (s. cot_layer.py,
+# UIQ-COT-MODULE-DATA-ACQUISITION-SPEC-v1.0-2026-09-17.md) — bewusst
+# unabhängig vom täglichen market-aggregator.yml-Lauf (Backlog-Punkt
+# "Für nächstes Mal", Übergabeprotokoll 17.09.2026). Analog zu
+# tr-backup-saturday.yml aufgebaut: KEIN market_aggregator.py, KEINE
+# yfinance-/Anthropic-Calls, KEINE Tests — nur der Collector selbst,
+# committet anschließend die neuen JSONL-Zeilen ins Repo (Git-History
+# als Datenarchiv, wie beim TR-Backup).
+#
+# Cron bewusst NACH der CFTC-Veröffentlichung (freitags, genauer Zeitpunkt
+# historisch nicht bekannt — s. cot_layer.py-Kommentar zu
+# uiq_effective_date_type) UND nach dem Freitags-Nachbörsen-Hauptlauf
+# (22:00 UTC) gelegt, damit beide Jobs sich nicht um Git-Commits streiten.
+# Kein Anspruch, den exakten Freitags-Publikationszeitpunkt zu treffen —
+# ein Lauf am Samstag holt eine verspätete Freitagsveröffentlichung ohnehin
+# über den 5-Wochen-Puffer in run_weekly() nach.
+#
+# Initialer Vollimport (COT_MODE=backfill) ist NICHT Teil dieses
+# geplanten Laufs — einmalig manuell über workflow_dispatch mit dem
+# entsprechenden Input auslösen (s.u.), da das pro Instrument mehrere
+# Minuten dauern kann und nicht in den regulären wöchentlichen Rhythmus
+# gehört.
+
+name: CoT-Data-Collector (wöchentlich)
+
+permissions:
+  contents: write   # committet data/cot/raw/*.jsonl + data/cot/normalized/*.jsonl
+
+on:
+  schedule:
+    - cron: '00 06 * * 6'   # Samstag 06:00 UTC — Puffer nach CFTC-Freitagsveröffentlichung und nach dem Freitags-Nachbörsen-Hauptlauf
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "COT_MODE: 'weekly' (Default) oder 'backfill' (einmaliger Vollimport, mehrere Minuten)"
+        required: false
+        default: 'weekly'
+      instrument:
+        description: "Optional: nur ein Instrument (z.B. SP500) statt aller sechs — v.a. für einen gezielten Backfill-Test"
+        required: false
+        default: ''
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # grosszügig für einen manuellen Backfill-Lauf über 6 Instrumente x ~20 Jahre; ein regulärer weekly-Lauf braucht nur Sekunden
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 Setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dependencies
+        run: pip install requests
+
+      - name: CoT-Collector
+        env:
+          COT_MODE:       ${{ github.event.inputs.mode || 'weekly' }}
+          COT_INSTRUMENT: ${{ github.event.inputs.instrument || '' }}
+        run: python cot_layer.py
+
+      - name: Neue Daten committen
+        if: always()
+        run: |
+          git config user.name "uiq-nightly"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/cot/raw data/cot/normalized 2>/dev/null || true
+          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "cot: Data-Collector-Lauf $(date -u +%F)" && git push)
