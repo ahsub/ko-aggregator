@@ -1,0 +1,4337 @@
+{
+  "report_version": "1.0",
+  "generated_at": "2026-09-20T06:30:58.450784+00:00",
+  "source": {
+    "dataset": "gpe5-46if",
+    "instrument_count": 6,
+    "record_count": 6234
+  },
+  "overall_status": "WARN",
+  "checks": {
+    "temporal_integrity": {
+      "NASDAQ100": {
+        "status": "PASS",
+        "record_count": 1057,
+        "effective_date_type_counts": {
+          "backfill_estimate": 1057
+        },
+        "violation_count": 0,
+        "violations_sample": []
+      },
+      "RUSSELL2000": {
+        "status": "PASS",
+        "record_count": 990,
+        "effective_date_type_counts": {
+          "backfill_estimate": 990
+        },
+        "violation_count": 0,
+        "violations_sample": []
+      },
+      "SP500": {
+        "status": "PASS",
+        "record_count": 1057,
+        "effective_date_type_counts": {
+          "backfill_estimate": 1057
+        },
+        "violation_count": 0,
+        "violations_sample": []
+      },
+      "UST10Y": {
+        "status": "PASS",
+        "record_count": 1057,
+        "effective_date_type_counts": {
+          "backfill_estimate": 1057
+        },
+        "violation_count": 0,
+        "violations_sample": []
+      },
+      "UST2Y": {
+        "status": "PASS",
+        "record_count": 1057,
+        "effective_date_type_counts": {
+          "backfill_estimate": 1057
+        },
+        "violation_count": 0,
+        "violations_sample": []
+      },
+      "VIX": {
+        "status": "PASS",
+        "record_count": 1016,
+        "effective_date_type_counts": {
+          "backfill_estimate": 1016
+        },
+        "violation_count": 0,
+        "violations_sample": []
+      }
+    },
+    "schema_stability": {
+      "NASDAQ100": {
+        "status": "WARN",
+        "missing_explicit_fields": [],
+        "anomaly_count": 23,
+        "review_required_count": 6,
+        "unclassified_gap_count": 17,
+        "anomalies_sample": [
+          {
+            "field": "traders_dealer_spread_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2009-06-23",
+              "2009-06-30",
+              "2009-07-07",
+              "2009-07-14",
+              "2009-07-21",
+              "2009-08-11",
+              "2009-08-18",
+              "2009-09-22",
+              "2009-10-27",
+              "2009-11-03"
+            ],
+            "missing_count_total": 158
+          },
+          {
+            "field": "traders_asset_mgr_short_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-10-23"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "traders_lev_money_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-06-20",
+              "2006-07-11",
+              "2013-12-31"
+            ],
+            "missing_count_total": 3
+          },
+          {
+            "field": "traders_other_rept_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-11-25",
+              "2009-12-22",
+              "2009-12-29"
+            ],
+            "missing_count_total": 3
+          },
+          {
+            "field": "traders_other_rept_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-06-20",
+              "2006-06-27",
+              "2006-07-18",
+              "2006-07-25",
+              "2006-08-01",
+              "2006-08-08",
+              "2006-08-15",
+              "2006-08-22",
+              "2006-08-29",
+              "2006-09-19"
+            ],
+            "missing_count_total": 763
+          },
+          {
+            "field": "change_in_open_interest_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_spread_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "traders_asset_mgr_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-05-08",
+              "2007-05-15",
+              "2007-05-29",
+              "2007-06-05",
+              "2007-06-12",
+              "2007-06-19",
+              "2007-06-26",
+              "2007-07-03",
+              "2007-07-10",
+              "2007-07-17"
+            ],
+            "missing_count_total": 36
+          }
+        ],
+        "field_first_last_seen": {
+          "report_date_as_yyyy_mm_dd": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "market_and_exchange_names": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "contract_units": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "futonly_or_combined": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_instrument_id": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_fetched_at": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date_type": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "historical_source_overlap": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "change_in_open_interest_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_spread_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_spread": {
+            "first_present": "2006-12-12",
+            "last_present": "2026-09-08"
+          }
+        }
+      },
+      "RUSSELL2000": {
+        "status": "WARN",
+        "missing_explicit_fields": [],
+        "anomaly_count": 24,
+        "review_required_count": 7,
+        "unclassified_gap_count": 17,
+        "anomalies_sample": [
+          {
+            "field": "traders_asset_mgr_short_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-09-09"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "traders_lev_money_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-07-29",
+              "2008-08-05",
+              "2008-08-12",
+              "2008-08-19",
+              "2008-08-26"
+            ],
+            "missing_count_total": 5
+          },
+          {
+            "field": "traders_other_rept_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-09-09",
+              "2008-12-09",
+              "2008-12-22",
+              "2008-12-30",
+              "2009-01-06",
+              "2009-01-13",
+              "2009-01-20",
+              "2009-01-27",
+              "2009-02-03",
+              "2009-02-17"
+            ],
+            "missing_count_total": 71
+          },
+          {
+            "field": "traders_other_rept_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-09-09",
+              "2008-09-23",
+              "2008-09-30",
+              "2008-10-07",
+              "2008-10-14",
+              "2008-10-21",
+              "2008-10-28",
+              "2008-11-04",
+              "2008-11-11",
+              "2008-11-18"
+            ],
+            "missing_count_total": 660
+          },
+          {
+            "field": "change_in_open_interest_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_spread_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "traders_lev_money_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-08-05",
+              "2008-08-26",
+              "2008-09-02"
+            ],
+            "missing_count_total": 3
+          },
+          {
+            "field": "traders_dealer_spread_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2009-07-14",
+              "2009-09-22",
+              "2010-09-21",
+              "2010-09-28",
+              "2010-10-05",
+              "2010-10-12",
+              "2010-10-19",
+              "2010-10-26",
+              "2010-11-02",
+              "2010-11-09"
+            ],
+            "missing_count_total": 241
+          },
+          {
+            "field": "traders_other_rept_short",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2018-04-03",
+              "2018-04-03",
+              "2018-04-10",
+              "2018-04-10"
+            ],
+            "missing_count_total": 4
+          }
+        ],
+        "field_first_last_seen": {
+          "report_date_as_yyyy_mm_dd": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "market_and_exchange_names": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "open_interest_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_spread_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "contract_units": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "futonly_or_combined": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_open_interest_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_spread_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_spread": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_long": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_short": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_long_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_short_all": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "uiq_instrument_id": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "uiq_fetched_at": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date_type": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "historical_source_overlap": {
+            "first_present": "2008-07-22",
+            "last_present": "2026-09-08"
+          },
+          "change_in_open_interest_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_long_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_short_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_spread_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_long": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_short": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_spread": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_long": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_short": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_spread": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_long": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_short": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_spread": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_long_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_short": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_long_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_short_all": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_spread": {
+            "first_present": "2008-07-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_short_all": {
+            "first_present": "2008-08-05",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_spread_all": {
+            "first_present": "2008-09-09",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_long_all": {
+            "first_present": "2008-09-16",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_short": {
+            "first_present": "2008-09-16",
+            "last_present": "2026-09-08"
+          }
+        }
+      },
+      "SP500": {
+        "status": "WARN",
+        "missing_explicit_fields": [],
+        "anomaly_count": 18,
+        "review_required_count": 1,
+        "unclassified_gap_count": 17,
+        "anomalies_sample": [
+          {
+            "field": "traders_other_rept_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-06-20",
+              "2006-06-27",
+              "2006-07-03",
+              "2006-07-11",
+              "2006-07-18",
+              "2006-07-25",
+              "2006-08-01",
+              "2006-08-08",
+              "2006-08-15",
+              "2006-08-22"
+            ],
+            "missing_count_total": 151
+          },
+          {
+            "field": "change_in_open_interest_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_spread_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          }
+        ],
+        "field_first_last_seen": {
+          "report_date_as_yyyy_mm_dd": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "market_and_exchange_names": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "contract_units": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "futonly_or_combined": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_instrument_id": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_fetched_at": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date_type": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "historical_source_overlap": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "change_in_open_interest_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_spread_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          }
+        }
+      },
+      "UST10Y": {
+        "status": "WARN",
+        "missing_explicit_fields": [],
+        "anomaly_count": 20,
+        "review_required_count": 3,
+        "unclassified_gap_count": 17,
+        "anomalies_sample": [
+          {
+            "field": "traders_other_rept_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2010-06-01",
+              "2010-06-22"
+            ],
+            "missing_count_total": 2
+          },
+          {
+            "field": "traders_other_rept_short",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2009-05-05",
+              "2010-01-05",
+              "2010-01-12",
+              "2010-11-16"
+            ],
+            "missing_count_total": 4
+          },
+          {
+            "field": "traders_other_rept_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-06-20",
+              "2006-07-03",
+              "2006-07-25",
+              "2006-08-01",
+              "2006-10-24",
+              "2006-12-05",
+              "2007-01-09",
+              "2007-09-25",
+              "2007-12-18",
+              "2007-12-24"
+            ],
+            "missing_count_total": 203
+          },
+          {
+            "field": "change_in_open_interest_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_spread_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          }
+        ],
+        "field_first_last_seen": {
+          "report_date_as_yyyy_mm_dd": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "market_and_exchange_names": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "contract_units": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "futonly_or_combined": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-08-25"
+          },
+          "traders_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_instrument_id": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_fetched_at": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date_type": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "historical_source_overlap": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "change_in_open_interest_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_spread_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          }
+        }
+      },
+      "UST2Y": {
+        "status": "WARN",
+        "missing_explicit_fields": [],
+        "anomaly_count": 20,
+        "review_required_count": 3,
+        "unclassified_gap_count": 17,
+        "anomalies_sample": [
+          {
+            "field": "traders_dealer_spread_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2009-01-06",
+              "2009-01-13",
+              "2009-04-07",
+              "2009-04-14",
+              "2012-04-10",
+              "2012-07-10",
+              "2015-01-06",
+              "2015-04-07",
+              "2015-04-14",
+              "2015-10-06"
+            ],
+            "missing_count_total": 12
+          },
+          {
+            "field": "traders_other_rept_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-12-30",
+              "2009-01-06",
+              "2009-01-20",
+              "2009-04-14",
+              "2009-04-21",
+              "2009-04-28",
+              "2009-05-05",
+              "2009-05-19",
+              "2009-05-26",
+              "2009-07-14"
+            ],
+            "missing_count_total": 40
+          },
+          {
+            "field": "change_in_open_interest_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_spread_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "traders_other_rept_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-09-12",
+              "2006-09-19",
+              "2006-09-26",
+              "2006-10-03",
+              "2006-10-10",
+              "2006-10-17",
+              "2006-10-24",
+              "2006-10-31",
+              "2006-11-07",
+              "2006-11-14"
+            ],
+            "missing_count_total": 261
+          }
+        ],
+        "field_first_last_seen": {
+          "report_date_as_yyyy_mm_dd": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "market_and_exchange_names": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "contract_units": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "futonly_or_combined": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_open_interest_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_spread_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_spread": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_long": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_short": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_long_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_short_all": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_instrument_id": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_fetched_at": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date_type": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "historical_source_overlap": {
+            "first_present": "2006-06-13",
+            "last_present": "2026-09-08"
+          },
+          "change_in_open_interest_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_spread_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_long": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_spread": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_short": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_long_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_short_all": {
+            "first_present": "2006-06-20",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_spread": {
+            "first_present": "2006-08-22",
+            "last_present": "2026-06-23"
+          }
+        }
+      },
+      "VIX": {
+        "status": "WARN",
+        "missing_explicit_fields": [],
+        "anomaly_count": 29,
+        "review_required_count": 12,
+        "unclassified_gap_count": 17,
+        "anomalies_sample": [
+          {
+            "field": "traders_asset_mgr_short_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-02-27",
+              "2007-07-31",
+              "2007-08-07",
+              "2007-10-30",
+              "2007-11-20",
+              "2007-11-27",
+              "2007-12-04",
+              "2008-01-15",
+              "2008-01-22",
+              "2008-01-29"
+            ],
+            "missing_count_total": 102
+          },
+          {
+            "field": "traders_asset_mgr_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-02-20",
+              "2007-02-27",
+              "2007-10-23",
+              "2007-11-06",
+              "2008-01-29",
+              "2008-02-05",
+              "2008-02-12",
+              "2008-02-19",
+              "2008-02-26",
+              "2008-03-11"
+            ],
+            "missing_count_total": 64
+          },
+          {
+            "field": "traders_lev_money_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-11-27",
+              "2007-12-04",
+              "2008-09-30",
+              "2008-10-28",
+              "2008-11-04",
+              "2008-11-11",
+              "2008-12-16",
+              "2009-12-22",
+              "2009-12-29",
+              "2010-04-27"
+            ],
+            "missing_count_total": 26
+          },
+          {
+            "field": "traders_lev_money_short_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2009-06-09",
+              "2009-06-30",
+              "2009-07-07",
+              "2009-07-14",
+              "2009-07-21"
+            ],
+            "missing_count_total": 5
+          },
+          {
+            "field": "traders_other_rept_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-10-03",
+              "2006-10-10",
+              "2006-10-17",
+              "2006-10-24",
+              "2006-10-31",
+              "2006-11-07",
+              "2007-01-16",
+              "2007-01-23",
+              "2007-01-30",
+              "2007-02-06"
+            ],
+            "missing_count_total": 163
+          },
+          {
+            "field": "traders_other_rept_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-09-05",
+              "2006-09-12",
+              "2006-09-19",
+              "2006-09-26",
+              "2006-10-03",
+              "2006-10-10",
+              "2006-10-17",
+              "2006-10-24",
+              "2006-10-31",
+              "2006-11-07"
+            ],
+            "missing_count_total": 154
+          },
+          {
+            "field": "change_in_open_interest_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_dealer_spread_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_asset_mgr_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_lev_money_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_long",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_other_rept_spread",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_tot_rept_short",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_long_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "change_in_nonrept_short_all",
+            "classification": "UNCLASSIFIED_GAP",
+            "cause": null,
+            "missing_dates": [
+              "2010-07-20"
+            ],
+            "missing_count_total": 1
+          },
+          {
+            "field": "traders_dealer_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-01-16",
+              "2007-01-23",
+              "2007-01-30",
+              "2007-02-06",
+              "2007-02-13",
+              "2007-02-20",
+              "2007-02-27",
+              "2007-03-06",
+              "2007-03-13",
+              "2007-03-20"
+            ],
+            "missing_count_total": 70
+          },
+          {
+            "field": "traders_dealer_spread_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-10-24",
+              "2007-01-09",
+              "2007-01-16",
+              "2007-02-20"
+            ],
+            "missing_count_total": 4
+          },
+          {
+            "field": "traders_dealer_short_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-12-19",
+              "2007-01-03",
+              "2007-01-09",
+              "2007-01-16",
+              "2007-01-23",
+              "2007-01-30",
+              "2007-02-20",
+              "2008-04-01",
+              "2008-06-24",
+              "2008-08-19"
+            ],
+            "missing_count_total": 27
+          },
+          {
+            "field": "traders_asset_mgr_long_all",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2006-12-19",
+              "2007-01-03",
+              "2007-01-09",
+              "2007-01-16",
+              "2007-01-23",
+              "2007-01-30",
+              "2007-02-06",
+              "2007-02-13",
+              "2007-02-20",
+              "2007-02-27"
+            ],
+            "missing_count_total": 158
+          },
+          {
+            "field": "traders_lev_money_spread",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2007-03-27",
+              "2007-04-24",
+              "2008-01-08",
+              "2008-01-22",
+              "2009-06-02",
+              "2009-06-30",
+              "2009-07-07",
+              "2009-07-14"
+            ],
+            "missing_count_total": 8
+          },
+          {
+            "field": "traders_other_rept_short",
+            "classification": "REVIEW_REQUIRED",
+            "cause": {
+              "mechanism": "CFTC confidentiality suppression rule for TFF: fuer eine gegebene Kategorie mit weniger als vier aktiven Tradern wird die Positionsgroesse veroeffentlicht, der Trader-Count aber unterdrueckt (Platzhalter statt Zahl).",
+              "confidence": "HIGH",
+              "source": "CFTC, \"Traders in Financial Futures Explanatory Notes\", Abschnitt \"Numbers of Traders\"",
+              "source_url": "https://www.cftc.gov/sites/default/files/idc/groups/public/@commitmentsoftraders/documents/file/tfmexplanatorynotes.pdf",
+              "note": "Mechanismus ist TFF-spezifisch CFTC-dokumentiert (nicht nur durch die allgemeine COT-FAQ). Bestaetigt NICHT automatisch jeden einzelnen konkreten traders_*-Befund in diesem Report."
+            },
+            "missing_dates": [
+              "2008-02-05",
+              "2008-02-12",
+              "2008-03-04",
+              "2008-03-11",
+              "2008-03-18",
+              "2008-03-25",
+              "2008-04-08",
+              "2008-04-15",
+              "2008-04-22",
+              "2008-04-29"
+            ],
+            "missing_count_total": 84
+          }
+        ],
+        "field_first_last_seen": {
+          "report_date_as_yyyy_mm_dd": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "market_and_exchange_names": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "open_interest_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "dealer_positions_spread_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "asset_mgr_positions_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "lev_money_positions_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "other_rept_positions_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "nonrept_positions_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "contract_units": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "futonly_or_combined": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_open_interest_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_dealer_spread_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_asset_mgr_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_lev_money_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_other_rept_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_tot_rept_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "pct_of_oi_nonrept_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_spread": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "traders_tot_rept_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_4_tdr_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_long": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_gross_le_8_tdr_short": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_4_tdr_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_long_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "conc_net_le_8_tdr_short_all": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "uiq_instrument_id": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "uiq_fetched_at": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "uiq_effective_date_type": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "historical_source_overlap": {
+            "first_present": "2006-08-29",
+            "last_present": "2026-09-08"
+          },
+          "change_in_open_interest_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_long_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_short_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_dealer_spread_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_long": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_short": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_asset_mgr_spread": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_long": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_short": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_lev_money_spread": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_long": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_short": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_other_rept_spread": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_long_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_tot_rept_short": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_long_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "change_in_nonrept_short_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_long_all": {
+            "first_present": "2006-09-05",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_spread_all": {
+            "first_present": "2006-10-17",
+            "last_present": "2026-09-08"
+          },
+          "traders_dealer_short_all": {
+            "first_present": "2006-11-07",
+            "last_present": "2026-09-08"
+          },
+          "traders_asset_mgr_long_all": {
+            "first_present": "2006-11-21",
+            "last_present": "2026-09-08"
+          },
+          "traders_lev_money_spread": {
+            "first_present": "2007-03-06",
+            "last_present": "2026-09-08"
+          },
+          "traders_other_rept_short": {
+            "first_present": "2007-12-11",
+            "last_present": "2026-09-08"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "NASDAQ100": {
+        "coverage_status": "MINOR_GAPS",
+        "duplicate_keys": [],
+        "per_source_name": {
+          "NASDAQ-100 STOCK INDEX (MINI) - CHICAGO MERCANTILE EXCHANGE": {
+            "record_count": 817,
+            "earliest": "2006-06-13",
+            "latest": "2022-02-01",
+            "minor_gaps": [
+              {
+                "from": "2006-07-03",
+                "to": "2006-07-11",
+                "days": 8
+              },
+              {
+                "from": "2006-12-26",
+                "to": "2007-01-03",
+                "days": 8
+              },
+              {
+                "from": "2007-12-31",
+                "to": "2008-01-08",
+                "days": 8
+              },
+              {
+                "from": "2008-12-22",
+                "to": "2008-12-30",
+                "days": 8
+              },
+              {
+                "from": "2009-11-09",
+                "to": "2009-11-17",
+                "days": 8
+              },
+              {
+                "from": "2012-12-31",
+                "to": "2013-01-08",
+                "days": 8
+              },
+              {
+                "from": "2017-07-03",
+                "to": "2017-07-11",
+                "days": 8
+              },
+              {
+                "from": "2018-12-31",
+                "to": "2019-01-08",
+                "days": 8
+              },
+              {
+                "from": "2020-12-21",
+                "to": "2020-12-29",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          },
+          "NASDAQ MINI - CHICAGO MERCANTILE EXCHANGE": {
+            "record_count": 240,
+            "earliest": "2022-02-08",
+            "latest": "2026-09-08",
+            "minor_gaps": [
+              {
+                "from": "2023-07-03",
+                "to": "2023-07-11",
+                "days": 8
+              },
+              {
+                "from": "2025-11-10",
+                "to": "2025-11-18",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          }
+        }
+      },
+      "RUSSELL2000": {
+        "coverage_status": "MINOR_GAPS",
+        "duplicate_keys": [],
+        "per_source_name": {
+          "RUSSELL 2000 MINI INDEX FUTURE - ICE FUTURES U.S.": {
+            "record_count": 516,
+            "earliest": "2008-07-22",
+            "latest": "2018-06-05",
+            "minor_gaps": [
+              {
+                "from": "2008-12-22",
+                "to": "2008-12-30",
+                "days": 8
+              },
+              {
+                "from": "2009-11-09",
+                "to": "2009-11-17",
+                "days": 8
+              },
+              {
+                "from": "2012-12-31",
+                "to": "2013-01-08",
+                "days": 8
+              },
+              {
+                "from": "2017-07-03",
+                "to": "2017-07-11",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          },
+          "E-MINI RUSSELL 2000 INDEX - CHICAGO MERCANTILE EXCHANGE": {
+            "record_count": 234,
+            "earliest": "2017-08-15",
+            "latest": "2022-02-01",
+            "minor_gaps": [
+              {
+                "from": "2018-12-31",
+                "to": "2019-01-08",
+                "days": 8
+              },
+              {
+                "from": "2020-12-21",
+                "to": "2020-12-29",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          },
+          "RUSSELL E-MINI - CHICAGO MERCANTILE EXCHANGE": {
+            "record_count": 240,
+            "earliest": "2022-02-08",
+            "latest": "2026-09-08",
+            "minor_gaps": [
+              {
+                "from": "2023-07-03",
+                "to": "2023-07-11",
+                "days": 8
+              },
+              {
+                "from": "2025-11-10",
+                "to": "2025-11-18",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          }
+        }
+      },
+      "SP500": {
+        "coverage_status": "MINOR_GAPS",
+        "duplicate_keys": [],
+        "per_source_name": {
+          "E-MINI S&P 500 STOCK INDEX - CHICAGO MERCANTILE EXCHANGE": {
+            "record_count": 817,
+            "earliest": "2006-06-13",
+            "latest": "2022-02-01",
+            "minor_gaps": [
+              {
+                "from": "2006-07-03",
+                "to": "2006-07-11",
+                "days": 8
+              },
+              {
+                "from": "2006-12-26",
+                "to": "2007-01-03",
+                "days": 8
+              },
+              {
+                "from": "2007-12-31",
+                "to": "2008-01-08",
+                "days": 8
+              },
+              {
+                "from": "2008-12-22",
+                "to": "2008-12-30",
+                "days": 8
+              },
+              {
+                "from": "2009-11-09",
+                "to": "2009-11-17",
+                "days": 8
+              },
+              {
+                "from": "2012-12-31",
+                "to": "2013-01-08",
+                "days": 8
+              },
+              {
+                "from": "2017-07-03",
+                "to": "2017-07-11",
+                "days": 8
+              },
+              {
+                "from": "2018-12-31",
+                "to": "2019-01-08",
+                "days": 8
+              },
+              {
+                "from": "2020-12-21",
+                "to": "2020-12-29",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          },
+          "E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE": {
+            "record_count": 240,
+            "earliest": "2022-02-08",
+            "latest": "2026-09-08",
+            "minor_gaps": [
+              {
+                "from": "2023-07-03",
+                "to": "2023-07-11",
+                "days": 8
+              },
+              {
+                "from": "2025-11-10",
+                "to": "2025-11-18",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          }
+        }
+      },
+      "UST10Y": {
+        "coverage_status": "MINOR_GAPS",
+        "duplicate_keys": [],
+        "per_source_name": {
+          "10-YEAR U.S. TREASURY NOTES - CHICAGO BOARD OF TRADE": {
+            "record_count": 817,
+            "earliest": "2006-06-13",
+            "latest": "2022-02-01",
+            "minor_gaps": [
+              {
+                "from": "2006-07-03",
+                "to": "2006-07-11",
+                "days": 8
+              },
+              {
+                "from": "2006-12-26",
+                "to": "2007-01-03",
+                "days": 8
+              },
+              {
+                "from": "2007-12-31",
+                "to": "2008-01-08",
+                "days": 8
+              },
+              {
+                "from": "2008-12-22",
+                "to": "2008-12-30",
+                "days": 8
+              },
+              {
+                "from": "2009-11-09",
+                "to": "2009-11-17",
+                "days": 8
+              },
+              {
+                "from": "2012-12-31",
+                "to": "2013-01-08",
+                "days": 8
+              },
+              {
+                "from": "2017-07-03",
+                "to": "2017-07-11",
+                "days": 8
+              },
+              {
+                "from": "2018-12-31",
+                "to": "2019-01-08",
+                "days": 8
+              },
+              {
+                "from": "2020-12-21",
+                "to": "2020-12-29",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          },
+          "UST 10Y NOTE - CHICAGO BOARD OF TRADE": {
+            "record_count": 240,
+            "earliest": "2022-02-08",
+            "latest": "2026-09-08",
+            "minor_gaps": [
+              {
+                "from": "2023-07-03",
+                "to": "2023-07-11",
+                "days": 8
+              },
+              {
+                "from": "2025-11-10",
+                "to": "2025-11-18",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          }
+        }
+      },
+      "UST2Y": {
+        "coverage_status": "MINOR_GAPS",
+        "duplicate_keys": [],
+        "per_source_name": {
+          "2-YEAR U.S. TREASURY NOTES - CHICAGO BOARD OF TRADE": {
+            "record_count": 817,
+            "earliest": "2006-06-13",
+            "latest": "2022-02-01",
+            "minor_gaps": [
+              {
+                "from": "2006-07-03",
+                "to": "2006-07-11",
+                "days": 8
+              },
+              {
+                "from": "2006-12-26",
+                "to": "2007-01-03",
+                "days": 8
+              },
+              {
+                "from": "2007-12-31",
+                "to": "2008-01-08",
+                "days": 8
+              },
+              {
+                "from": "2008-12-22",
+                "to": "2008-12-30",
+                "days": 8
+              },
+              {
+                "from": "2009-11-09",
+                "to": "2009-11-17",
+                "days": 8
+              },
+              {
+                "from": "2012-12-31",
+                "to": "2013-01-08",
+                "days": 8
+              },
+              {
+                "from": "2017-07-03",
+                "to": "2017-07-11",
+                "days": 8
+              },
+              {
+                "from": "2018-12-31",
+                "to": "2019-01-08",
+                "days": 8
+              },
+              {
+                "from": "2020-12-21",
+                "to": "2020-12-29",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          },
+          "UST 2Y NOTE - CHICAGO BOARD OF TRADE": {
+            "record_count": 240,
+            "earliest": "2022-02-08",
+            "latest": "2026-09-08",
+            "minor_gaps": [
+              {
+                "from": "2023-07-03",
+                "to": "2023-07-11",
+                "days": 8
+              },
+              {
+                "from": "2025-11-10",
+                "to": "2025-11-18",
+                "days": 8
+              }
+            ],
+            "material_gaps": []
+          }
+        }
+      },
+      "VIX": {
+        "coverage_status": "MATERIAL_GAPS",
+        "duplicate_keys": [],
+        "per_source_name": {
+          "VIX FUTURES - CBOE FUTURES EXCHANGE": {
+            "record_count": 1016,
+            "earliest": "2006-08-29",
+            "latest": "2026-09-08",
+            "minor_gaps": [
+              {
+                "from": "2009-06-16",
+                "to": "2009-06-30",
+                "days": 14
+              },
+              {
+                "from": "2009-11-09",
+                "to": "2009-11-17",
+                "days": 8
+              },
+              {
+                "from": "2012-12-31",
+                "to": "2013-01-08",
+                "days": 8
+              },
+              {
+                "from": "2017-07-03",
+                "to": "2017-07-11",
+                "days": 8
+              },
+              {
+                "from": "2018-12-31",
+                "to": "2019-01-08",
+                "days": 8
+              },
+              {
+                "from": "2020-12-21",
+                "to": "2020-12-29",
+                "days": 8
+              },
+              {
+                "from": "2023-07-03",
+                "to": "2023-07-11",
+                "days": 8
+              },
+              {
+                "from": "2025-11-10",
+                "to": "2025-11-18",
+                "days": 8
+              }
+            ],
+            "material_gaps": [
+              {
+                "from": "2006-12-19",
+                "to": "2007-01-03",
+                "days": 15
+              },
+              {
+                "from": "2007-12-18",
+                "to": "2008-01-08",
+                "days": 21
+              },
+              {
+                "from": "2008-11-18",
+                "to": "2008-12-16",
+                "days": 28
+              },
+              {
+                "from": "2008-12-16",
+                "to": "2009-06-02",
+                "days": 168
+              }
+            ]
+          }
+        }
+      }
+    },
+    "source_mapping": {
+      "NASDAQ100": {
+        "distinct_source_names": 2,
+        "transitions": [
+          {
+            "market_and_exchange_names": "NASDAQ-100 STOCK INDEX (MINI) - CHICAGO MERCANTILE EXCHANGE",
+            "first_report_date": "2006-06-13",
+            "last_report_date": "2022-02-01",
+            "record_count": 817
+          },
+          {
+            "market_and_exchange_names": "NASDAQ MINI - CHICAGO MERCANTILE EXCHANGE",
+            "first_report_date": "2022-02-08",
+            "last_report_date": "2026-09-08",
+            "record_count": 240
+          }
+        ]
+      },
+      "RUSSELL2000": {
+        "distinct_source_names": 3,
+        "transitions": [
+          {
+            "market_and_exchange_names": "RUSSELL 2000 MINI INDEX FUTURE - ICE FUTURES U.S.",
+            "first_report_date": "2008-07-22",
+            "last_report_date": "2018-06-05",
+            "record_count": 516
+          },
+          {
+            "market_and_exchange_names": "E-MINI RUSSELL 2000 INDEX - CHICAGO MERCANTILE EXCHANGE",
+            "first_report_date": "2017-08-15",
+            "last_report_date": "2022-02-01",
+            "record_count": 234
+          },
+          {
+            "market_and_exchange_names": "RUSSELL E-MINI - CHICAGO MERCANTILE EXCHANGE",
+            "first_report_date": "2022-02-08",
+            "last_report_date": "2026-09-08",
+            "record_count": 240
+          }
+        ]
+      },
+      "SP500": {
+        "distinct_source_names": 2,
+        "transitions": [
+          {
+            "market_and_exchange_names": "E-MINI S&P 500 STOCK INDEX - CHICAGO MERCANTILE EXCHANGE",
+            "first_report_date": "2006-06-13",
+            "last_report_date": "2022-02-01",
+            "record_count": 817
+          },
+          {
+            "market_and_exchange_names": "E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE",
+            "first_report_date": "2022-02-08",
+            "last_report_date": "2026-09-08",
+            "record_count": 240
+          }
+        ]
+      },
+      "UST10Y": {
+        "distinct_source_names": 2,
+        "transitions": [
+          {
+            "market_and_exchange_names": "10-YEAR U.S. TREASURY NOTES - CHICAGO BOARD OF TRADE",
+            "first_report_date": "2006-06-13",
+            "last_report_date": "2022-02-01",
+            "record_count": 817
+          },
+          {
+            "market_and_exchange_names": "UST 10Y NOTE - CHICAGO BOARD OF TRADE",
+            "first_report_date": "2022-02-08",
+            "last_report_date": "2026-09-08",
+            "record_count": 240
+          }
+        ]
+      },
+      "UST2Y": {
+        "distinct_source_names": 2,
+        "transitions": [
+          {
+            "market_and_exchange_names": "2-YEAR U.S. TREASURY NOTES - CHICAGO BOARD OF TRADE",
+            "first_report_date": "2006-06-13",
+            "last_report_date": "2022-02-01",
+            "record_count": 817
+          },
+          {
+            "market_and_exchange_names": "UST 2Y NOTE - CHICAGO BOARD OF TRADE",
+            "first_report_date": "2022-02-08",
+            "last_report_date": "2026-09-08",
+            "record_count": 240
+          }
+        ]
+      },
+      "VIX": {
+        "distinct_source_names": 1,
+        "transitions": [
+          {
+            "market_and_exchange_names": "VIX FUTURES - CBOE FUTURES EXCHANGE",
+            "first_report_date": "2006-08-29",
+            "last_report_date": "2026-09-08",
+            "record_count": 1016
+          }
+        ]
+      }
+    },
+    "russell_overlap": {
+      "RUSSELL2000": {
+        "applicable": true,
+        "status": "PASS",
+        "windows": [
+          [
+            "2017-08-15",
+            "2018-06-05"
+          ]
+        ],
+        "source_names": {
+          "a": "E-MINI RUSSELL 2000 INDEX - CHICAGO MERCANTILE EXCHANGE",
+          "b": "RUSSELL 2000 MINI INDEX FUTURE - ICE FUTURES U.S."
+        },
+        "dates_with_both_sources": 43,
+        "dates_with_single_source_in_window": [],
+        "open_interest_correlation": -0.7322,
+        "open_interest_mean_abs_diff": 507976.49,
+        "open_interest_mean_abs_diff_relative_to_oi_a": 3.5652,
+        "net_position_by_category": {
+          "dealer": {
+            "n": 43,
+            "pearson_correlation": 0.0446,
+            "mean_abs_diff": 107502.26,
+            "directional_agreement_pct": 46.51
+          },
+          "asset_mgr": {
+            "n": 43,
+            "pearson_correlation": -0.0213,
+            "mean_abs_diff": 47098.07,
+            "directional_agreement_pct": 55.81
+          },
+          "lev_money": {
+            "n": 43,
+            "pearson_correlation": 0.331,
+            "mean_abs_diff": 44170.23,
+            "directional_agreement_pct": 37.21
+          },
+          "other_rept": {
+            "n": 43,
+            "pearson_correlation": -0.0069,
+            "mean_abs_diff": 12833.07,
+            "directional_agreement_pct": 76.74
+          }
+        }
+      }
+    },
+    "cross_validated_gaps": {
+      "VIX": {
+        "applicable": true,
+        "findings": [
+          {
+            "gap_start": "2008-12-16",
+            "gap_end": "2009-06-02",
+            "duration_days": 168,
+            "live_reverification": "CONFIRMED",
+            "cross_validated": true,
+            "cross_validated_sources": [
+              "TFF_Socrata_gpe5-46if",
+              "TFF_CFTC_F_TFF_2006_2016_xls",
+              "Legacy_Futures_Only_6dca-aqww"
+            ],
+            "cause": {
+              "status": "HYPOTHESIS",
+              "hypothesis": "Der VIX-Futures-Markt erscheint in diesem Zeitraum in keinem der geprueften CFTC-COT-Publikationsformate (TFF und Legacy). Moegliche, NICHT belegte Erklaerung: Open Interest/Trader-Zahl unterschritt waehrend der Finanzkrise die CFTC-Aufnahmeschwelle fuer die COT-Veroeffentlichung. Keine Aussage ueber eine rechtliche Meldepflicht - dafuer geben die Daten allein nichts her.",
+              "confidence": "MEDIUM"
+            },
+            "research_implication": {
+              "stable_series_start": "2009-06-02",
+              "usage_before_stable_start": "RESEARCH_ONLY"
+            },
+            "verified_at": "2026-09-19"
+          }
+        ]
+      }
+    }
+  },
+  "research_readiness": {
+    "feature_research": "CONDITIONAL",
+    "regime_backtest": "CONDITIONAL",
+    "full_universe_research": false,
+    "instrument_notes": {
+      "VIX": {
+        "stable_series_start": "2009-06-02",
+        "usage_before_stable_start": "RESEARCH_ONLY",
+        "cause_status": "HYPOTHESIS"
+      }
+    },
+    "reason": "Schema Stability (D): mindestens ein unklassifizierter Gap (UNCLASSIFIED_GAP) oder fehlendes Kernfeld - noch nicht erklaert; Coverage (A) zeigt MATERIAL_GAPS bei mindestens einem Instrument; Russell ICE/CME Overlap: Research Decision Pending (keine Konsolidierung getroffen, Zahlen liegen vor - full_universe_research bleibt false, bis das entschieden ist); VIX: cross-validierte Luecke, stabile Reihe erst ab 2009-06-02 (Ursache: HYPOTHESIS) - s. instrument_notes"
+  }
+}
