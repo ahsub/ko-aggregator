@@ -1,6 +1,30 @@
-# Workflow-Version: v1.3 (vorheriger, unversionierter Stand = implizit v1.0)
+# Workflow-Version: v1.4 (vorheriger, unversionierter Stand = implizit v1.0)
 #
 # CHANGELOG (neueste zuerst):
+# v1.4 (22.09.2026, Claude + Axel): Job-Timeout 30 -> 45 Minuten erhoeht.
+#      Root Cause fuer einen abgebrochenen Lauf (21.09.2026, Error: The
+#      operation was canceled. nach 30min19s): timeout-minutes steht auf
+#      JOB-Ebene, nicht nur auf dem Public-Recommendations-Step — das
+#      30-Minuten-Budget musste sich Checkout/Python-Setup/Dependency-
+#      Install/Unit-Tests/kompletten market_aggregator.py-Lauf UND danach
+#      erst die 15 sequenziellen Anthropic-Calls (generate_public_
+#      recommendations.js) inkl. bis zu vier Options-Strategie-Repairs
+#      (csp_wheel/atmna/weekly_income/cc, s. dortiger v1.7-REPAIR-LOOP)
+#      teilen — jeder Repair bedeutet einen zusaetzlichen
+#      callAnthropicWithRetry()-Call plus ggf. 10s-Retry-Wartezeit. Der
+#      Wert 30 stammt vermutlich aus der Zeit vor dem Public-Digest-Schritt
+#      (v1.1, 10.09.2026) und den fuenf Options-Strategien mit Repair-Loop
+#      (v1.4/v1.7 in generate_public_recommendations.js, 16./20.09.2026) —
+#      kein Kommentar begruendet den urspruenglichen Wert. Zusaetzliches
+#      Risiko ueber den Public Digest hinaus: ein zu knappes Jobtimeout
+#      kann auch die beiden if:always()-Schritte (Track-Record-Backup,
+#      Archiv-Commit) mit abschneiden, falls der Job vorher abbricht —
+#      45 Minuten sind ein risikoarmer Puffer (kostet nur bei tatsaechlicher
+#      Nutzung GHA-Minuten). Strukturelle Loesung fuer die eigentliche
+#      Ursache (15 synchrone Calls + Repairs) ist die geplante Anthropic-
+#      Batch-API-Umstellung (Backlog #27, generate_public_recommendations.js)
+#      — dieser Timeout-Fix ist bewusst nur die kurzfristige Absicherung,
+#      nicht der strukturelle Fix.
 # v1.3 (13.09.2026, Claude + Axel): neue Workflow-Eingabe `force_regenerate`,
 #      verdrahtet den bestehenden FORCE_REGENERATE-Escape-Hatch in
 #      generate_public_recommendations.js (Trading-Day-Skip-Check, v1.2/
@@ -87,7 +111,7 @@ on:
 jobs:
   aggregate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # AI_delivery_public (10.09.2026, umbenannt 11.09.2026 v1.2): muss exakt
       # der Cron-Zeile oben entsprechen — einzige Stelle, die bei einer
