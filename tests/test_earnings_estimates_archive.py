@@ -1,5 +1,18 @@
 """
-test_earnings_estimates_archive.py — v0.1 (23.09.2026)
+test_earnings_estimates_archive.py — v0.2 (23.09.2026)
+
+CHANGELOG:
+v0.2 (23.09.2026, Claude): sys.path-Fix — fruehere Fassung fuegte nur das
+     eigene Verzeichnis (tests/) zum Pfad hinzu, das reichte fuer die
+     Fixtures, aber nicht fuer den Import von earnings_estimates_archive.py
+     selbst (liegt im Repo-Root, eine Ebene hoeher). In der urspruenglichen
+     flachen Testumgebung (Skript+Test im selben Ordner) unbemerkt, erst
+     beim Nachbau der echten ko-aggregator-Repo-Struktur als
+     ModuleNotFoundError aufgefallen. Ausserdem: Flag-Namen in den
+     Assertions bereits seit der vorherigen Fassung auf
+     REPEATED_PLACEHOLDER/POSSIBLE_SPLIT_ARTIFACT/ZERO_VALUE_ANOMALY
+     aktualisiert (Docstring-Version war dabei nicht mitgezogen worden).
+v0.1 (23.09.2026, Claude): Erstfassung.
 
 Testet die drei Sanity-Check-Detektoren gegen ECHTE Live-Daten aus der
 Phase-0-Feasibility-Recherche (IBKR/MPC/NVDA, s. EARNINGS-INVEST-PHASE0-
@@ -15,19 +28,32 @@ Feasibility-Report §14-Referenz). Der Detektor arbeitet rein statistisch
 unterscheiden -- Refinement-Kandidat fuer Phase 2/3 (Abgleich gegen eine
 echte Split-Kalenderquelle statt reiner Heuristik).
 
-Ausfuehren: python -m pytest test_earnings_estimates_archive.py -v
-        oder: python test_earnings_estimates_archive.py
+Ausfuehren (von ueberall, dank sys.path-Fix): python tests/test_earnings_estimates_archive.py
+        oder: python -m pytest tests/test_earnings_estimates_archive.py -v
 """
+
 import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_TESTS_DIR)
+# NEU (v0.2, Fund beim Verifizieren des echten Repo-Layouts, 23.09.2026):
+# earnings_estimates_archive.py liegt im Repo-Root (neben market_aggregator.py,
+# iv_layer.py), diese Testdatei + die Fixtures liegen in tests/. Das fruehere
+# sys.path.insert() fuegte NUR tests/ hinzu — das reichte fuers Finden der
+# Fixtures, aber NICHT fuer den Modul-Import selbst ("from
+# earnings_estimates_archive import ..."), da das Skript eine Ebene hoeher
+# liegt. Unbemerkt in der urspruenglichen flachen Testumgebung (Skript+Test
+# im selben Ordner), erst beim Nachbau der echten Repo-Struktur aufgefallen
+# (ModuleNotFoundError). Jetzt wird zusaetzlich das Repo-Root ergaenzt.
+sys.path.insert(0, _REPO_ROOT)
+sys.path.insert(0, _TESTS_DIR)
 from earnings_estimates_archive import (
     detect_repeated_value, detect_split_artifact, detect_zero_row, run_sanity_checks,
 )
 
-FIXTURES_DIR = os.path.dirname(os.path.abspath(__file__))
+FIXTURES_DIR = _TESTS_DIR
 
 
 def _load(name):
