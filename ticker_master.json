@@ -1,0 +1,8559 @@
+{
+  "AAPL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MSFT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NVDA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "SEMIS",
+      "ROBOTICS",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "AMZN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GOOGL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GOOG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "META": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TSLA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "AVGO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ORCL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "JPM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BAC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "WFC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BLK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SCHW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AXP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MMC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AON": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CME": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SPGI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MCO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "UNH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "LLY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH",
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "JNJ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ABT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MRK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ABBV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TMO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "DHR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SYK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BSX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MDT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ELV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HUM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ISRG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "REGN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH",
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "VRTX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GILD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH",
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AMGN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BMY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PFE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CVS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ZTS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "IDXX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "nasdaq100"
+    ]
+  },
+  "A": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "IQV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "COST": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "WMT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MCD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SBUX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TGT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "LOW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TJX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BKNG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MAR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HLT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "YUM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NKE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "KO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PEP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "EL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CHD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CAT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HON": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "UPS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GEV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "LMT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "RTX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NOC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HII": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TDG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE",
+      "SPACE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "KTOS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AXON": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "UNP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CSX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NSC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CARR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "OTIS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "JCI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "EMR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ROK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AME": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ITW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ETN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS",
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "IR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "XOM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CVX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "COP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "EOG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SLB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MPC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PSX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "VLO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "OXY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "DVN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HAL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BKR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "FANG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NEE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "DUK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AEP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "D": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SRE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "EXC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "nasdaq100"
+    ]
+  },
+  "PLD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AMT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "EQIX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CCI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PSA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "O": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "VICI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "V": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "INTU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ADBE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CRM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NOW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SNPS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CDNS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ADSK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "nasdaq100"
+    ]
+  },
+  "WDAY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TEAM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PANW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CYBERSECURITY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CRWD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CYBERSECURITY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "FTNT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CYBERSECURITY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ZS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CYBERSECURITY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "OKTA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CYBERSECURITY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "S": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "DDOG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "MDB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "SNOW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "NET": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "CYBERSECURITY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "CFLT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ESTC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "QCOM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TXN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ADI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MCHP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NXPI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "KLAC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "LRCX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "AMAT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "WDC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "STX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "IBM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CSCO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ACN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HPQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HPE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "DELL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NTAP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ARM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "SMCI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "MRVL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS",
+      "PICKS_SHOVELS",
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "MSTR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "PLTR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "COIN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH",
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "NFLX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "UBER": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "ABNB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "LYFT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "RBLX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "SNAP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "PINS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "MTCH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "ZM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "DOCU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "SHOP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "MELI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GRAB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "XYZ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "HOOD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH",
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "SOFI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "AFRM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "UPST": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "PYPL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BABA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "JD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl"
+    ]
+  },
+  "PDD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "BIDU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "NTES": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TCOM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "FUTU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NIO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "XPEV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "LI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl",
+      "bear_us"
+    ]
+  },
+  "GM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "F": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "RIVN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "LCID": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "STLA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "TM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "intl"
+    ]
+  },
+  "HMC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "intl"
+    ]
+  },
+  "LIN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "APD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ECL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WATER"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SHW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "FCX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "EU_ADR_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NEM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GOLD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ALB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MRNA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "BNTX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "BIIB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "ILMN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH",
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "RARE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "EXAS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "INCY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "NBIX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ALLO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "VKTX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "RYTM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ACAD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "MRUS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PRCT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ENPH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "FSLR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "SEDG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "RUN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "ARRY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "PLUG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500",
+      "bear_us"
+    ]
+  },
+  "BLDP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GLW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "LDOS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "SAIC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "CACI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "BAH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "HUBS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GTM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "GTLB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500",
+      "intl"
+    ]
+  },
+  "BILL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "PCTY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SP500_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "sp500"
+    ]
+  },
+  "FAST": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "KDP": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "KHC": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "LULU": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "MNST": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "ODFL": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "PAYX": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "PCAR": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "ROST": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "SIRI": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "TMUS": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "VRSK": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "VRSN": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "XEL": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "CPRT": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "CTAS": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "DLTR": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "EBAY": {
+    "in_universe": true,
+    "universe_sources": [
+      "NASDAQ100_EXTRA"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "nasdaq100"
+    ]
+  },
+  "SAP": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "DB": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SIEGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BAYRY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BMWYY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "ADDYY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "DHLGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "DTEGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "AZSEY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "MURGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "RWEOY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "IFNNY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "BASFY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "MKKGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "FSNUY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "RNMBY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "VWAGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "MBGAF": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "HBMRY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "HENKY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "EADSY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "SBGSY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "TTE": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "LRLCY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": []
+  },
+  "LVMUY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "PPRUY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "HESAY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BNPQY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "CFRUY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "PDRDY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "VCISY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "STM": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "AIVAF": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "ASML": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SEMIS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "PHG": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "ING": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "HEINY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "NVS": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "RHHBY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NSRGY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "ABB": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "AZN": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH",
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SHEL": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BP": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "GSK": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "RIO": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "HSBC": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "VOD": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "UL": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "DEO": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "BTI": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "NGG": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "NVO": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH",
+      "GLPONE",
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ERIC": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NOK": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "VOLVY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ATLKY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "E": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "RACE": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": []
+  },
+  "SNY": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GLPONE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NUE": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "URI": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "WM": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "RSG": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "VMC": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "MLM": {
+    "in_universe": true,
+    "universe_sources": [
+      "EU_ADR_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": []
+  },
+  "ALAB": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH"
+    ],
+    "leaderboard_tags": [
+      "bear_us"
+    ]
+  },
+  "DASH": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_us"
+    ]
+  },
+  "GME": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_US_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_us"
+    ]
+  },
+  "AMD": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_US_TICKERS",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH",
+      "SEMIS",
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": [
+      "bear_us"
+    ]
+  },
+  "BAYN.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "VOW3.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "BMW.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "MBG.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "CON.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "DHER.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "ZAL.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "tecdax",
+      "bear_eu"
+    ]
+  },
+  "VNA.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "LEG.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "bear_eu"
+    ]
+  },
+  "TAG.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "bear_eu"
+    ]
+  },
+  "1COV.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "EVT.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_eu"
+    ]
+  },
+  "SRT.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_eu"
+    ]
+  },
+  "NDX1.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax",
+      "bear_eu"
+    ]
+  },
+  "AIXA.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "tecdax",
+      "bear_eu"
+    ]
+  },
+  "WAF.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "tecdax",
+      "bear_eu"
+    ]
+  },
+  "IFX.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "tecdax",
+      "bear_eu"
+    ]
+  },
+  "STLAM.MI": {
+    "in_universe": false,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_eu"
+    ]
+  },
+  "RNO.PA": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "bear_eu"
+    ]
+  },
+  "VOD.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100",
+      "bear_eu"
+    ]
+  },
+  "BT-A.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100",
+      "bear_eu"
+    ]
+  },
+  "TEF.MC": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_eu"
+    ]
+  },
+  "UCB.BR": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu",
+      "bear_eu"
+    ]
+  },
+  "GLPG.BR": {
+    "in_universe": false,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_eu"
+    ]
+  },
+  "ARND.DE": {
+    "in_universe": false,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "bear_eu"
+    ]
+  },
+  "WDP.BR": {
+    "in_universe": false,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "bear_eu"
+    ]
+  },
+  "RWE.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "ENEL.MI": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "bear_eu"
+    ]
+  },
+  "EZJ.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100",
+      "bear_eu"
+    ]
+  },
+  "IAG.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100",
+      "bear_eu"
+    ]
+  },
+  "DTE.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "bear_eu"
+    ]
+  },
+  "GLEN.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100",
+      "bear_eu"
+    ]
+  },
+  "AAL.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "BEAR_DE_EU_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100",
+      "bear_eu"
+    ]
+  },
+  "KEYS": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NVCR": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ENLAY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ENGIY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SQM": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BHP": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "VALE": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH",
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SCCO": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "UBS": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BCS": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BURBY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "DSDVY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "RHM.DE": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "dax40",
+      "intl"
+    ]
+  },
+  "BA.L": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "intl",
+      "ftse100"
+    ]
+  },
+  "SAAB-B.ST": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "HO.PA": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "LDO.MI": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SONY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NTT": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "MUFG": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SMFG": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "MFG": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NTDOY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "KYOCY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "FANUY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS",
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CCOEY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "JAPAN_TECH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ITOCY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "MARUY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SSNLF": {
+    "in_universe": false,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "MX": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "TSM": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS",
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "TCEHY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BYDDY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "INFY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "WIT": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "HDB": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "IBN": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "RDY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CNQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SU": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CNI": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CP": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "TD": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "RY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BNS": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ENB": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "TRP": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NTR": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CCJ": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "WDS": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ORG.AX": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "PBR": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ITUB": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BBD": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "ABEV": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "BRKM": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "AMX": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "FMX": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "PROSY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NPSNY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CHKP": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "NICE": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "CYBR": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "WIX": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "MNDY": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "GLBE": {
+    "in_universe": true,
+    "universe_sources": [
+      "INTL_TIER1"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "intl"
+    ]
+  },
+  "SPY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "QQQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IWM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "RSP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "DIA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VTI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "MDY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IJR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VEA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VWO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "EFA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "EEM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IEFA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IEMG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ACWI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "URTH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_BROAD"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VGT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "FTEC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "QTEC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "SMH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "SOXX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "SOXQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IGV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "BUG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "CIBR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "HACK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "WCLD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLF": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VFH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYF": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "KRE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "KBE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VHT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XBI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IBB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ARKG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH"
+    ],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "PJP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "BBP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VDE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "OIH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XOP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VIS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYJ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ITA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XAR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "PPA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "NLR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "URA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ARKX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VCR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VDC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IWF": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IWD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VPU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IDU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLRE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VNQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "REET": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VAW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "XLC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VOX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IYZ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ICLN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "QCLN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "CLEAN_ENERGY"
+    ],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "CNRG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ACES": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ESGU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "BOTZ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ROBO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IRBO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US",
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "AIQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "THNQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ARKK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "BITO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "GBTC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "ETHA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "GLD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IAU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "GLDM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "SLV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "PPLT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "PDBC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "DJP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "USO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "UNG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "CORN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "TLT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "IEF": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "SHY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "HYG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "LQD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "EMB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "BND": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VCIT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "VCSH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "TIPS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_US"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs"
+    ]
+  },
+  "EZU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "VGK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IEUR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "FEZ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWQ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWJ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "FXI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "KWEB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "MCHI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "INDA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "VNM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWZ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EWW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "ILF": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IXUS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "VXUS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IFRA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IQLT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IXC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IXJ": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "IXG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EMXC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EEMS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "EMSG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_ETFS_EXUS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "etfs_exus",
+      "etfs"
+    ]
+  },
+  "BTC-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "ETH-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "SOL-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "BNB-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "XRP-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "ADA-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "AVAX-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "DOGE-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "DOT-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "POL-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "LINK-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "UNI-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "ATOM-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "LTC-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "BCH-USD": {
+    "in_universe": true,
+    "universe_sources": [
+      "CRYPTO_TICKERS"
+    ],
+    "sectors": [],
+    "leaderboard_tags": [
+      "crypto"
+    ]
+  },
+  "CRDO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AI_TECH"
+    ],
+    "leaderboard_tags": []
+  },
+  "HWM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE",
+      "SPACE"
+    ],
+    "leaderboard_tags": []
+  },
+  "HEI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "MOG-A": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "TXT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "CW": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "DRS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "AVAV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "LHX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "BWXT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "DEFENSE"
+    ],
+    "leaderboard_tags": []
+  },
+  "TER": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "AZTA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "ONTO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "NDSN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "SYM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "MBLY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "TDY": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "CGNX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "PATH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "ZBRA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "ROBOTICS"
+    ],
+    "leaderboard_tags": []
+  },
+  "NU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH",
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": []
+  },
+  "STNE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "FINTECH",
+      "EM_GROWTH"
+    ],
+    "leaderboard_tags": []
+  },
+  "VRT": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS"
+    ],
+    "leaderboard_tags": []
+  },
+  "PWR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS",
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "HUBB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS",
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "CEG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PICKS_SHOVELS",
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "AMSC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": []
+  },
+  "IREN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": []
+  },
+  "CIFR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": []
+  },
+  "CLSK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": []
+  },
+  "ENVX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WHEEL_STOCKS"
+    ],
+    "leaderboard_tags": []
+  },
+  "CPRI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": []
+  },
+  "RL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "LUXURY_EU"
+    ],
+    "leaderboard_tags": []
+  },
+  "TECK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "HBM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "ERO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "LAC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "MATERIALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "VST": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "NRG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "TLN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "SMR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "OKLO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "LEU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "UEC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "UUUU": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "NXE": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "NUCLEAR_ENERGY"
+    ],
+    "leaderboard_tags": []
+  },
+  "RKLB": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SPACE"
+    ],
+    "leaderboard_tags": []
+  },
+  "ASTS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "SPACE"
+    ],
+    "leaderboard_tags": []
+  },
+  "CRSP": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": []
+  },
+  "BEAM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": []
+  },
+  "NTLA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": []
+  },
+  "RXRX": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": []
+  },
+  "DXCM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": []
+  },
+  "ALGN": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "BIOTECH_LONGEVITY"
+    ],
+    "leaderboard_tags": []
+  },
+  "VMI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": []
+  },
+  "POWL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": []
+  },
+  "AEIS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": []
+  },
+  "PLPC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "GRID_ELECTRIFICATION"
+    ],
+    "leaderboard_tags": []
+  },
+  "B": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "WPM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "FNV": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "RGLD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "PAAS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "HL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "AG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "EXK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "FSM": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "MAG": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "PRECIOUS_METALS"
+    ],
+    "leaderboard_tags": []
+  },
+  "AGCO": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "CTVA": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "MOS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "CF": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "FMC": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "DAR": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "CNH": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "AVD": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "AGRICULTURE"
+    ],
+    "leaderboard_tags": []
+  },
+  "XYL": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WATER"
+    ],
+    "leaderboard_tags": []
+  },
+  "AWK": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WATER"
+    ],
+    "leaderboard_tags": []
+  },
+  "WTS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WATER"
+    ],
+    "leaderboard_tags": []
+  },
+  "AOS": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WATER"
+    ],
+    "leaderboard_tags": []
+  },
+  "BMI": {
+    "in_universe": true,
+    "universe_sources": [
+      "SECTOR_WATCHLISTS"
+    ],
+    "sectors": [
+      "WATER"
+    ],
+    "leaderboard_tags": []
+  },
+  "ADS.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "AIR.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "ALV.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "BAS.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "BNR.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "CBK.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "DBK.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "DB1.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "DHL.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "EOAN.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "FRE.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "HEI.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "HEN3.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "INL.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "LIN.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "MRK.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "MTX.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "MUV2.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "P911.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "PAH3.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "QIA.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "SAP.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "tecdax"
+    ]
+  },
+  "SHL.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "tecdax"
+    ]
+  },
+  "SIE.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40",
+      "tecdax"
+    ]
+  },
+  "SY1.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "ENR.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "PUMA.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "dax40"
+    ]
+  },
+  "AFX.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "AG1.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "BC8.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "BOSS.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "DEQ.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "DWS.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "EVD.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "EVK.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "FNTN.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "tecdax"
+    ]
+  },
+  "HAG.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "HHFA.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "HNR1.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "HOT.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "JEN.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "KGX.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "NDA.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "NOEJ.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "O2D.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "PBB.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "PSM.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "tecdax"
+    ]
+  },
+  "SFQ.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "tecdax"
+    ]
+  },
+  "SGL.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "TLX.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "TUI1.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "UTDI.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax",
+      "tecdax"
+    ]
+  },
+  "WCH.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "KSB.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "SMT.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "GFK.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "mdax"
+    ]
+  },
+  "BB1.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "EVNT.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "INH.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "PFV.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "S92.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "SOW.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "SRT3.DE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "tecdax"
+    ]
+  },
+  "OR.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "MC.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "SU.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "BNP.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "AIR.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "TTE.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "STM.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "ASML.AS": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "PHIA.AS": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "ING.AS": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "ADYEN.AS": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "HEIA.AS": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "ENI.MI": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "RACE.MI": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "STM.MI": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "NOVN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "stoxx_eu"
+    ]
+  },
+  "ROG.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "stoxx_eu"
+    ]
+  },
+  "NESN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu"
+    ]
+  },
+  "ABBN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "stoxx_eu"
+    ]
+  },
+  "AZN.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "ftse100"
+    ]
+  },
+  "SHEL.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "ftse100"
+    ]
+  },
+  "BP.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "ftse100"
+    ]
+  },
+  "GSK.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "ftse100"
+    ]
+  },
+  "ULVR.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "ftse100"
+    ]
+  },
+  "RIO.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "ftse100"
+    ]
+  },
+  "NOVO-B.CO": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "stoxx_eu"
+    ]
+  },
+  "ERICB.ST": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "eurostoxx",
+      "intl_eu",
+      "stoxx_eu"
+    ]
+  },
+  "HSBA.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "REL.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "BATS.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "DGE.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "NG.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "EXPN.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "LSEG.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "PRU.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "NWG.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "LLOY.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "MNG.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "AV.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "TSCO.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "ABF.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "IMB.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "STAN.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "WPP.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "CRH.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "IHG.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "RKT.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "SSE.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "BME.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "RR.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "SBRY.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "MKS.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "JD.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "SPX.L": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "ftse100"
+    ]
+  },
+  "DSV.CO": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "CARL-B.CO": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "ORSTED.CO": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "MAERSK-B.CO": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "GIVN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "SIKA.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "LONN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "ZURN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "ALC.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "PGHN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "HOLN.SW": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "VOLVA.ST": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "ATCO-A.ST": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "SAND.ST": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "SEB-A.ST": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "KER.PA": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  },
+  "KNEBV.HE": {
+    "in_universe": false,
+    "universe_sources": [],
+    "sectors": [],
+    "leaderboard_tags": [
+      "stoxx_eu"
+    ]
+  }
+}
