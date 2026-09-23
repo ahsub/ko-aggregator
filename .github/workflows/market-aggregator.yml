@@ -1,94 +1,122 @@
-# Workflow-Version: v1.4 (vorheriger, unversionierter Stand = implizit v1.0)
+# Workflow-Version: v1.5 (vorheriger, unversionierter Stand = implizit v1.0)
 #
 # CHANGELOG (neueste zuerst):
+# v1.5 (23.09.2026, Claude + Axel): `concurrency`-Guard ergaenzt. Root Cause
+#     (belegt, nicht vermutet — Axel-Bestaetigung): zwei Laeufe wurden
+#     versehentlich kurz hintereinander manuell getriggert, der zweite lief
+#     parallel zum ersten und wurde erst nach ~20 Minuten beendet. Beide
+#     Laeufe fuehren im "Archive committen"-Step ein `git pull --rebase
+#     --autostash` aus — beim spaeter beendeten Lauf kollidierte der
+#     Autostash-Reapply mit dem inzwischen vom ersten Lauf gepushten Stand
+#     (`data/iv_history/2026-09-23.json`, `data/snapshots/2026-09-23_03.json.gz`),
+#     der Job brach mit "Committing is not possible because you have
+#     unmerged files" ab (Exit 128). Fix: `concurrency`-Block auf
+#     Workflow-Ebene macht eine zweite Ueberlappung strukturell unmoeglich,
+#     statt sich auf "nicht nochmal versehentlich doppelt triggern" zu
+#     verlassen. Bewusst OHNE `cancel-in-progress: true` — ein zweiter Trigger
+#     soll warten (queuen), bis der erste vollstaendig durchgelaufen ist,
+#     nicht den ersten (moeglicherweise den echten, planmaessigen Nightly-
+#     Lauf) mitten im Aggregator-/KI-Digest-Lauf abbrechen. Betrifft nur
+#     Ueberlappungs-Schutz — keine Aenderung an Cron-Zeit, Steps oder
+#     bestehender Job-Logik.
 # v1.4 (22.09.2026, Claude + Axel): Job-Timeout 30 -> 45 Minuten erhoeht.
-#      Root Cause fuer einen abgebrochenen Lauf (21.09.2026, Error: The
-#      operation was canceled. nach 30min19s): timeout-minutes steht auf
-#      JOB-Ebene, nicht nur auf dem Public-Recommendations-Step — das
-#      30-Minuten-Budget musste sich Checkout/Python-Setup/Dependency-
-#      Install/Unit-Tests/kompletten market_aggregator.py-Lauf UND danach
-#      erst die 15 sequenziellen Anthropic-Calls (generate_public_
-#      recommendations.js) inkl. bis zu vier Options-Strategie-Repairs
-#      (csp_wheel/atmna/weekly_income/cc, s. dortiger v1.7-REPAIR-LOOP)
-#      teilen — jeder Repair bedeutet einen zusaetzlichen
-#      callAnthropicWithRetry()-Call plus ggf. 10s-Retry-Wartezeit. Der
-#      Wert 30 stammt vermutlich aus der Zeit vor dem Public-Digest-Schritt
-#      (v1.1, 10.09.2026) und den fuenf Options-Strategien mit Repair-Loop
-#      (v1.4/v1.7 in generate_public_recommendations.js, 16./20.09.2026) —
-#      kein Kommentar begruendet den urspruenglichen Wert. Zusaetzliches
-#      Risiko ueber den Public Digest hinaus: ein zu knappes Jobtimeout
-#      kann auch die beiden if:always()-Schritte (Track-Record-Backup,
-#      Archiv-Commit) mit abschneiden, falls der Job vorher abbricht —
-#      45 Minuten sind ein risikoarmer Puffer (kostet nur bei tatsaechlicher
-#      Nutzung GHA-Minuten). Strukturelle Loesung fuer die eigentliche
-#      Ursache (15 synchrone Calls + Repairs) ist die geplante Anthropic-
-#      Batch-API-Umstellung (Backlog #27, generate_public_recommendations.js)
-#      — dieser Timeout-Fix ist bewusst nur die kurzfristige Absicherung,
-#      nicht der strukturelle Fix.
+#     Root Cause fuer einen abgebrochenen Lauf (21.09.2026, Error: The
+#     operation was canceled. nach 30min19s): timeout-minutes steht auf
+#     JOB-Ebene, nicht nur auf dem Public-Recommendations-Step — das
+#     30-Minuten-Budget musste sich Checkout/Python-Setup/Dependency-
+#     Install/Unit-Tests/kompletten market_aggregator.py-Lauf UND danach
+#     erst die 15 sequenziellen Anthropic-Calls (generate_public_
+#     recommendations.js) inkl. bis zu vier Options-Strategie-Repairs
+#     (csp_wheel/atmna/weekly_income/cc, s. dortiger v1.7-REPAIR-LOOP)
+#     teilen — jeder Repair bedeutet einen zusaetzlichen
+#     callAnthropicWithRetry()-Call plus ggf. 10s-Retry-Wartezeit. Der
+#     Wert 30 stammt vermutlich aus der Zeit vor dem Public-Digest-Schritt
+#     (v1.1, 10.09.2026) und den fuenf Options-Strategien mit Repair-Loop
+#     (v1.4/v1.7 in generate_public_recommendations.js, 16./20.09.2026) —
+#     kein Kommentar begruendet den urspruenglichen Wert. Zusaetzliches
+#     Risiko ueber den Public Digest hinaus: ein zu knappes Jobtimeout
+#     kann auch die beiden if:always()-Schritte (Track-Record-Backup,
+#     Archiv-Commit) mit abschneiden, falls der Job vorher abbricht —
+#     45 Minuten sind ein risikoarmer Puffer (kostet nur bei tatsaechlicher
+#     Nutzung GHA-Minuten). Strukturelle Loesung fuer die eigentliche
+#     Ursache (15 synchrone Calls + Repairs) ist die geplante Anthropic-
+#     Batch-API-Umstellung (Backlog #27, generate_public_recommendations.js)
+#     — dieser Timeout-Fix ist bewusst nur die kurzfristige Absicherung,
+#     nicht der strukturelle Fix.
 # v1.3 (13.09.2026, Claude + Axel): neue Workflow-Eingabe `force_regenerate`,
-#      verdrahtet den bestehenden FORCE_REGENERATE-Escape-Hatch in
-#      generate_public_recommendations.js (Trading-Day-Skip-Check, v1.2/
-#      v1.3 dort) als Dropdown im "Run workflow"-Dialog, analog zu
-#      `force_backup`. Fund: nach einem Code-Fix an
-#      generate_public_recommendations.js am selben Handelstag (13.09.2026,
-#      neuer public/ai_output/latest/{strategy}-Pointer fuer Digest-Cache-
-#      First) lieferte ein manueller Testlauf (#302) trotz Erfolg keine
-#      neuen Daten — der Skip-Check erkannte korrekt "kein neuer Handelstag
-#      seit letztem Digest (2026-09-11)" und liess ALLE Anthropic-Calls
-#      aus, obwohl der Code sich geaendert hatte. Vorher war der Escape-
-#      Hatch nur per YAML-Bearbeitung erreichbar — jetzt bequem als Eingabe.
+#     verdrahtet den bestehenden FORCE_REGENERATE-Escape-Hatch in
+#     generate_public_recommendations.js (Trading-Day-Skip-Check, v1.2/
+#     v1.3 dort) als Dropdown im "Run workflow"-Dialog, analog zu
+#     `force_backup`. Fund: nach einem Code-Fix an
+#     generate_public_recommendations.js am selben Handelstag (13.09.2026,
+#     neuer public/ai_output/latest/{strategy}-Pointer fuer Digest-Cache-
+#     First) lieferte ein manueller Testlauf (#302) trotz Erfolg keine
+#     neuen Daten — der Skip-Check erkannte korrekt "kein neuer Handelstag
+#     seit letztem Digest (2026-09-11)" und liess ALLE Anthropic-Calls
+#     aus, obwohl der Code sich geaendert hatte. Vorher war der Escape-
+#     Hatch nur per YAML-Bearbeitung erreichbar — jetzt bequem als Eingabe.
 # v1.2 (11.09.2026, Axel + Claude): Umstellung von zwei Vor-Handelsschluss-
-#      Läufen (Lauf 1: 03:37 UTC vor Xetra, Lauf 2: 13:30 UTC bei NYSE-
-#      Öffnung) auf EINEN einzigen Lauf NACH US-Börsenschluss (22:00 UTC
-#      Mo-Fr). Root-Cause-Fund: `get_last_trading_day()` liest die letzte
-#      SPY-Tageskerze — die erscheint bei yfinance erst nach Börsenschluss
-#      (20:00 UTC EDT / 21:00 UTC EST). Beide alten Läufe lagen davor, der
-#      Public Digest war dadurch strukturell IMMER auf den Vortag datiert,
-#      nie auf den tatsächlichen Handelstag. 22:00 UTC liegt ganzjährig
-#      sicher nach Schluss (Puffer für Nachbörsenhandel + Datenverfügbar-
-#      keit). Samstag entfällt (war nur wegen Xetra-Bezug in Lauf 1 nötig,
-#      s. `* * 1-6`) — dadurch würde das wöchentliche Track-Record-Backup
-#      (`tr_backup.py`, prüft intern `isoweekday()==6`) nie mehr laufen;
-#      als eigener, schlanker Workflow ausgelagert: `tr-backup-saturday.yml`
-#      (kein voller Aggregator-Lauf, keine KI-/yfinance-Kosten, nur Backup +
-#      Commit). Env `MORNING_RUN_CRON` → `EOD_RUN_CRON` umbenannt (war beim
-#      Public-Digest-Gate ohnehin nur noch ein einziger Cron-Wert, Name
-#      spiegelt jetzt den tatsächlichen Zweck). Mit dieser Änderung
-#      gekoppelt (separate Deploys, nicht Teil dieser Datei): `ko-watchdog`
-#      (wrangler.toml + ko-watchdog.js, RUN_SCHEDULES auf einen Eintrag
-#      reduziert) und `ko-cron-trigger` (wrangler.toml, Redundanz-Trigger
-#      auf 22:00 UTC verschoben) — beide müssen synchron zu dieser Cron-Zeit
-#      bleiben, sonst laufen sie am alten (jetzt falschen) Zeitpunkt weiter
-#      und lösen dabei via workflow_dispatch ungewollt wieder einen
-#      Vor-Schluss-Digest aus.
+#     Läufen (Lauf 1: 03:37 UTC vor Xetra, Lauf 2: 13:30 UTC bei NYSE-
+#     Öffnung) auf EINEN einzigen Lauf NACH US-Börsenschluss (22:00 UTC
+#     Mo-Fr). Root-Cause-Fund: `get_last_trading_day()` liest die letzte
+#     SPY-Tageskerze — die erscheint bei yfinance erst nach Börsenschluss
+#     (20:00 UTC EDT / 21:00 UTC EST). Beide alten Läufe lagen davor, der
+#     Public Digest war dadurch strukturell IMMER auf den Vortag datiert,
+#     nie auf den tatsächlichen Handelstag. 22:00 UTC liegt ganzjährig
+#     sicher nach Schluss (Puffer für Nachbörsenhandel + Datenverfügbar-
+#     keit). Samstag entfällt (war nur wegen Xetra-Bezug in Lauf 1 nötig,
+#     s. `* * 1-6`) — dadurch würde das wöchentliche Track-Record-Backup
+#     (`tr_backup.py`, prüft intern `isoweekday()==6`) nie mehr laufen;
+#     als eigener, schlanker Workflow ausgelagert: `tr-backup-saturday.yml`
+#     (kein voller Aggregator-Lauf, keine KI-/yfinance-Kosten, nur Backup +
+#     Commit). Env `MORNING_RUN_CRON` → `EOD_RUN_CRON` umbenannt (war beim
+#     Public-Digest-Gate ohnehin nur noch ein einziger Cron-Wert, Name
+#     spiegelt jetzt den tatsächlichen Zweck). Mit dieser Änderung
+#     gekoppelt (separate Deploys, nicht Teil dieser Datei): `ko-watchdog`
+#     (wrangler.toml + ko-watchdog.js, RUN_SCHEDULES auf einen Eintrag
+#     reduziert) und `ko-cron-trigger` (wrangler.toml, Redundanz-Trigger
+#     auf 22:00 UTC verschoben) — beide müssen synchron zu dieser Cron-Zeit
+#     bleiben, sonst laufen sie am alten (jetzt falschen) Zeitpunkt weiter
+#     und lösen dabei via workflow_dispatch ungewollt wieder einen
+#     Vor-Schluss-Digest aus.
 # v1.1 (10.09.2026, Axel + Claude): AI_delivery_public — drei neue Steps
-#      ("Checkout UIQ-Suite (Public Recommendations Script)", "Node.js
-#      Setup", "Generate Public Recommendations") zwischen "Run Market
-#      Aggregator" und "Track-Record Backup" eingefuegt, s. Uebergabe-
-#      protokoll 09.09./10.09.2026 Punkt 6/10. Ruft
-#      UIQ-Suite/scripts/generate_public_recommendations.js auf (Node,
-#      liest master_market_data.json aus dem Checkout-Root). Neuer
-#      Job-level env MORNING_RUN_CRON bindet alle drei Steps an Lauf 1
-#      (03:37 UTC, vor Xetra) + workflow_dispatch — verhindert, dass der
-#      Job (2x/Tag) versehentlich 2x/Tag statt der beschlossenen 1x/Tag-
-#      Frequenz einen Public Digest erzeugt (Frequenz-Entscheidung s.
-#      Uebergabeprotokoll Punkt 10). Bewusst OHNE continue-on-error fuer
-#      den Start — Pruefpunkt nach 10 fehlerfreien Handelstags-Laeufen
-#      (~2 Wochen), dann auf continue-on-error: true umstellen, damit
-#      das Feature den Track-Record-Lauf nie blockieren kann.
+#     ("Checkout UIQ-Suite (Public Recommendations Script)", "Node.js
+#     Setup", "Generate Public Recommendations") zwischen "Run Market
+#     Aggregator" und "Track-Record Backup" eingefuegt, s. Uebergabe-
+#     protokoll 09.09./10.09.2026 Punkt 6/10. Ruft
+#     UIQ-Suite/scripts/generate_public_recommendations.js auf (Node,
+#     liest master_market_data.json aus dem Checkout-Root). Neuer
+#     Job-level env MORNING_RUN_CRON bindet alle drei Steps an Lauf 1
+#     (03:37 UTC, vor Xetra) + workflow_dispatch — verhindert, dass der
+#     Job (2x/Tag) versehentlich 2x/Tag statt der beschlossenen 1x/Tag-
+#     Frequenz einen Public Digest erzeugt (Frequenz-Entscheidung s.
+#     Uebergabeprotokoll Punkt 10). Bewusst OHNE continue-on-error fuer
+#     den Start — Pruefpunkt nach 10 fehlerfreien Handelstags-Laeufen
+#     (~2 Wochen), dann auf continue-on-error: true umstellen, damit
+#     das Feature den Track-Record-Lauf nie blockieren kann.
 # v1.0 (Datum unbekannt — Datei war bisher unversioniert, dieser
-#      Changelog-Kopf wurde erst mit v1.1 eingefuehrt): Basis-Workflow
-#      (Checkout, Python-Setup, Aggregator-Lauf, Track-Record-Backup,
-#      Archiv-Commit, Artifact-Upload).
+#     Changelog-Kopf wurde erst mit v1.1 eingefuehrt): Basis-Workflow
+#     (Checkout, Python-Setup, Aggregator-Lauf, Track-Record-Backup,
+#     Archiv-Commit, Artifact-Upload).
 
 name: KO-Scanner Market Aggregator
 
 permissions:
-  contents: write   # v4.5: Track-Record-Backup committet nach backups/ (RUNBOOK §7.3)
+  contents: write  # v4.5: Track-Record-Backup committet nach backups/ (RUNBOOK §7.3)
+
+# NEU (v1.5, 23.09.2026): verhindert zwei ueberlappende Laeufe desselben
+# Workflows (z.B. zwei kurz hintereinander getriggerte workflow_dispatch-
+# Laeufe, oder ein manueller Trigger waehrend der planmaessige Cron-Lauf
+# noch laeuft). Ohne cancel-in-progress (Default false): ein zweiter Trigger
+# wartet in der Queue, bis der erste vollstaendig durch ist — bricht NICHT
+# den eventuell echten, planmaessigen Lauf ab.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 on:
   schedule:
-    - cron: '00 22 * * 1-5'   # Nachbörsen-Lauf: 22:00 UTC = 00:00 MESZ/01:00 MEZ (nach NYSE-Schluss 20:00/21:00 UTC)
+    - cron: '00 22 * * 1-5'  # Nachbörsen-Lauf: 22:00 UTC = 00:00 MESZ/01:00 MEZ (nach NYSE-Schluss 20:00/21:00 UTC)
   workflow_dispatch:
     inputs:
       force_backup:
@@ -121,7 +149,6 @@ jobs:
       # es seit v1.2 kein "Morgen-Lauf" mehr ist, sondern der einzige,
       # nachbörsliche Lauf.
       EOD_RUN_CRON: '00 22 * * 1-5'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -153,15 +180,15 @@ jobs:
 
       - name: Run Market Aggregator
         env:
-          CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN:         ${{ secrets.CF_API_TOKEN }}
-          CF_KV_NS_ID:          ${{ secrets.CF_KV_NS_ID }}
-          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
-          FLASHALPHA_API_KEY:   ${{ secrets.FLASHALPHA_API_KEY }}
-          FRED_API_KEY:         ${{ secrets.FRED_API_KEY }}
-          FINRA_CLIENT_ID:      ${{ secrets.FINRA_CLIENT_ID }}
-          FINRA_CLIENT_SECRET:  ${{ secrets.FINRA_CLIENT_SECRET }}
-          PYTHONUNBUFFERED:     "1"
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID: ${{ secrets.CF_KV_NS_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FLASHALPHA_API_KEY: ${{ secrets.FLASHALPHA_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FINRA_CLIENT_ID: ${{ secrets.FINRA_CLIENT_ID }}
+          FINRA_CLIENT_SECRET: ${{ secrets.FINRA_CLIENT_SECRET }}
+          PYTHONUNBUFFERED: "1"
         run: |
           python market_aggregator.py
           echo "Exit Code: $?"
@@ -191,10 +218,10 @@ jobs:
         # verschwinden.
         if: github.event.schedule == env.EOD_RUN_CRON || github.event_name == 'workflow_dispatch'
         env:
-          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
-          CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN:         ${{ secrets.CF_API_TOKEN }}
-          CF_KV_NS_ID:          ${{ secrets.CF_KV_NS_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID: ${{ secrets.CF_KV_NS_ID }}
           # NEU (13.09.2026, Claude+Axel): verdrahtet den bestehenden
           # FORCE_REGENERATE-Escape-Hatch (generate_public_recommendations.js,
           # Trading-Day-Skip-Check) als Workflow-Eingabe, analog zu
@@ -203,7 +230,7 @@ jobs:
           # unveraendert, nur bewusstes manuelles Erzwingen (z.B. nach einem
           # Code-Fix am selben Handelstag, wie hier am 13.09.2026 noetig)
           # wird jetzt ueber das "Run workflow"-Dropdown moeglich.
-          FORCE_REGENERATE:     ${{ github.event.inputs.force_regenerate == 'true' && 'true' || 'false' }}
+          FORCE_REGENERATE: ${{ github.event.inputs.force_regenerate == 'true' && 'true' || 'false' }}
         run: |
           node uiq-suite/scripts/generate_public_recommendations.js
           echo "Exit Code: $?"
@@ -218,10 +245,10 @@ jobs:
         # Samstags-Rhythmus.
         if: always()
         env:
-          CF_ACCOUNT_ID:    ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN:     ${{ secrets.CF_API_TOKEN }}
-          CF_KV_NS_ID:      ${{ secrets.CF_KV_NS_ID }}
-          TR_BACKUP_FORCE:  ${{ github.event.inputs.force_backup == 'true' && '1' || '0' }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_KV_NS_ID: ${{ secrets.CF_KV_NS_ID }}
+          TR_BACKUP_FORCE: ${{ github.event.inputs.force_backup == 'true' && '1' || '0' }}
         run: python tr_backup.py
 
       - name: Archive committen (tr-Backup + FIN-Archiv + Snapshots, Git-History = Archiv)
