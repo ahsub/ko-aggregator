@@ -1,0 +1,5 @@
+[
+  {"date": "2027-12-31", "horizon": "fiscal year", "eps_estimate_average": "3.1863", "eps_estimate_average_7_days_ago": "3.1863", "eps_estimate_average_30_days_ago": "3.1835", "eps_estimate_average_60_days_ago": "3.0001", "eps_estimate_average_90_days_ago": "2.8769", "eps_estimate_analyst_count": "14.0000", "revenue_estimate_high": "9333600000.00"},
+  {"date": "2026-12-31", "horizon": "fiscal year", "eps_estimate_average": "2.7053", "eps_estimate_average_7_days_ago": "2.7053", "eps_estimate_average_30_days_ago": "2.7136", "eps_estimate_average_60_days_ago": "2.6036", "eps_estimate_average_90_days_ago": "2.5127", "eps_estimate_analyst_count": "13.0000", "revenue_estimate_high": "7622600000.00"},
+  {"date": "2026-06-30", "horizon": "fiscal quarter", "eps_estimate_average": "0.6390", "eps_estimate_average_7_days_ago": "0.6334", "eps_estimate_average_30_days_ago": "0.6081", "eps_estimate_average_60_days_ago": "0.6066", "eps_estimate_average_90_days_ago": "0.6057", "eps_estimate_analyst_count": "10.0000", "revenue_estimate_high": "1817000000.00"}
+]
