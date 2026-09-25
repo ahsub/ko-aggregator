@@ -1306,7 +1306,40 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.43.1"
+AGGREGATOR_VERSION = "5.44.0"
+# v5.44.0 (24.09.2026, Claude + Axel + Reviewer): TICKER_MASTER-Migration
+# Phase C, Schritte 1-6 (Plan: UIQ-Suite/docs/TICKER-MASTER-MIGRATION-PHASE-AB.md
+# Abschnitt 5). Zwei getrennte Aenderungen:
+# (1) PARITAETS-MIGRATION (verhaltensneutral): ticker_master.py (neu, gleiches
+#     Verzeichnis) ist Single Source of Truth fuer alle statischen Ticker-
+#     Listen, die Sektor-Watchlists, deren Reihenfolge und SECTOR_WATCHLISTS_
+#     VERSION. SP500_TICKERS, NASDAQ100_EXTRA, EU_ADR_TICKERS, INTL_TIER1,
+#     SECTOR_ETFS_BROAD/_US/_EXUS, CRYPTO_TICKERS, RS_SECTOR_ETFS,
+#     BEAR_US_TICKERS, BEAR_DE_EU_TICKERS und SECTOR_WATCHLISTS werden daraus
+#     abgeleitet (Kompatibilitaetsschicht, gleiche Namen). build_ticker_
+#     universe() liest den statischen Teil ueber _TM.static_universe_
+#     candidates(); KV-Extras, ex-IWV und BAD_SYMS bleiben hier (Laufzeit).
+#     Die 201 Kommentarzeilen aus den bisherigen Listen-Literalen sind in
+#     ticker_master.py den jeweiligen Tickern/Sektoren zugeordnet erhalten.
+#     Paritaet lokal gegen v5.43.1 geprueft (Mitgliedschaft, Reihenfolge,
+#     Pro-Ticker-Metadaten, Laufzeitquellen inkl. BAD_SYMS) — einzige
+#     beabsichtigte Abweichung: Duplikate INNERHALB einer Liste (SP500:
+#     NEE/UPST/HOOD/AFRM/SOFI; INTL_TIER1: VALE/BHP/RIO) sind in den
+#     abgeleiteten Listen nur noch einmal enthalten (erste Position). Wirkung:
+#     keine (Universum dedupliziert ohnehin, Listen werden sonst nur per
+#     "in" genutzt).
+# (2) ENTFERNUNG NACHWEISLICH UNGENUTZTER LEGACY-LISTEN (separat dokumentiert):
+#     DAX40_TICKERS, MDAX_TICKERS, TECDAX_TICKERS, EUROSTOXX_TICKERS_LEGACY
+#     (+ Alias EUROSTOXX_TICKERS), FTSE100_TICKERS, STOXX_EU_EXTRA und die
+#     sieben master["markets"]-Gruppen dax40/mdax/tecdax/eurostoxx/intl_eu/
+#     ftse100/stoxx_eu. Restsuche 24.09.2026: kein Leser des markets-Blocks
+#     in 84 Code-Dateien aus 6 Repos. Die Listen waren schon zuvor bewusst
+#     NICHT im Universum (ersetzt durch EU_ADR_TICKERS); die Gruppen enthielten
+#     daher fast nur BEAR_DE_EU-Titel (dax40: 12 von 13). Output-Aenderung:
+#     diese sieben Schluessel fehlen ab jetzt in master["markets"].
+# Offen, NICHT Teil dieser Version: ex-IWV-Survivorship-Fix vermutlich
+# inaktiv (_load_ex_iwv_tickers() sucht ausserhalb des Repos; Datei
+# data/ex_iwv_tickers.csv existiert nicht) — separater Bug-Eintrag.
 # v5.43.1 (16.09.2026): Backlog #64 final abgeschlossen — Validierungs-
 # Baseline (Top-20/50/100/200-Overlap zwischen sCsp/sAtmna, Spearman/
 # Pearson-Korrelation) als Docstring-Kommentar bei score_options_atmna()
@@ -1659,6 +1692,11 @@ def validate_data_freshness(results):
     return str(last_trading_day)
 
 # ── TICKER UNIVERSUM ──────────────────────────────────────────────────────────
+# Phase C (24.09.2026): Einzige Quelle der Wahrheit fuer alle statischen
+# Ticker-Listen und Sektor-Watchlists ist ticker_master.py (gleiches Verzeichnis).
+# Die Listennamen unten bleiben als abgeleitete Kompatibilitaetsschicht erhalten
+# — NICHT hier editieren, sondern in ticker_master.py (Governance s. dort).
+import ticker_master as _TM
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TICKER UNIVERSUM v3.0  (~600 Titel)
@@ -1667,323 +1705,43 @@ def validate_data_freshness(results):
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── US LARGE/MID CAP (S&P500 Kern + Nasdaq Wachstum) ─────────────────────────
-SP500_TICKERS = [
-    # Mega-Cap Tech
-    "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","TSLA","AVGO","ORCL",
-    # Financials
-    "JPM","BAC","WFC","GS","MS","BLK","SCHW","AXP","CB","MMC","AON","CME","SPGI","MCO",
-    # Healthcare
-    "UNH","LLY","JNJ","ABT","MRK","ABBV","TMO","DHR","SYK","BSX","MDT","ELV","CI","HUM",
-    "ISRG","REGN","VRTX","GILD","AMGN","BMY","PFE","CVS","ZTS","IDXX","A","IQV",
-    # Consumer
-    "COST","WMT","HD","MCD","SBUX","TGT","LOW","TJX","BKNG","MAR","HLT","YUM",
-    "NKE","PG","KO","PEP","PM","MO","CL","EL","CHD",
-    # Industrials
-    "CAT","HON","UPS","DE","GE","GEV","BA","LMT","RTX","NOC","GD","HII","TDG","KTOS","AXON",
-    "UNP","CSX","NSC","TT","CARR","OTIS","JCI","EMR","ROK","AME","ITW","ETN","PH","IR",
-    # Energy
-    "XOM","CVX","COP","EOG","SLB","MPC","PSX","VLO","OXY","DVN","HAL","BKR","FANG",
-    # Utilities & REITs
-    "NEE","DUK","SO","AEP","D","SRE","EXC","PLD","AMT","EQIX","CCI","PSA","O","VICI",
-    # Tech & Software
-    "V","MA","INTU","ADBE","CRM","NOW","SNPS","CDNS","ADSK","WDAY","TEAM",  # v4.3: ANSS delistet (Synopsys-Übernahme 2025)
-    "PANW","CRWD","FTNT","ZS","OKTA","S","DDOG","MDB","SNOW","NET","CFLT","ESTC",
-    "QCOM","TXN","ADI","MCHP","NXPI","KLAC","LRCX","AMAT","MU","WDC","STX",
-    "IBM","CSCO","ACN","HPQ","HPE","DELL","NTAP",
-    # Semiconductors / AI
-    "ARM","SMCI","MRVL","MSTR","PLTR","COIN",
-    # E-Commerce / Consumer Tech
-    "NFLX","UBER","ABNB","LYFT","RBLX","SNAP","PINS","MTCH","ZM","DOCU",
-    "SHOP","MELI","SE","GRAB","XYZ","HOOD","SOFI","AFRM","UPST","PYPL",  # v4.3: SQ→XYZ (Block-Umbenennung 01/2025)
-    # China ADRs (US-listed)
-    "BABA","JD","PDD","BIDU","NTES","TCOM","FUTU","NIO","XPEV","LI",
-    # Auto
-    "GM","F","RIVN","LCID","STLA","TM","HMC",
-    # Materials
-    "LIN","APD","ECL","SHW","FCX","NEM","GOLD","ALB","MP",
-    # Biotech / Pharma Growth
-    "MRNA","BNTX","BIIB","ILMN","RARE","EXAS","INCY","NBIX","ALLO",  # v4.3: SGEN delistet (Pfizer-Übernahme 2023)
-    "VKTX","RYTM","ACAD","MRUS","PRCT",
-    # Clean Energy
-    "ENPH","FSLR","SEDG","RUN","ARRY","BE","PLUG","BLDP","NEE",  # v4.3: NOVA (Sunnova) delistet nach Insolvenz 2025
-    # Fintech
-    "HOOD","AFRM","UPST","SOFI",
-    # Misc Growth
-    "GLW","LDOS","SAIC","CACI","BAH","HUBS","GTM","GTLB","BILL","PCTY",  # v4.3: ZI→GTM (ZoomInfo-Umbenennung 2025)
-]
+SP500_TICKERS = _TM.derive_list("SP500_TICKERS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
-NASDAQ100_EXTRA = [
-    "ADSK","FAST","IDXX","KDP","KHC","LULU","MNST","ODFL","PAYX","PCAR",
-    "ROST","SIRI","TMUS","VRSK","VRSN","XEL","CPRT","CTAS","DLTR","EBAY","EXC",
-]
+NASDAQ100_EXTRA = _TM.derive_list("NASDAQ100_EXTRA")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
-# ── DEUTSCHE MAERKTE (Xetra .DE — beste yfinance Verfuegbarkeit) ──────────────
-# DAX40/MDAX/TecDAX: NUR Referenz + KO-Produkt-Screener (keine Options-Kandidaten)
-# Werden in build_ticker_universe() NICHT mehr direkt eingebunden.
-DAX40_TICKERS = [
-    "ADS.DE","AIR.DE","ALV.DE","BAS.DE","BAYN.DE","BMW.DE","BNR.DE",
-    "CBK.DE","CON.DE","1COV.DE","DBK.DE","DB1.DE","DHL.DE","DTE.DE",
-    "EOAN.DE","FRE.DE","HEI.DE","HEN3.DE","IFX.DE","INL.DE","LIN.DE",
-    "MBG.DE","MRK.DE","MTX.DE","MUV2.DE","P911.DE","PAH3.DE","QIA.DE",
-    "RHM.DE","RWE.DE","SAP.DE","SHL.DE","SIE.DE","SY1.DE",
-    "VNA.DE","VOW3.DE","ZAL.DE","ENR.DE","DHER.DE","PUMA.DE",
-]
+# ── ENTFERNT (Phase C, 24.09.2026): DAX40_TICKERS, MDAX_TICKERS, TECDAX_TICKERS,
+# EUROSTOXX_TICKERS_LEGACY (+ Alias EUROSTOXX_TICKERS), FTSE100_TICKERS,
+# STOXX_EU_EXTRA — nachweislich ungenutzte Legacy-Listen. Sie wurden schon
+# vorher NICHT ins Universum eingebunden (bewusst durch EU_ADR_TICKERS ersetzt,
+# s.u.) und speisten nur sieben Gruppen im master["markets"]-Block (dax40, mdax,
+# tecdax, eurostoxx, intl_eu, ftse100, stoxx_eu), fuer die in 84 Code-Dateien
+# aus 6 Repos (ko-aggregator, UIQ-Suite, axel-scanner, ko-modules, workers,
+# ko-sync) kein Leser existiert. Befund dazu: die "dax40"-Gruppe bestand zu 12/13
+# aus BEAR_DE_EU_TICKERS (irrefuehrend). Details: Changelog v5.44.0 bei
+# AGGREGATOR_VERSION. Wiederaufnahme deutscher Heimatboersen-Titel ins Universum
+# waere ein eigenes Feature (dann als Daten in ticker_master.py).
 
-MDAX_TICKERS = [
-    "AFX.DE","AG1.DE","AIXA.DE","BC8.DE","BOSS.DE","DEQ.DE","DWS.DE",
-    "EVD.DE","EVK.DE","FNTN.DE","HAG.DE","HHFA.DE","HNR1.DE","HOT.DE",
-    "JEN.DE","KGX.DE","LEG.DE","NDA.DE","NOEJ.DE","O2D.DE","PBB.DE",
-    "PSM.DE","SFQ.DE","SGL.DE","TAG.DE","TLX.DE","TUI1.DE","UTDI.DE",
-    "WAF.DE","WCH.DE","KSB.DE","SMT.DE","GFK.DE","ARND.DE",
-]
-
-TECDAX_TICKERS = [
-    "AIXA.DE","BB1.DE","EVNT.DE","FNTN.DE","IFX.DE","INH.DE",
-    "NDX1.DE","PFV.DE","PSM.DE","S92.DE","SAP.DE","SFQ.DE","SHL.DE",
-    "SIE.DE","SOW.DE","SRT3.DE","UTDI.DE","WAF.DE","ZAL.DE",
-]
-
-# ── EUROSTOXX / EU-Heimatboersen (NUR fuer Referenz + KV-Filterung) ──────────
-# Diese Liste wird NICHT mehr direkt in build_ticker_universe() eingebunden.
-# Stattdessen: EU_ADR_TICKERS (US-gelistete Pendants) werden verwendet.
-# Heimatboersen bleiben als Referenz fuer KO-Produkt-Screener und Watchlisten.
-EUROSTOXX_TICKERS_LEGACY = [
-    # Frankreich (.PA) — nur Referenz
-    "OR.PA","MC.PA","SU.PA","BNP.PA","AIR.PA","TTE.PA","STM.PA","RNO.PA",
-    # Niederlande (.AS)
-    "ASML.AS","PHIA.AS","ING.AS","ADYEN.AS","HEIA.AS",
-    # Italien (.MI)
-    "ENI.MI","ENEL.MI","RACE.MI","STM.MI",
-    # Schweiz (.SW)
-    "NOVN.SW","ROG.SW","NESN.SW","ABBN.SW",
-    # UK (.L)
-    "AZN.L","SHEL.L","BP.L","GSK.L","ULVR.L","RIO.L",
-    # Skandinavien / Sonstige
-    "NOVO-B.CO","ERICB.ST",
-]
-# Alias fuer abwaertskompatible KV-Keys
-EUROSTOXX_TICKERS = EUROSTOXX_TICKERS_LEGACY
 
 # ── EU BLUE CHIPS — US-gelistete ADRs (Options-faehig, liquid) ───────────────
 # Ersetzt DAX40, MDAX, TecDAX, EuroStoxx, FTSE100, STOXX_EU_EXTRA im Universum.
 # Nur US-gelistete Ticker: NYSE/NASDAQ-ADRs oder primär US-notierte Titel.
 # Quelle: OTC Markets / NYSE ADR-Datenbank — geprüft auf Optionsliquidität.
-EU_ADR_TICKERS = [
-    # ── Deutschland (DAX + MDAX) ──────────────────────────────────────────────
-    "SAP",      # SAP SE (NYSE, primär US-listing)
-    "DB",       # Deutsche Bank (NYSE ADR)
-    "SIEGY",    # Siemens (OTC ADR, liquid)
-    "BAYRY",    # Bayer (OTC ADR)
-    "BMWYY",    # BMW (OTC ADR)
-    "ADDYY",    # Adidas (OTC ADR)
-    "DHLGY",    # DHL Group (OTC ADR)
-    "DTEGY",    # Deutsche Telekom (OTC ADR)
-    "AZSEY",    # Allianz (OTC ADR)
-    "MURGY",    # Munich Re (OTC ADR)
-    "RWEOY",    # RWE (OTC ADR)
-    "IFNNY",    # Infineon (OTC ADR)
-    "LIN",      # Linde (NYSE, primär US-listing seit Fusion)
-    "BASFY",    # BASF (OTC ADR)
-    "MKKGY",    # Merck KGaA (OTC ADR — nicht Merck US!)
-    "FSNUY",    # Fresenius (OTC ADR)
-    "RNMBY",    # Rheinmetall (OTC ADR, Defense)
-    "VWAGY",    # Volkswagen (OTC ADR)
-    "MBGAF",    # Mercedes-Benz (OTC ADR)
-    "HBMRY",    # Heidelberg Materials (OTC ADR)
-    "HENKY",    # Henkel (OTC ADR)
-    "EADSY",    # Airbus (OTC ADR)
-    "SBGSY",    # Schneider Electric (OTC ADR)
-    # ── Frankreich ────────────────────────────────────────────────────────────
-    "TTE",      # TotalEnergies (NYSE, liquid Options)
-    "LRLCY",    # L'Oreal (OTC ADR)
-    "LVMUY",    # LVMH (OTC ADR)
-    "PPRUY",    # Kering (OTC ADR)
-    "HESAY",    # Hermès (OTC ADR)
-    "BNPQY",    # BNP Paribas (OTC ADR)
-    "CFRUY",    # Richemont (OTC ADR)
-    "PDRDY",    # Pernod Ricard (OTC ADR)
-    "VCISY",    # Vinci (OTC ADR)
-    "STM",      # STMicroelectronics (NYSE, US-listing)
-    "AIVAF",    # Air Liquide (OTC ADR)
-    # ── Niederlande ───────────────────────────────────────────────────────────
-    "ASML",     # ASML (NASDAQ, primär US-listing)
-    "PHG",      # Philips (NYSE ADR)
-    "ING",      # ING Groep (NYSE ADR, liquid Options)
-    "HEINY",    # Heineken (OTC ADR)
-    # ── Schweiz ───────────────────────────────────────────────────────────────
-    "NVS",      # Novartis (NYSE ADR, liquid Options)
-    "RHHBY",    # Roche (OTC ADR)
-    "NSRGY",    # Nestle (OTC ADR)
-    "ABB",      # ABB (NYSE, US-listing)
-    # CFR/ZURN entfernt — schlechte OTC-Liquidität (CFRUY bereits in Liste)
-    # ── UK ────────────────────────────────────────────────────────────────────
-    "AZN",      # AstraZeneca (NASDAQ, primär US-listing, liquid Options!)
-    "SHEL",     # Shell (NYSE ADR, liquid Options)
-    "BP",       # BP (NYSE ADR, liquid Options)
-    "GSK",      # GSK (NYSE ADR, liquid Options)
-    "RIO",      # Rio Tinto (NYSE ADR, liquid Options)
-    "HSBC",     # HSBC (NYSE ADR, liquid Options)
-    "VOD",      # Vodafone (NASDAQ ADR)
-    "UL",       # Unilever (NYSE ADR)
-    "DEO",      # Diageo (NYSE ADR)
-    "BTI",      # British American Tobacco (NYSE ADR)
-    "NGG",      # National Grid (NYSE ADR)
-    # ── Skandinavien ──────────────────────────────────────────────────────────
-    "NVO",      # Novo Nordisk (NYSE ADR, SEHR liquid Options!)
-    "ERIC",     # Ericsson (NASDAQ ADR)
-    "NOK",      # Nokia (NYSE ADR)
-    "VOLVY",    # Volvo (OTC ADR)
-    "ATLKY",    # Atlas Copco (OTC ADR)
-    # ── Sonstige Europa ───────────────────────────────────────────────────────
-    "E",        # Eni (NYSE ADR)
-    "RACE",     # Ferrari (NYSE, primär US-listing, liquid Options!)
-    "SNY",      # Sanofi (NASDAQ ADR)
-    # ── Defensive Ergänzungen (Gemini-Empfehlung: Sektorparität) ─────────────
-    "NUE",      # Nucor (Industrials/Materials — S&P500)
-    "FCX",      # Freeport-McMoRan (Materials — liquid Options)
-    "URI",      # United Rentals (Industrials — liquid Options)
-    "WM",       # Waste Management (Defensive — liquid Options)
-    "RSG",      # Republic Services (Defensive)
-    "VMC",      # Vulcan Materials (Materials)
-    "MLM",      # Martin Marietta (Materials)
-]
+EU_ADR_TICKERS = _TM.derive_list("EU_ADR_TICKERS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # ── FTSE ALL-WORLD NON-US TOP 150 ─────────────────────────────────────────────
 # ADRs (US-listed) bevorzugt — bessere yfinance-Datenqualitaet
 # Heimatboersen als Fallback fuer Titel ohne liquides ADR
-INTL_TIER1 = [
-    # Europa — Technologie (ADR/US-listed)
-    "ASML","STM","ERIC","NOK","SAP","KEYS",  # v4.3: INFN delistet (Nokia-Übernahme 2025)
-    # Europa — Healthcare (ADR)
-    "NVO","AZN","NVS","RHHBY","SNY","GSK","BAYRY","NVCR",
-    # Europa — Energie & Rohstoffe (ADR)
-    "SHEL","BP","TTE","ENLAY","E","ENGIY","SQM","RIO","BHP","VALE","SCCO",
-    # Europa — Finanzen (ADR)
-    "UBS","ING","BCS","HSBC","DB",
-    # Europa — Konsum & Luxus (ADR)
-    "LVMUY","CFRUY","PPRUY","HESAY","BURBY","ADDYY",
-    # Europa — Industrie (ADR)
-    "SIEGY","ATLKY","VOLVY","ABB","DSDVY",
-    # Europa — Defence (DIREKT .DE/.PA — OTC-ADRs wie RHTRY haben schlechten API-Feed)
-    # NEU (01.07.2026): Rheinmetall, BAE Systems, Saab, Thales, Leonardo über
-    # Heimatboersen-Suffix statt OTC-ADR — stabiler yfinance-Feed via Yahoo .DE/.PA/.ST
-    "RHM.DE",   # Rheinmetall AG (XETRA) — kein stabiler OTC-ADR verfügbar
-    "BA.L",     # BAE Systems (London) — BAESY OTC zu dünn
-    "SAAB-B.ST",# Saab AB (Stockholm) — SAABY OTC zu dünn
-    "HO.PA",    # Thales SA (Euronext Paris) — THLLY OTC zu dünn
-    "LDO.MI",   # Leonardo SpA (Milano)
-    # Japan (ADRs only)
-    "TM","HMC","SONY","NTT","MUFG","SMFG","MFG","NTDOY","KYOCY","FANUY",
-    "CCOEY","ITOCY","MARUY",
-    # Suedkorea
-    "SSNLF","MX",
-    # Taiwan
-    "TSM",
-    # China/Hongkong (US-gelistete ADRs)
-    "BABA","JD","PDD","BIDU",
-    "TCEHY","BYDDY","NIO","XPEV","LI",
-    # Indien (ADR)
-    "INFY","WIT","HDB","IBN","RDY",  # v4.3: VEDL + TTM (ADRs delistet)
-    # Kanada (US-listed)
-    # v4.2-Fix: CCO war Clear Channel Outdoor (falsche Firma!) — Cameco = CCJ
-    "SHOP","CNQ","SU","CNI","CP","TD","RY","BNS","ENB","TRP","NTR","CCJ",
-    # Australien (ADR)
-    "BHP","RIO","WDS","ORG.AX",  # v4.3: ORG hat kein US-Listing → Heimatbörse ASX
-    # Brasilien (ADR)
-    "VALE","PBR","ITUB","BBD","ABEV","BRKM",
-    # Mexiko/Latam
-    "AMX","FMX",  # v4.3: Femsa-NYSE-Symbol ist FMX (FMXB ungültig)
-    # Suedafrika / EM Sonstiges
-    "PROSY","NPSNY",  # v4.3: Prosus-OTC-Symbol ist PROSY (PROSSY ungültig)
-    # Israel Tech
-    "CHKP","NICE","CYBR","WIX","MNDY","GLBE","GTLB",
-]
+INTL_TIER1 = _TM.derive_list("INTL_TIER1")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # ── SEKTOR-ETFs USA (2-5 pro Sektor) ─────────────────────────────────────────
 # Breite Markt-Benchmarks
-SECTOR_ETFS_BROAD = [
-    "SPY","QQQ","IWM","RSP","DIA","VTI","MDY","IJR",    # US Broad (RSP = Equal-Weight S&P für Breadth)
-    "VEA","VWO","EFA","EEM","IEFA","IEMG",               # Ex-US Broad
-    "ACWI","VT","URTH",                                  # World
-]
+SECTOR_ETFS_BROAD = _TM.derive_list("SECTOR_ETFS_BROAD")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # US Sektoren (SPDR XL-Familie + Alternativen)
-SECTOR_ETFS_US = [
-    # Technologie
-    "XLK","VGT","FTEC","IYW","QTEC",
-    # Semiconductors
-    "SMH","SOXX","SOXQ","USD",
-    # Software / Cyber
-    "IGV","BUG","CIBR","HACK","WCLD",
-    # Financials
-    "XLF","VFH","IYF","KRE","KBE",
-    # Healthcare
-    "XLV","VHT","IYH",
-    # Biotech / Pharma
-    "XBI","IBB","ARKG","PJP","BBP",
-    # Energie
-    "XLE","VDE","IYE","OIH","XOP",
-    # Industrials
-    "XLI","VIS","IYJ",
-    # Defense & Aerospace (DFEN bewusst NICHT aufgenommen -- 24.08.2026,
-    # Axel-Entscheidung: 3x taeglich gehebelter Fonds verzerrt Leaderboards/
-    # technische Scores, widerspricht UIQ-Leitprinzip Fehler-Reduzierer)
-    "ITA","XAR","PPA",
-    # Nuclear / Uranium / Space (v4.2, 02.07.2026 — RS-Referenz neue Watchlists)
-    "NLR","URA","ARKX",
-    # Consumer Discretionary
-    "XLY","VCR","IYC",
-    # Consumer Staples
-    "XLP","VDC","IYK",
-    # Growth vs. Value (17.08.2026, Axel-Anfrage — Konjunktur-Indikatoren):
-    # IWF/IWD = iShares Russell 1000 Growth/Value, Standard-Paar fuer diese
-    # Rotation, hochliquide. Wird fuer calc_growth_value_signal() benoetigt.
-    "IWF","IWD",
-    # Utilities
-    "XLU","VPU","IDU",
-    # Real Estate
-    "XLRE","VNQ","IYR","REET",
-    # Materials
-    "XLB","VAW","IYM",
-    # Communication
-    "XLC","VOX","IYZ",
-    # Clean Energy / ESG
-    "ICLN","QCLN","CNRG","ACES","ESGU",
-    # AI & Robotics / Innovation
-    # v4.2-Fix: ARKK stand seit v4.0 in RS_SECTOR_ETFS, fehlte aber im
-    # Download-Universum → RS-Berechnung wurde nachts still übersprungen
-    "BOTZ","ROBO","IRBO","AIQ","THNQ","ARKK",
-    # Crypto-related
-    "BITO","GBTC","ETHA",
-    # Commodities
-    "GLD","IAU","GLDM","SLV","PPLT","PDBC","DJP","USO","UNG","CORN",
-    # Bonds
-    "TLT","IEF","SHY","HYG","LQD","EMB","BND","VCIT","VCSH","TIPS",
-]
+SECTOR_ETFS_US = _TM.derive_list("SECTOR_ETFS_US")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # Ex-US Sektoren (iShares / Vanguard international)
-SECTOR_ETFS_EXUS = [
-    # Europa
-    "EZU","VGK","IEUR","FEZ","EWG","EWU","EWI","EWQ","EWP","EWN","EWD","EWL",  # v4.3: EWF existiert nicht (Frankreich = EWQ)
-    # Asien Developed
-    "EWJ","EWA","EWH","EWS","EWY",
-    # Asien Emerging
-    "FXI","KWEB","MCHI","EWT","INDA","VNM",
-    # Latam
-    "EWZ","EWW","ILF",
-    # Sector Ex-US
-    "IXUS","VXUS",
-    # Ex-US Technologie
-    "IFRA","IQLT",
-    # Ex-US Energie
-    "IXC",
-    # Ex-US Healthcare
-    "IXJ",
-    # Ex-US Financials
-    "IXG",
-    # Schwellenlaender Sektoren
-    "EMXC","EEMS","EMSG",
-]
+SECTOR_ETFS_EXUS = _TM.derive_list("SECTOR_ETFS_EXUS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # Zusammengefasst (fuer Aggregator)
 SECTOR_ETFS = list(dict.fromkeys(
@@ -1991,74 +1749,22 @@ SECTOR_ETFS = list(dict.fromkeys(
 ))
 
 # ── KRYPTO ────────────────────────────────────────────────────────────────────
-CRYPTO_TICKERS = [
-    "BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD",
-    "ADA-USD","AVAX-USD","DOGE-USD","DOT-USD","POL-USD",
-    "LINK-USD","UNI-USD","ATOM-USD","LTC-USD","BCH-USD",
-]
+CRYPTO_TICKERS = _TM.derive_list("CRYPTO_TICKERS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # ── SEKTOR-WATCHLISTEN (fuer Deep-Dive & EIC-Vorschlaege) ────────────────────
-SECTOR_WATCHLISTS = {
-    "AI_TECH":      ["NVDA","AMD","MSFT","GOOGL","META","PLTR","ARM","SMCI","MSTR","NET","CRDO","ALAB"],
-    "SEMIS":        ["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ASML","MRVL","NXPI","ADI"],
-    # Defence: US-Titel + europäische Heimatbörsen-Symbole (ADRs wie RHTRY haben keinen stabilen API-Feed)
-    "DEFENSE":      ["LMT","RTX","NOC","GD","BA","KTOS","AXON","HII","TDG","HWM","HEI",
-                     "LDOS","SAIC","CACI","MOG-A","TXT","CW","DRS",  # v4.3: Yahoo-Symbol für Moog ist MOG-A
-                     # v4.2 (02.07.2026): Gemini-Liste — Drohnen/Nuklear/Defense-Tech
-                     "AVAV","LHX","BWXT","PLTR",
-                     "RHM.DE","BA.L","SAAB-B.ST","HO.PA","LDO.MI"],
-    # Robotics/AI-Hardware (01.07.2026): IRBO neu, bestehende konsolidiert
-    "ROBOTICS":     ["NVDA","ABB","FANUY","IRBO","BOTZ","ROBO","ISRG","KEYS","TER","AZTA","ONTO","NDSN",
-                     # v4.2 (02.07.2026): Gemini-Liste — Automation/Vision/Chips (COGN→CGNX korrigiert)
-                     "SYM","ROK","MBLY","TDY","CGNX","PATH","ZBRA","IR","ADI","NXPI","MCHP"],
-    "BIOTECH":      ["MRNA","BNTX","REGN","VRTX","GILD","BIIB","ILMN","ARKG","ABBV","LLY","NVO","AZN"],
-    "CLEAN_ENERGY": ["ENPH","FSLR","SEDG","RUN","BE","PLUG","NEE","ARRY","BLDP","ICLN","QCLN"],
-    "FINTECH":      ["XYZ","HOOD","AFRM","SOFI","UPST","COIN","PYPL","V","MA","SCHW","NU","STNE"],
-    "GLPONE":       ["LLY","NVO","VKTX","RYTM","AMGN","REGN","AZN","SNY","GILD","PFE","RHHBY"],
-    "PICKS_SHOVELS":["NVDA","AMD","AVGO","AMAT","LRCX","TSM","ARM","KLAC","SNPS","CDNS","ONTO","ACLS"],
-    "WHEEL_STOCKS": ["DDOG","AMSC","IREN","CIFR","PBR","CLSK","NVO","HOOD","ENVX","MRVL","COIN"],
-    "LUXURY_EU":    ["LVMUY","LRLCY","HESAY","CFRUY","PPRUY","ADDYY","BURBY","RACE","CPRI","RL"],
-    "JAPAN_TECH":   ["TM","SONY","NTDOY","KYOCY","FANUY","CCOEY","HMC"],
-    "EM_GROWTH":    ["TSM","BABA","PDD","INFY","VALE","ITUB","NU","STNE","SE","GRAB"],
-    # ── v4.2 (02.07.2026): 5 neue Sektoren (Gemini-Liste, Kausalitätsprüfung bestanden) ──
-    # Governance: CEG NUR hier unter NUCLEAR_ENERGY (Kernkraft-Versorger, kein
-    # Rohstoffwert). IBM/HON bewusst NICHT in CYBERSECURITY (Mischkonzerne mit
-    # Cyber-Anteil <10% Umsatz — würden den Sektor-Filter im Scanner verwässern).
-    "MATERIALS":    ["FCX","ALB","MP","TECK","CCJ","SCCO","VALE","SQM","BHP","RIO",
-                     "HBM","ERO","LAC"],  # v4.7: Kupfer-Mid-Caps + Lithium (Gemini, verifiziert)
-    "CYBERSECURITY":["PANW","CRWD","FTNT","NET","ZS","OKTA"],
-    "NUCLEAR_ENERGY":["CEG","VST","NRG","TLN","SMR","OKLO","ETN","PWR","HUBB",
-                     "LEU","UEC","UUUU","NXE"],  # v4.7: Uran-Fuel-Cycle (Gemini, verifiziert)
-    "SPACE":        ["RKLB","ASTS","HWM","TDG"],
-    "BIOTECH_LONGEVITY":["CRSP","BEAM","NTLA","EXAS","ILMN","RXRX","DXCM","ALGN"],
-    # v4.7 (05.07.2026): Supercycle-Sektoren (Gemini-Vorschlag, Claude-verifiziert —
-    # 10 Fehlticker/Fehlklassifikationen aussortiert: VERT→VRT, PRE→PLPC, GOLD→B,
-    # SILV/PEAK/UHR/CNHI veraltet, FI/TTE Fehlkategorie, RKDA Nano-Cap).
-    # Demografie-Qualitätstitel bewusst NICHT als Scan-Sektor (Value-Thema →
-    # docs/VALUE_MOD_KONZEPT.md Themenregister; FIN-Archiv sammelt sie via R3000).
-    "GRID_ELECTRIFICATION": ["GEV","EMR","VMI","AME","POWL","AEIS","PLPC"],
-    "PRECIOUS_METALS":      ["NEM","B","WPM","FNV","RGLD","PAAS","HL","AG","EXK","FSM","MAG"],
-    "AGRICULTURE":          ["DE","AGCO","CTVA","NTR","MOS","CF","FMC","DAR","CNH","AVD"],
-    "WATER":                ["XYL","AWK","WTS","AOS","ECL","BMI"],
-    # v4.7: Picks&Shovels vom Frontend-Index-Slot zum getaggten Sektor befördert
-    # (Axel: "hat nichts zu suchen in der Kategorie S&P500/Nasdaq")
-    "PICKS_SHOVELS":        ["NVDA","AMD","AVGO","AMAT","LRCX","KLAC","MRVL","ARM","TSM","SMCI",
-                             "MSFT","AMZN","GOOGL","META","ORCL","VRT","ETN","PWR","HUBB","CEG"],
-}
+SECTOR_WATCHLISTS = _TM.derive_sector_watchlists()  # Phase C (24.09.2026): Zuordnung + Reihenfolge -> ticker_master.py
 
 # ── SEKTOR-TAG-INDEX (automatisch abgeleitet, NICHT manuell pflegen!) ─────────
 # Invertierung von SECTOR_WATCHLISTS: {ticker → [sektoren]}.
 # Zwischenstufe auf dem Weg zu TICKER_SECTOR_MAP als einziger Wahrheitsquelle.
 #
 # GOVERNANCE — NEUE TICKER AUFNEHMEN:
-#   1. Ticker zur passenden Liste in SECTOR_WATCHLISTS oben eintragen
-#   2. TICKER_SECTOR_TAG wird automatisch neu berechnet
-#   3. KEIN manueller Eintrag hier nötig — diese Variable nie direkt editieren!
+#   (Phase C, 24.09.2026) Ticker/Sektor-Zuordnung in ticker_master.py pflegen —
+#   SECTOR_WATCHLISTS und TICKER_SECTOR_TAG werden automatisch abgeleitet.
+#   KEIN manueller Eintrag hier nötig — diese Variable nie direkt editieren!
 #
-# MITTELFRISTIG (eigene Session):
-#   Migration zu TICKER_SECTOR_MAP = {"NVDA": ["AI_TECH","SEMIS",...], ...}
-#   als echter Single Source of Truth — dann entfällt auch die Duplikation
-#   zwischen SECTOR_WATCHLISTS und SP500_TICKERS/NASDAQ100_EXTRA.
+# ERLEDIGT (Phase C, 24.09.2026): ticker_master.py ist der Single Source of
+#   Truth (ticker-zentrisch: Listen- UND Sektor-Zugehoerigkeit je Ticker).
 TICKER_SECTOR_TAG = {}
 for _sector, _tickers in SECTOR_WATCHLISTS.items():
     for _t in _tickers:
@@ -2073,41 +1779,18 @@ for _sector, _tickers in SECTOR_WATCHLISTS.items():
 # SECTOR_WATCHLISTS sich aendert (Ticker verschoben/ergaenzt/entfernt),
 # damit historische Daten nicht rueckwirkend semantisch umgedeutet werden.
 # Bei jeder inhaltlichen Aenderung an SECTOR_WATCHLISTS hochzaehlen.
-SECTOR_WATCHLISTS_VERSION = "4.7"
+SECTOR_WATCHLISTS_VERSION = _TM.SECTOR_WATCHLISTS_VERSION  # Phase C: Wert ("4.7") wird jetzt in ticker_master.py gepflegt
 
 # ── RS-REFERENZ ETFs fuer Sektor Relative-Staerke ─────────────────────────────
-RS_SECTOR_ETFS = [
-    "XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLU","XLRE","XLB","XLC",
-    "SMH","SOXX","IBB","XBI","ARKK","BOTZ","ITA","ICLN","VNQ",
-    # Defence & Aerospace (01.07.2026 ergänzt; DFEN am 24.08.2026 wieder
-    # entfernt -- 3x taeglich gehebelt, verzerrt den RS-Vergleich, s. Kommentar
-    # bei SECTOR_ETFS_US)
-    "XAR","PPA",
-    # Robotics & AI-Hardware (01.07.2026 ergänzt)
-    "IRBO","ROBO",
-    # v4.2 (02.07.2026): RS-Referenzen der neuen Watchlists —
-    # XLB (Materials) und ITA/XBI bereits oben vorhanden
-    "HACK","CIBR",   # Cybersecurity
-    "NLR","URA",     # Nuclear Energy / Uran
-    "ARKX",          # Space
-    "ARKG",          # Biotech/Genomics (BIOTECH_LONGEVITY)
-    # Ex-US RS
-    "EZU","EWJ","EWG","FXI","INDA","EWZ","EWY","EWT",
-]
+RS_SECTOR_ETFS = _TM.derive_list("RS_SECTOR_ETFS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 
-# ── FTSE 100 TOP 40 (London Stock Exchange) ───────────────────────────────────
-# FTSE100/STOXX_EU_EXTRA: NUR Referenz (Heimatboersen — keine US-Optionen)
-FTSE100_TICKERS = ['AZN.L', 'SHEL.L', 'HSBA.L', 'ULVR.L', 'RIO.L', 'BP.L', 'GSK.L', 'REL.L', 'BATS.L', 'DGE.L', 'NG.L', 'VOD.L', 'BA.L', 'EXPN.L', 'LSEG.L', 'PRU.L', 'AAL.L', 'GLEN.L', 'NWG.L', 'LLOY.L', 'BT-A.L', 'MNG.L', 'AV.L', 'TSCO.L', 'ABF.L', 'IMB.L', 'STAN.L', 'WPP.L', 'CRH.L', 'IHG.L', 'RKT.L', 'SSE.L', 'BME.L', 'EZJ.L', 'IAG.L', 'RR.L', 'SBRY.L', 'MKS.L', 'JD.L', 'SPX.L']
-
-# ── STOXX EUROPE EXTRA (Schweiz, Skandinavien, Benelux) ──────────────────────
-STOXX_EU_EXTRA = ['NOVO-B.CO', 'DSV.CO', 'CARL-B.CO', 'ORSTED.CO', 'MAERSK-B.CO', 'GIVN.SW', 'SIKA.SW', 'LONN.SW', 'ROG.SW', 'NOVN.SW', 'ABBN.SW', 'ZURN.SW', 'ALC.SW', 'PGHN.SW', 'HOLN.SW', 'ERICB.ST', 'VOLVA.ST', 'ATCO-A.ST', 'SAND.ST', 'SEB-A.ST', 'UCB.BR', 'KER.PA', 'KNEBV.HE']
 
 # ── BEAR-KANDIDATEN US (Momentum/Hype-Titel mit hohem Rückschlagpotenzial) ───
-BEAR_US_TICKERS = ['SMCI', 'MSTR', 'MRVL', 'ALAB', 'CRWD', 'SNOW', 'NET', 'DDOG', 'MDB', 'SHOP', 'XYZ', 'HOOD', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'ENPH', 'FSLR', 'PLUG', 'BE', 'MRNA', 'BNTX', 'ILMN', 'BIIB', 'ZM', 'DOCU', 'UBER', 'LYFT', 'ABNB', 'DASH', 'RBLX', 'SNAP', 'PINS', 'MTCH', 'UPST', 'AFRM', 'SOFI', 'GME', 'PLTR', 'COIN', 'TSLA', 'BABA', 'PDD', 'BIDU', 'AMD', 'NVDA', 'ARM']
+BEAR_US_TICKERS = _TM.derive_list("BEAR_US_TICKERS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 # ── BEAR-KANDIDATEN DE/EU (Zykliker, Immobilien, Hochverschuldete) ───────────
-BEAR_DE_EU_TICKERS = ['BAYN.DE', 'VOW3.DE', 'BMW.DE', 'MBG.DE', 'CON.DE', 'DHER.DE', 'ZAL.DE', 'VNA.DE', 'LEG.DE', 'TAG.DE', '1COV.DE', 'EVT.DE', 'SRT.DE', 'NDX1.DE', 'AIXA.DE', 'WAF.DE', 'IFX.DE', 'STLAM.MI', 'RNO.PA', 'VOD.L', 'BT-A.L', 'TEF.MC', 'UCB.BR', 'GLPG.BR', 'ARND.DE', 'WDP.BR', 'RWE.DE', 'ENEL.MI', 'EZJ.L', 'IAG.L', 'DTE.DE', 'GLEN.L', 'AAL.L']
+BEAR_DE_EU_TICKERS = _TM.derive_list("BEAR_DE_EU_TICKERS")  # Phase C (24.09.2026): Inhalt, Reihenfolge und Kommentare -> ticker_master.py
 
 def fetch_approved_extra_tickers():
     """Liest vom Frontend vorgeschlagene + per Admin-Review freigegebene Ticker
@@ -2172,14 +1855,13 @@ def build_ticker_universe():
     if ex_iwv:
         log.info(f'  [ex_iwv] {len(ex_iwv)} herausgefallene IWV-Ticker weiter getracked')
     # Alle Quellen zusammenführen
+    # Phase C (24.09.2026): statischer Teil kommt aus ticker_master.py, in
+    # exakt der bisherigen Reihenfolge (SP500 + NASDAQ100_EXTRA + EU_ADR +
+    # BEAR_US + BEAR_DE_EU + INTL_TIER1 + SECTOR_ETFS + CRYPTO + Sektor-
+    # Watchlists). Laufzeitquellen (KV-Extras, ex-IWV) und der BAD_SYMS-Filter
+    # bleiben bewusst HIER (Master = statische Konfiguration).
     all_sources = (
-        SP500_TICKERS + NASDAQ100_EXTRA +
-        # EU_ADR_TICKERS: US-gelistete ADRs/Primärlistings (ersetzt .DE/.PA/.AS/.L etc.)
-        EU_ADR_TICKERS +
-        # BEAR_DE_EU: nur fuer Bear-Scanner Referenz (keine Options-Kandidaten)
-        BEAR_US_TICKERS + BEAR_DE_EU_TICKERS +
-        INTL_TIER1 + SECTOR_ETFS + CRYPTO_TICKERS +
-        [t for wl in SECTOR_WATCHLISTS.values() for t in wl] +
+        _TM.static_universe_candidates() +
         # NEU (30.06.2026): per Fibo-Tab vorgeschlagene + admin-freigegebene Ticker
         fetch_approved_extra_tickers() +
         # SWOT T3 (07.08.2026): ex-IWV Ticker weiter tracken
@@ -11507,16 +11189,11 @@ def main():
             for name, tickers in SECTOR_WATCHLISTS.items()
         },
         "markets": {
-            "dax40":    [r for r in results if r["sym"] in DAX40_TICKERS],
-            "mdax":     [r for r in results if r["sym"] in MDAX_TICKERS],
-            "tecdax":   [r for r in results if r["sym"] in TECDAX_TICKERS],
-            "eurostoxx":[r for r in results if r["sym"] in EUROSTOXX_TICKERS],
+            # Phase C (24.09.2026): dax40/mdax/tecdax/eurostoxx/intl_eu/ftse100/
+            # stoxx_eu entfernt (kein Leser, s. Changelog v5.44.0)
             "sp500":    [r for r in results if r["sym"] in SP500_TICKERS],
             "nasdaq100":[r for r in results if r["sym"] in NASDAQ100_EXTRA],
             "intl":     [r for r in results if r["sym"] in INTL_TIER1],
-            "intl_eu":  [r for r in results if r["sym"] in EUROSTOXX_TICKERS],
-            "ftse100":  [r for r in results if r["sym"] in FTSE100_TICKERS],
-            "stoxx_eu": [r for r in results if r["sym"] in STOXX_EU_EXTRA],
             "bear_us":  [r for r in results if r["sym"] in BEAR_US_TICKERS],
             "bear_eu":  [r for r in results if r["sym"] in BEAR_DE_EU_TICKERS],
             "etfs_exus":[r for r in results if r["sym"] in SECTOR_ETFS_EXUS],
