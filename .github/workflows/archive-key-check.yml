@@ -1,0 +1,93 @@
+# Workflow-Version: v1.0 (29.09.2026, Claude + Axel)
+#
+# Zweck: prueft das Secret ARCHIVE_DEPLOY_KEY gegen das private Repo
+# ahsub/uiq-archive, OHNE etwas zu veraendern und ohne Aggregator-Lauf.
+# Anlass: Einfuehrung market-aggregator.yml v1.6 (Snapshots nur noch privat,
+# Befundregister S6). Das Secret ist verschluesselt und von aussen nicht
+# einsehbar - nur ein Lauf mit dem echten Secret belegt, dass privater
+# Schluessel (Secret) und Deploy Key (uiq-archive) zusammenpassen.
+#
+# Prueft in dieser Reihenfolge, jeder Schritt bricht bei Fehler ROT ab:
+#   1. Secret vorhanden und als SSH-Schluessel lesbar
+#   2. Fingerprint des Secrets == Fingerprint des Deploy Keys in uiq-archive
+#      (Settings -> Deploy keys: "ko-aggregator nightly")
+#   3. Lesezugriff (git ls-remote)
+#   4. Schreibrecht per Push-TROCKENLAUF (git push --dry-run): GitHub
+#      verweigert read-only-Keys schon beim Verbindungsaufbau; es wird
+#      nichts uebertragen und kein Branch angelegt (lokal verifiziert).
+# Ausloesung nur manuell (workflow_dispatch). Kann bleiben und bei jedem
+# Schluesseltausch erneut gestartet werden.
+
+name: Archive-Key-Check (uiq-archive)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Fingerprint des am 29.09.2026 hinterlegten Deploy Keys
+      # "ko-aggregator nightly" (uiq-archive -> Settings -> Deploy keys).
+      # Bei einem Schluesseltausch hier mitziehen.
+      EXPECTED_FP: 'SHA256:r+mC/we4eZFOPdkeL1f1Q0T0BR4a/b6/ZEAsnQglNsI'
+      ARCHIVE_URL: 'git@github.com:ahsub/uiq-archive.git'
+    steps:
+      - name: Deploy Key gegen uiq-archive pruefen (ohne Aenderung)
+        env:
+          ARCHIVE_DEPLOY_KEY: ${{ secrets.ARCHIVE_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+
+          echo "1/4 Secret vorhanden und lesbar"
+          if [ -z "${ARCHIVE_DEPLOY_KEY:-}" ]; then
+            echo "::error::Secret ARCHIVE_DEPLOY_KEY fehlt oder ist leer"
+            exit 1
+          fi
+          keyfile="$RUNNER_TEMP/archive_key"
+          trap 'rm -f "$keyfile" "$keyfile.pub"' EXIT
+          printf '%s\n' "$ARCHIVE_DEPLOY_KEY" > "$keyfile"
+          chmod 600 "$keyfile"
+          if ! ssh-keygen -y -f "$keyfile" > "$keyfile.pub" 2>/dev/null; then
+            echo "::error::Secret ist kein lesbarer privater SSH-Schluessel (unvollstaendig kopiert? BEGIN/END-Zeilen fehlen? Passphrase gesetzt?)"
+            exit 1
+          fi
+          echo "   ok"
+
+          echo "2/4 Fingerprint Secret vs. Deploy Key"
+          fp=$(ssh-keygen -lf "$keyfile.pub" | awk '{print $2}')
+          echo "   Secret:     $fp"
+          echo "   Deploy Key: $EXPECTED_FP"
+          if [ "$fp" != "$EXPECTED_FP" ]; then
+            echo "::error::Fingerprint passt NICHT - Secret und Deploy Key gehoeren nicht zum selben Schluesselpaar"
+            exit 1
+          fi
+          echo "   ok - gleiches Schluesselpaar"
+
+          # GitHub-Hostschluessel fest verankert (docs.github.com, Ed25519
+          # SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU), wie in
+          # market-aggregator.yml v1.6
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$RUNNER_TEMP/archive_known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $keyfile -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/archive_known_hosts"
+
+          echo "3/4 Lesezugriff"
+          if ! git ls-remote "$ARCHIVE_URL" HEAD; then
+            echo "::error::Kein Lesezugriff auf uiq-archive mit diesem Schluessel"
+            exit 1
+          fi
+          echo "   ok"
+
+          echo "4/4 Schreibrecht (Push-Trockenlauf, keine Aenderung)"
+          arch="$RUNNER_TEMP/uiq-archive"
+          git clone -q --depth 1 --filter=blob:none --no-checkout "$ARCHIVE_URL" "$arch"
+          if ! git -C "$arch" push --dry-run origin HEAD:refs/heads/key-check-dryrun; then
+            echo "::error::Kein Schreibrecht - beim Deploy Key 'Allow write access' anhaken"
+            exit 1
+          fi
+          echo "   ok"
+
+          echo "ERGEBNIS: Deploy Key passt, Lese- und Schreibrecht bestaetigt. Der Archiv-Schritt im Nachtlauf kann pushen."
