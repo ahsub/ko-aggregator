@@ -1306,7 +1306,23 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.44.0"
+AGGREGATOR_VERSION = "5.44.1"
+# v5.44.1 (29.09.2026, Claude + Axel, SUITE №72 Folgeaudit Teil 2, Befund G1):
+# Ranking-Score der Options-Leaderboards wird jetzt mitgeliefert. Root Cause
+# (belegt, nicht vermutet): top20() fuehrt sCsp/sAtmna/sCc nicht in _core,
+# die fuenf Options-Leaderboards (options_csp/atmna/weekly/collar/cc) trugen
+# das Sortierfeld daher in KEINER Zeile (0/20 in allen 26 Snapshots seit
+# 16.09.2026). generate_public_recommendations.js (UIQ-Suite) las
+# candidate[sCsp|sAtmna|sCc] ?? candidate.score und fiel dadurch still auf
+# den Composite-Score zurueck (strategy_score in Decision-Snapshot, Ledger,
+# Public Digest und Kandidaten-Pool-Archiv). Fix: die fuenf Options-
+# Leaderboards uebergeben ihr Sortierfeld per extra_fields (gezielt, statt
+# _core zu erweitern — Equity-Zeilen bleiben unveraendert; _core und
+# _rebuild_fundamental_lb() bleiben wie zuvor). Reihenfolge, Filter,
+# Scores und alle anderen Ausgabefelder unveraendert; neu sind ausschliesslich
+# die Felder sCsp (options_csp/weekly/collar), sAtmna (options_atmna) und
+# sCc (options_cc) je Leaderboard-Zeile. Historische Snapshots/Ledger-Werte
+# werden NICHT veraendert (s. Generator v1.26: LEGACY-Kennzeichnung).
 # v5.44.0 (24.09.2026, Claude + Axel + Reviewer): TICKER_MASTER-Migration
 # Phase C, Schritte 1-6 (Plan: UIQ-Suite/docs/TICKER-MASTER-MIGRATION-PHASE-AB.md
 # Abschnitt 5). Zwei getrennte Aenderungen:
@@ -5869,7 +5885,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "short_breakdown":top20("sBreakdown", 35),
         "short_fading":   top20("sFading",    35),
         "ko_long":        top20("sKoLong",    50),
-        "options_csp":    top20("sCsp",       50),
+        "options_csp":    top20("sCsp",       50, extra_fields=["sCsp"]),   # v5.44.1: Sortierfeld mitfuehren
         # ERGÄNZT (09.09.2026, Axel-Entscheidung "Weg 1" statt Frontend-
         # Workaround, nach Fading-Short-lbKey-Debugging vom selben Tag):
         # atmna/weekly_income/collar teilen sich dieselbe CSP-taugliche
@@ -5909,10 +5925,10 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # pending a dedicated collar suitability model — bewusst NICHT jetzt
         # gebaut (Scope-Disziplin, kein drittes Score-Modell ohne konkrete
         # Positionsstruktur-Analyse fuer Collar aus dem Boden stampfen).
-        "options_atmna":  top20("sAtmna",     50),
-        "options_weekly": top20("sCsp",       50),
-        "options_collar": top20("sCsp",       50),  # s. Backlog-Kommentar oben
-        "options_cc":     top20("sCc",        30),
+        "options_atmna":  top20("sAtmna",     50, extra_fields=["sAtmna"]), # v5.44.1
+        "options_weekly": top20("sCsp",       50, extra_fields=["sCsp"]),   # v5.44.1
+        "options_collar": top20("sCsp",       50, extra_fields=["sCsp"]),   # s. Backlog-Kommentar oben; v5.44.1
+        "options_cc":     top20("sCc",        30, extra_fields=["sCc"]),    # v5.44.1
         "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct", "vcpVolContraction", "vcpBreakoutVol"]),
         "long_dividend":  top20("sDividend",  35, extra_fields=["divYield", "payoutRatio", "fcfYield", "roe", "ownerEarningsYield"]),   # Backlog #13b, ownerEarningsYield ERGAENZT 09.09.2026
         "long_value":     top20("sValue",     35, extra_fields=["peForward", "pb", "fcfYield", "roe", "analystUpside", "ownerEarningsYield"]),  # Backlog #13b, ownerEarningsYield ERGAENZT 09.09.2026
