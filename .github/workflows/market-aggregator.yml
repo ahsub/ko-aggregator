@@ -1,6 +1,38 @@
-# Workflow-Version: v1.5 (vorheriger, unversionierter Stand = implizit v1.0)
+# Workflow-Version: v1.6 (vorheriger, unversionierter Stand = implizit v1.0)
 #
 # CHANGELOG (neueste zuerst):
+# v1.6 (29.09.2026, Claude + Axel): Snapshots nur noch PRIVAT archivieren.
+#     Befund (belegt am Snapshot 2026-09-29_01.json.gz): der bisher ins
+#     OEFFENTLICHE Repo committete master_market_data enthielt interne Felder,
+#     die der Worker ko-sync fuer Nicht-Owner gezielt entfernt (Legal-Audit
+#     №61): masterShortlist[].ki (positionPct, leverageRec, stopLoss, target,
+#     trigger, crv, holdingDays, direction), optionsWatchlist[].ki_eic
+#     (strikeSuggestion, deltaTarget, dte, premiumEstimate) sowie das
+#     vollstaendige DCE-Objekt (direction, position_size; ADR-1). Der Worker-
+#     Filter wurde ueber das Git-Archiv und das Workflow-Artefakt vollstaendig
+#     umgangen. Aenderungen:
+#     (1) NEU Step "Snapshot ins private Archiv (uiq-archive)": pusht jeden
+#         neuen Snapshot per Deploy Key (Secret ARCHIVE_DEPLOY_KEY, nur Repo
+#         ahsub/uiq-archive, Schreibrecht) in das private Repo; GitHub-
+#         Hostschluessel fest verankert; blob-loser Klon + Plumbing-Commit,
+#         damit das unbegrenzt wachsende Archiv nie heruntergeladen wird;
+#         Zugriffs-/Push-Fehler brechen den Step ROT ab (kein stilles
+#         Nicht-Archivieren). Lokal getestet: Erfolg, Idempotenz, abgewiesener
+#         Push, nicht erreichbares Ziel, fehlendes Secret, leerer Ordner.
+#     (2) Step "Archive committen": data/snapshots wird nicht mehr oeffentlich
+#         committet und per `git rm --cached` aus dem Repo-Stand entfernt
+#         (idempotent; Dateien bleiben auf dem Runner). Die Git-HISTORIE
+#         bleibt unveraendert (Entscheidung offen, s. SUITE №73).
+#     (3) Step "Upload artifact" entfernt: das Artefakt (volles
+#         master_market_data.json, 7 Tage) war bei einem oeffentlichen Repo
+#         fuer jeden eingeloggten GitHub-Nutzer herunterladbar.
+#     Bestand 22.07.–29.09.2026 (175 Dateien) vorab nach uiq-archive
+#     uebernommen (Commit df3921f, Blob-Vergleich gegen Quelle identisch).
+#     Nicht betroffen: Aggregator-Code, Digest, KV-Ausgaben, Cron-Zeit —
+#     reine Infrastruktur-Aenderung am Archivpfad (Grundregel 8: keine
+#     Aenderung an Output-Pfaden). Bekannte Grenze: schlaegt der Archiv-Push
+#     fehl, ist der Snapshot dieses Laufs nirgends archiviert (Job rot,
+#     KV haelt nur den aktuellen Stand).
 # v1.5 (23.09.2026, Claude + Axel): `concurrency`-Guard ergaenzt. Root Cause
 #     (belegt, nicht vermutet — Axel-Bestaetigung): zwei Laeufe wurden
 #     versehentlich kurz hintereinander manuell getriggert, der zweite lief
@@ -251,7 +283,88 @@ jobs:
           TR_BACKUP_FORCE: ${{ github.event.inputs.force_backup == 'true' && '1' || '0' }}
         run: python tr_backup.py
 
-      - name: Archive committen (tr-Backup + FIN-Archiv + Snapshots, Git-History = Archiv)
+      - name: Snapshot ins private Archiv (uiq-archive)
+        # NEU v1.6 (29.09.2026): vollstaendige Snapshots enthalten interne
+        # Felder (DCE, KI-Positionsgroessen, EIC) und gehoeren NICHT ins
+        # oeffentliche Repo. Vor dem oeffentlichen Commit-Step, damit ein
+        # Archiv-Fehler im Log direkt vor dem Commit sichtbar ist.
+        if: always()
+        env:
+          ARCHIVE_DEPLOY_KEY: ${{ secrets.ARCHIVE_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          ARCHIVE_URL="${ARCHIVE_URL:-git@github.com:ahsub/uiq-archive.git}"
+          snaps=(data/snapshots/*.json.gz)
+          if [ ${#snaps[@]} -eq 0 ]; then
+            echo "::warning::Kein Snapshot unter data/snapshots/ - nichts zu archivieren (Aggregator-Schritt pruefen)"
+            exit 0
+          fi
+
+          if [ "${SKIP_SSH:-0}" != "1" ]; then
+            if [ -z "${ARCHIVE_DEPLOY_KEY:-}" ]; then
+              echo "::error::Secret ARCHIVE_DEPLOY_KEY fehlt oder ist leer"
+              exit 1
+            fi
+            keyfile="$RUNNER_TEMP/archive_key"
+            trap 'rm -f "$keyfile"' EXIT
+            printf '%s\n' "$ARCHIVE_DEPLOY_KEY" > "$keyfile"
+            chmod 600 "$keyfile"
+            # GitHub-Hostschluessel fest verankert (docs.github.com, "GitHub's SSH key
+            # fingerprints", Ed25519 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU)
+            echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$RUNNER_TEMP/archive_known_hosts"
+            export GIT_SSH_COMMAND="ssh -i $keyfile -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/archive_known_hosts"
+          fi
+
+          if ! git ls-remote "$ARCHIVE_URL" HEAD >/dev/null; then
+            echo "::error::Kein Zugriff auf uiq-archive - Deploy Key passt nicht zum Secret ARCHIVE_DEPLOY_KEY, fehlt in uiq-archive oder GitHub nicht erreichbar"
+            exit 1
+          fi
+
+          archive_once() {
+            # Frischer, blob-loser Klon (--filter=blob:none): laedt nur Commit + Baeume,
+            # keine vorhandenen Snapshots - das Archiv waechst unbegrenzt. Commit
+            # ausschliesslich ueber Plumbing mit Objekt-IDs; Porcelain-"git commit" und
+            # "write-tree" ohne --missing-ok wuerden alle Alt-Blobs nachladen (lokal
+            # nachgewiesen 29.09.2026). Vorhandene Archiv-Dateien werden nie
+            # ueberschrieben oder entfernt.
+            local arch="$RUNNER_TEMP/uiq-archive"
+            # absoluter Quellpfad: "git -C <archiv>" loest relative Pfade im Klon auf
+            local src_dir="$(pwd)/data/snapshots"
+            rm -rf "$arch"
+            git clone -q --depth 1 --filter=blob:none --no-checkout "$ARCHIVE_URL" "$arch" || return 1
+            git -C "$arch" read-tree HEAD || return 1
+            added=()
+            for f in "${snaps[@]}"; do
+              local name="data/snapshots/$(basename "$f")"
+              if git -C "$arch" ls-files --error-unmatch "$name" >/dev/null 2>&1; then
+                continue
+              fi
+              local blob
+              blob=$(git -C "$arch" hash-object -w -- "$src_dir/$(basename "$f")") || return 1
+              git -C "$arch" update-index --add --cacheinfo "100644,$blob,$name" || return 1
+              added+=("$(basename "$f")")
+            done
+            if [ ${#added[@]} -eq 0 ]; then
+              echo "Archiv bereits aktuell - keine neuen Snapshots"
+              return 0
+            fi
+            local tree commit
+            tree=$(git -C "$arch" write-tree --missing-ok) || return 1
+            commit=$(git -C "$arch" -c user.name="uiq-nightly" -c user.email="actions@users.noreply.github.com" \
+              commit-tree "$tree" -p HEAD -m "snapshot: ${added[*]} (ko-aggregator run ${GITHUB_RUN_NUMBER:-lokal})") || return 1
+            git -C "$arch" push -q origin "$commit:refs/heads/main" || return 1
+            echo "OK archiviert in uiq-archive: ${added[*]} (Commit ${commit:0:7})"
+          }
+
+          # Hinweis: set -e wirkt in einer per "||" aufgerufenen Funktion NICHT - deshalb
+          # in archive_once jeder kritische Befehl mit explizitem "|| return 1".
+          # Zweiter Versuch mit frischem Klon, falls der Push abgewiesen wird
+          # (z.B. zwischenzeitlicher Commit im Archiv). Kein rebase im blob-losen Klon.
+          archive_once || { echo "::warning::Erster Archiv-Push fehlgeschlagen - zweiter Versuch mit frischem Klon"; sleep 5; archive_once; }
+
+      - name: Archive committen (tr-Backup + FIN-/IV-/Breadth-Archiv; Snapshots nur privat)
         if: always()
         run: |
           git config user.name "uiq-nightly"
@@ -260,16 +373,12 @@ jobs:
           [ -d data/fundamentals ] && git add data/fundamentals || true
           [ -d data/iv_history ] && git add data/iv_history || true
           [ -d data/breadth_history ] && git add data/breadth_history || true
-          # Rolling-Window-Snapshots (v5.16.0): gzip'd master_market_data, 90-Tage-Fenster
-          # Gelöschte Snapshots (>90 Tage) via git rm entfernen
-          [ -d data/snapshots ] && git add data/snapshots/ || true
-          git ls-files --deleted data/snapshots/ | xargs -r git rm --cached
-          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup/FIN-Archiv/Snapshots $(date -u +%F)" && git push)
+          # v1.6 (29.09.2026): Snapshots NICHT mehr oeffentlich committen (s. Step
+          # "Snapshot ins private Archiv"). Einmalig und danach idempotent aus dem
+          # Repo-Stand entfernen; Dateien bleiben auf dem Runner, Historie unberuehrt.
+          git rm -r -q --cached --ignore-unmatch data/snapshots
+          git diff --cached --quiet || (git pull --rebase --autostash && git commit -m "archive: tr-Backup/FIN-Archiv $(date -u +%F)" && git push)
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: master-market-data-${{ github.run_number }}
-          path: master_market_data.json
-          retention-days: 7
+      # v1.6 (29.09.2026): Step "Upload artifact" entfernt — das Artefakt
+      # (volles master_market_data.json) war bei einem oeffentlichen Repo fuer
+      # jeden eingeloggten GitHub-Nutzer herunterladbar. Ersatz: uiq-archive.
