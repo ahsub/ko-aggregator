@@ -1,4 +1,12 @@
-// ko-sync-worker.js v2.4
+// ko-sync-worker.js v2.5
+//
+// ÄNDERUNG v2.5 (30.09.2026, Claude + Axel, SUITE №72 / Runmap 2 Nacht A, ADR-1):
+// DCE-Trennung. (1) sanitizeMasterMarketData() entfernt für Nicht-Owner zusätzlich
+// das interne DCE-Objekt `dce` und `meta.dce_cusum_buffer` (zweite Sicherung; der
+// Aggregator v5.46.0 schreibt beides ohnehin nicht mehr in master_market_data).
+// `dce_public` (Whitelist-Schema) bleibt öffentlich. (2) NEU: GET /owner/dce liefert
+// den KV-Key `dce_internal` (volles internes DCE-Objekt) ausschließlich mit OWNER_TOKEN.
+// Keine Änderung an Token-Isolation, /sync/* oder anderen /public/*-Routen.
 // Cloudflare Worker — KV-Sync für UnderlyingIQ mit Token-Isolation
 //
 // VERSIONSHINWEIS (13.09.2026, Claude+Axel): dieser Datei-Kopf sprang bisher
@@ -67,6 +75,7 @@
 // Endpoints:
 //   GET  /public/master_market_data     → öffentlich (Bearer-Token), sanitisiert für Nicht-Owner
 //   GET  /public/options_watchlist      → öffentlich (Bearer-Token), sanitisiert für Nicht-Owner
+//   GET  /owner/dce                     → NUR Owner-Token: internes DCE-Objekt (KV dce_internal), v2.5
 //   GET  /public/daily_market_snapshot  → öffentlich (Bearer-Token)
 //   GET  /public/daily_market_snapshot_us → öffentlich (Bearer-Token)
 //   GET  /public/digest                 → öffentlich (Bearer-Token)
@@ -140,6 +149,11 @@ function sanitizeMasterMarketData(obj) {
   if (obj && Array.isArray(obj.optionsWatchlist)) {
     obj.optionsWatchlist = obj.optionsWatchlist.map(sanitizeOptionsItem);
   }
+  // v2.5 (ADR-1): internes DCE-Objekt und sein CUSUM-Puffer nie an Nicht-Owner
+  if (obj && typeof obj === 'object') {
+    delete obj.dce;
+    if (obj.meta && typeof obj.meta === 'object') delete obj.meta.dce_cusum_buffer;
+  }
   return obj;
 }
 
@@ -206,6 +220,31 @@ export default {
         parsed = sanitizeMasterMarketData(parsed);
         return new Response(JSON.stringify(parsed), {
           headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=300' }
+        });
+      } catch(e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: cors });
+      }
+    }
+
+    // ── GET /owner/dce — NUR Owner-Token (v2.5, 30.09.2026, ADR-1) ─────────────
+    // Internes DCE-Objekt (confidence, mode, direction, position_size, warnings, ...).
+    // Nicht-Owner (auch gültiger STATIC_TOKEN) erhalten 403; kein Cache.
+    if (path === '/owner/dce' && request.method === 'GET') {
+      const { isValid, isOwner } = checkPublicAuth();
+      if (!isValid) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: cors });
+      }
+      if (!isOwner) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
+      }
+      try {
+        const raw = await env.KO_SYNC_KV.get('dce_internal', { type: 'text' });
+        if (!raw) {
+          return new Response(JSON.stringify({ error: 'dce_internal nicht im KV' }),
+            { status: 404, headers: cors });
+        }
+        return new Response(raw, {
+          headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }
         });
       } catch(e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: cors });
