@@ -1306,7 +1306,16 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.44.1"
+AGGREGATOR_VERSION = "5.45.0"
+# v5.45.0 (30.09.2026): SUITE №72, P1 #2 "Spitzengruppe" (Axel-Entscheidung
+# 29.09.2026) — Gleichstandsgroesse der Options-Leaderboards ausweisen.
+# Neu: master["leaderboardMeta"][<options_*>] = {rankField, minScore,
+# candidatesAtOrAboveMin, topScore, topTieCount}. Gezaehlt wird VOR der
+# Kuerzung auf 20 Zeilen (top20() kappt; die Leaderboard-Zeilen allein
+# zeigen daher nur "mindestens 20"). Rein ADDITIV: leaderboards,
+# masterShortlist, Reihenfolge, Filter und Scores bleiben unveraendert
+# (Test: tests/test_leaderboard_meta.py). Kein Tie-Breaker — der wird
+# gesondert entschieden.
 # v5.44.1 (29.09.2026, Claude + Axel, SUITE №72 Folgeaudit Teil 2, Befund G1):
 # Ranking-Score der Options-Leaderboards wird jetzt mitgeliefert. Root Cause
 # (belegt, nicht vermutet): top20() fuehrt sCsp/sAtmna/sCc nicht in _core,
@@ -5810,7 +5819,23 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         })
 
     # ── LEADERBOARDS (Top 20 je Strategie) ───────────────────────────────────
-    def top20(key, min_score=35, extra_fields=None):
+    _lb_meta = {}
+
+    def _record_tie_meta(name, key, min_score):
+        # v5.45.0: Gleichstandsgroesse VOR der 20er-Kuerzung (s. Changelog).
+        qualified = [x[key] for x in scored if x[key] >= min_score]
+        top = max(qualified) if qualified else None
+        _lb_meta[name] = {
+            "rankField": key,
+            "minScore": min_score,
+            "candidatesAtOrAboveMin": len(qualified),
+            "topScore": top,
+            "topTieCount": sum(1 for v in qualified if v == top) if qualified else 0,
+        }
+
+    def top20(key, min_score=35, extra_fields=None, meta_name=None):
+        if meta_name:
+            _record_tie_meta(meta_name, key, min_score)
         # Kern-Felder: für alle Strategien relevant für KI-Analyse
         # (v5.18.0, 22.07.2026): MACD, OBV, volRatio, HVP, EMA50/200, pctFromHigh52
         # ergänzt — waren bisher nicht im LB-Eintrag, KI-Prompt sagte "Daten fehlen"
@@ -5885,7 +5910,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         "short_breakdown":top20("sBreakdown", 35),
         "short_fading":   top20("sFading",    35),
         "ko_long":        top20("sKoLong",    50),
-        "options_csp":    top20("sCsp",       50, extra_fields=["sCsp"]),   # v5.44.1: Sortierfeld mitfuehren
+        "options_csp":    top20("sCsp",       50, extra_fields=["sCsp"], meta_name="options_csp"),   # v5.44.1: Sortierfeld mitfuehren
         # ERGÄNZT (09.09.2026, Axel-Entscheidung "Weg 1" statt Frontend-
         # Workaround, nach Fading-Short-lbKey-Debugging vom selben Tag):
         # atmna/weekly_income/collar teilen sich dieselbe CSP-taugliche
@@ -5925,10 +5950,10 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
         # pending a dedicated collar suitability model — bewusst NICHT jetzt
         # gebaut (Scope-Disziplin, kein drittes Score-Modell ohne konkrete
         # Positionsstruktur-Analyse fuer Collar aus dem Boden stampfen).
-        "options_atmna":  top20("sAtmna",     50, extra_fields=["sAtmna"]), # v5.44.1
-        "options_weekly": top20("sCsp",       50, extra_fields=["sCsp"]),   # v5.44.1
-        "options_collar": top20("sCsp",       50, extra_fields=["sCsp"]),   # s. Backlog-Kommentar oben; v5.44.1
-        "options_cc":     top20("sCc",        30, extra_fields=["sCc"]),    # v5.44.1
+        "options_atmna":  top20("sAtmna",     50, extra_fields=["sAtmna"], meta_name="options_atmna"), # v5.44.1
+        "options_weekly": top20("sCsp",       50, extra_fields=["sCsp"], meta_name="options_weekly"),   # v5.44.1
+        "options_collar": top20("sCsp",       50, extra_fields=["sCsp"], meta_name="options_collar"),   # s. Backlog-Kommentar oben; v5.44.1
+        "options_cc":     top20("sCc",        30, extra_fields=["sCc"], meta_name="options_cc"),    # v5.44.1
         "vcp_setups":     top20("sVcp",       40, extra_fields=["vcpContractions", "vcpLastPct", "vcpVolContraction", "vcpBreakoutVol"]),
         "long_dividend":  top20("sDividend",  35, extra_fields=["divYield", "payoutRatio", "fcfYield", "roe", "ownerEarningsYield"]),   # Backlog #13b, ownerEarningsYield ERGAENZT 09.09.2026
         "long_value":     top20("sValue",     35, extra_fields=["peForward", "pb", "fcfYield", "roe", "analystUpside", "ownerEarningsYield"]),  # Backlog #13b, ownerEarningsYield ERGAENZT 09.09.2026
@@ -6118,6 +6143,7 @@ def build_leaderboards(results: list, market_regime: str = "NEUTRAL") -> dict:
 
     return {
         "leaderboards":   leaderboards,
+        "leaderboardMeta": _lb_meta,   # v5.45.0
         "masterShortlist": master_shortlist,
         "regimeUsed":     regime_upper,
         "timestamp":      datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -11253,6 +11279,7 @@ def main():
     log.info(f"  [DIAG] results[0:3] ema50: {_sample_ema}")
     # ── ENDE DIAGNOSE ────────────────────────────────────────────────────────
     leaderboards_obj  = strategy_data["leaderboards"]
+    leaderboard_meta  = strategy_data.get("leaderboardMeta", {})   # v5.45.0
     master_shortlist  = strategy_data["masterShortlist"]
     log.info(f"\n🤖 KI-Enrichment Master Shortlist ({len(master_shortlist)} Kandidaten)...")
     if _ant_key:
@@ -11447,6 +11474,7 @@ def main():
 
     # Leaderboards + Shortlist in master dict einfuegen
     master["leaderboards"]     = leaderboards_obj
+    master["leaderboardMeta"]  = leaderboard_meta    # v5.45.0 (Spitzengruppe, additiv)
     master["masterShortlist"]  = master_shortlist
     master["optionsWatchlist"] = options_watchlist   # Top-50 Options-Kandidaten (täglich)
     master["multilegPrefilter"] = {                  # Stufe 1 (Sieb), 24.08.2026
