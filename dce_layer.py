@@ -488,6 +488,7 @@ class DecisionConfidenceEngine:
             "direction":     "HOLD",
             "regime":        self.current_regime,
             "regime_probs":  {},
+            "fallback":      True,   # v5.46.0: intern gekennzeichnet, nie oeffentlich als Signal
             "var_95":        -0.05,
             "cusum_alarm":   False,
             "aggregated":    {},

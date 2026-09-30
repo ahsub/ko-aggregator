@@ -1306,7 +1306,24 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.45.0"
+AGGREGATOR_VERSION = "5.46.0"
+# v5.46.0 (30.09.2026): SUITE №72 / Runmap 2 (Batch 1b, Nacht A), ADR-1 —
+# DCE-Trennung (nur Feldfluss, KEINE Aenderung der Messlogik, Scores oder
+# Filter). Entscheidungen Axel + Review 30.09.2026:
+#  (1) Das interne DCE-Objekt (confidence, mode, direction, position_size,
+#      warnings, ...) verlaesst den Aggregator nicht mehr oeffentlich:
+#      master_market_data.json (Generator-Eingang) und KV master_market_data
+#      erhalten eine Kopie OHNE `dce` und OHNE meta.dce_cusum_buffer, dafuer
+#      mit `dce_public` (Whitelist, dce_public.py). Das volle Objekt geht in
+#      den eigenen KV-Key `dce_internal` (Worker: GET /owner/dce, nur Owner)
+#      und bleibt im PRIVATEN Archiv-Snapshot erhalten.
+#  (2) dce_public Stufe 1: nur Signalbreite; CUSUM und VaR = n/v mit Ursache
+#      (Befund: CUSUM-Statistik ist mathematisch immer 0 und der Puffer wird
+#      nie persistiert; der EVT-Zweig laeuft bei n=60 nie). Keine Korrektur
+#      hier — eigenes Paket mit Praeregistrierung (SUITE №75).
+#  (3) Fallback-DCE wird intern mit fallback: true gekennzeichnet und nie als
+#      Signal in dce_public uebernommen.
+# Test: tests/test_dce_public.py
 # v5.45.0 (30.09.2026): SUITE №72, P1 #2 "Spitzengruppe" (Axel-Entscheidung
 # 29.09.2026) — Gleichstandsgroesse der Options-Leaderboards ausweisen.
 # Neu: master["leaderboardMeta"][<options_*>] = {rankField, minScore,
@@ -11563,6 +11580,7 @@ def main():
             "confidence": 50, "mode": "YELLOW",
             "position_size": 0.5, "direction": "HOLD",
             "regime": market_regime_str,
+            "fallback": True,  # v5.46.0: intern gekennzeichnet, nie oeffentlich als Signal
             "warnings": [f"DCE-Fehler: {str(_dce_err)}"],
         }
 
@@ -11673,9 +11691,14 @@ def main():
     log.info(f"   Top40 Long: {len(top40_long)} | Mean Reversion: {len(mean_reversion)}")
 
     # 7. Lokales Backup
+    # v5.46.0: Datei (Generator-Eingang) und KV erhalten die oeffentliche Kopie ohne
+    # internes DCE-Objekt; `master` selbst bleibt voll (privates Archiv-Snapshot).
+    from dce_public import split_public_master
+    master_public = split_public_master(master)
+    master["dce_public"] = master_public["dce_public"]  # auch im privaten Snapshot (Abgleich mit Digest)
     with open("master_market_data.json", "w", encoding="utf-8") as f:
-        json.dump(_json_safe(master), f, ensure_ascii=False, separators=(",", ":"))
-    log.info(f"   💾 Lokal gespeichert: master_market_data.json")
+        json.dump(_json_safe(master_public), f, ensure_ascii=False, separators=(",", ":"))
+    log.info(f"   💾 Lokal gespeichert: master_market_data.json (oeffentliche Kopie, ohne internes DCE)")
 
     # 7b. Rolling-Window-Archiv: master_market_data gzip'd ins data/snapshots/ Verzeichnis
     # (v5.16.0, 22.07.2026): 90-Tage-Rolling-Window für Cross-Repo-Nutzung.
@@ -11709,7 +11732,11 @@ def main():
 
     # 8. Cloudflare KV Upload
     log.info(f"\n☁️  Cloudflare KV Upload...")
-    push_to_cloudflare_kv(master, key="master_market_data")
+    push_to_cloudflare_kv(master_public, key="master_market_data")
+    # v5.46.0: internes DCE-Objekt in eigenen Key (Worker: nur Owner-Token)
+    if master.get("dce") is not None:
+        if not push_to_cloudflare_kv(master["dce"], key="dce_internal"):
+            log.warning("   dce_internal: KV-Upload fehlgeschlagen (Owner-Ansicht ohne DCE bis zum naechsten Lauf)")
 
     # Degraded-Status zuruecksetzen (Backlog №35-Vervollstaendigung, 24.08.2026):
     # dieser Lauf war erfolgreich (wir sind hier, weil der 50%-Valid-Check oben
