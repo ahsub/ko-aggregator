@@ -1306,15 +1306,7 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.47.0"
-# v5.47.0 (01.10.2026): SUITE №72, P1 #3 Schritt 1 (Axel-Entscheidung 01.10.2026) —
-# Earnings-Zustand sichtbar machen (Befund D16: earningsDTE = None heisst "nicht
-# abgefragt", nicht "keine Earnings"; 116 von 200 abgefragten Daten sind
-# vergangen). Neu, rein ADDITIV: Feld `earningsStatus` je Ticker (earnings_status.py:
-# KNOWN_FUTURE | STALE_PAST | NOT_QUERIED | NO_DATE | LOOKUP_ERROR) und
-# compute_earnings_calendar() liefert zusaetzlich `earningsLookup` (OK|NO_DATE|ERROR).
-# UNVERAENDERT (Test: tests/test_earnings_status.py): earningsDTE, alle Scores,
-# _earnings_gate(), Leaderboards, Kandidatenauswahl, die 200er-Abfragegrenze.
+AGGREGATOR_VERSION = "5.46.0"
 # v5.46.0 (30.09.2026): SUITE №72 / Runmap 2 (Batch 1b, Nacht A), ADR-1 —
 # DCE-Trennung (nur Feldfluss, KEINE Aenderung der Messlogik, Scores oder
 # Filter). Entscheidungen Axel + Review 30.09.2026:
@@ -4816,8 +4808,7 @@ def compute_earnings_calendar(sym: str) -> dict:
     Fallback: get_earnings_dates() für nächste 90 Tage.
     """
     _empty = {"earningsDate": None, "earningsDTE": None,
-              "earningsEPS": None, "earningsRevEst": None,
-              "earningsLookup": "NO_DATE"}  # v5.47.0: additiv; Quelle lieferte kein Datum
+              "earningsEPS": None, "earningsRevEst": None}
     try:
         from datetime import date as _date, datetime as _dt, timezone as _tz
         import yfinance as _yf
@@ -4861,13 +4852,11 @@ def compute_earnings_calendar(sym: str) -> dict:
             "earningsDTE":    dte,
             "earningsEPS":    eps_est,
             "earningsRevEst": None,  # nicht zuverlässig via .info
-            "earningsLookup": "OK",  # v5.47.0
         }
     except Exception as _e:
         log.debug(f"compute_earnings_calendar({sym}) Fehler: {_e}")
         return {"earningsDate": None, "earningsDTE": None,
-                "earningsEPS": None, "earningsRevEst": None,
-                "earningsLookup": "ERROR"}  # v5.47.0: Ausnahme, nicht "kein Datum"
+                "earningsEPS": None, "earningsRevEst": None}
 
 
 def calc_ios_market_score(hist_data: dict, vix_term: dict = None) -> dict:
@@ -6999,7 +6988,6 @@ def process_ticker(ticker, hist_df):
         result["earningsDTE"]    = None
         result["earningsEPS"]    = None
         result["earningsRevEst"] = None
-        result["earningsStatus"] = "NOT_QUERIED"  # v5.47.0: Platzhalter bis zur Abfrage (D16)
 
         # Fibonacci-Screening-Modul v1.0 (Gemini-Blueprint) — direkt anhängen
         result.update(calc_fibonacci_levels(result))
@@ -10681,7 +10669,6 @@ def main():
 
     _earn_ok = 0
     _earn_skip = 0
-    from earnings_status import classify_earnings as _classify_earn
     for _r in _earn_candidates:
         _sym = _r.get("sym")
         _earn = compute_earnings_calendar(_sym)
@@ -10689,15 +10676,11 @@ def main():
         _r["earningsDTE"]    = _earn.get("earningsDTE")
         _r["earningsEPS"]    = _earn.get("earningsEPS")
         _r["earningsRevEst"] = _earn.get("earningsRevEst")
-        _r["earningsStatus"] = _classify_earn(True, _earn.get("earningsLookup"), _earn.get("earningsDTE"))  # v5.47.0
         if _earn.get("earningsDate"):
             _earn_ok += 1
         else:
             _earn_skip += 1
     log.info(f"   [Earnings] ✅ {_earn_ok} Dates gefunden, {_earn_skip} ohne Datum")
-    # v5.47.0: Zustandsverteilung ueber ALLE Ergebnisse (additiv, nur Log)
-    from collections import Counter as _Cnt
-    log.info(f"   [Earnings] Status: {dict(_Cnt(r.get('earningsStatus') for r in results))}")
     # ── Ende Earnings Calendar ────────────────────────────────────────────────────────────────
 
     # ── IV-PERZENTIL-DATEN (06./07.09.2026, Axel-Fund) ──────────────────────────────────────

@@ -209,10 +209,6 @@ jobs:
           # Regime-Tests (SWOT №32, 07.08.2026): schützt Track-Record vor Scoring-Bugs
           # Testet: Ratio-Konventionen, MSE-Klassifikation, History-Flag, v4.3-Regression
           pytest tests/test_regime.py -v --tb=short
-          # Earnings-Zustand (SUITE №72 P1 #3 Schritt 1, v5.47.0, Axel-Entscheidung 01.10.2026):
-          # Die Darstellung des Earnings-Zustands darf Scores, Gates, Rankings und
-          # Leaderboards nicht veraendern (Invarianz). Echtdaten-Fall ohne Snapshot -> skip.
-          pytest tests/test_earnings_status.py -v --tb=short
 
       - name: Run Market Aggregator
         env:
@@ -243,13 +239,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Unit Tests Generator (earnings_state)
-        # SUITE №72 P1 #3 Schritt 1 (Axel-Entscheidung 01.10.2026): earnings_state ist
-        # rein beobachtend; Gate, Auswahl, Rang, Scores und Rationale bleiben unveraendert.
-        # Laeuft gegen denselben UIQ-Suite-Stand, der gleich danach generiert.
-        if: github.event.schedule == env.EOD_RUN_CRON || github.event_name == 'workflow_dispatch'
-        run: node uiq-suite/scripts/test_earnings_state.js
 
       - name: Generate Public Recommendations
         # PRUEFPUNKT (Axel-Entscheidung, 10.09.2026): nach 10 fehlerfreien
