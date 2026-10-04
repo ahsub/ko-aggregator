@@ -25,6 +25,10 @@ from dce_layer import DecisionConfidenceEngine, run_dce, compute_brier_score
 @pytest.fixture
 def market_bull():
     """Ruhiges Bull-Markt-Umfeld."""
+    # Deterministisch seeden (04.10.2026): Ohne Seed lag die Wahrscheinlichkeit, dass das
+    # 1-%-Quantil der 60 Zufallsrenditen unter -2,5 % faellt (-> Ampel YELLOW statt GREEN),
+    # bei ca. 0,28 % je Lauf. Das liess Lauf #343 (04.10.2026) im Test test_green_mode scheitern.
+    np.random.seed(2026)
     return {
         "regime":          "BULL_QUIET",
         "regimeUsed":      "BULL_QUIET",           # Kompatibilität mit market_aggregator
