@@ -37,6 +37,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Abhaengigkeiten installieren
+        # NEU (04.10.2026): tr_backup.py importiert 'requests'; das setup-python-Image bringt es
+        # nicht mit. Ohne diesen Schritt scheiterte jeder Lauf (#1 19.09., #2 26.09., #3 03.10.)
+        # mit ModuleNotFoundError. Gleiche Quelle wie market-aggregator.yml (kein Pinning dort).
+        run: pip install requests
+
       - name: Track-Record Backup
         # TR_BACKUP_FORCE=1: dieser Workflow existiert ausschliesslich fuer
         # den Samstags-Fall — der interne isoweekday()==6-Guard in
