@@ -1306,7 +1306,22 @@ from pathlib import Path
 # ⚠️ Erneut gedriftet: v5.31.0–v5.36.0 (07./08.08.2026) wurden committet,
 # ohne diese Konstante mitzuziehen. Verlaessliche Codestand-Zuordnung im
 # Track Record laeuft seit 12.08.2026 ueber aggSha (GITHUB_SHA) in tr_layer.py.
-AGGREGATOR_VERSION = "5.47.0"
+AGGREGATOR_VERSION = "5.48.0"
+# v5.48.0 (06.10.2026): D26 Variante A-1 (Axel-Entscheidung 06.10.2026) — REIN DIAGNOSTISCH.
+# D26 (P0): in Nacht-/Frueh-Laeufen liefert yfinance eine letzte Tageszeile mit Datum und
+# Volumen, aber Open/High/Low/Close = NaN. Folge in process_ticker(): price = Schluss des
+# Vortags, _dataAsOf und volRatio gehoeren zum Label-Tag (Befundregister, Teil 4;
+# docs/D26-REPARATURENTWURF-2026-10-06.md). Neu, rein ADDITIV und nur BEOBACHTEND:
+#   - je Ticker `_lastRowIncomplete` (Close der letzten Zeile ist NaN) und `_lastCloseDate`
+#     (Datum der letzten Zeile mit gueltigem Close);
+#   - je Lauf `meta.data_integrity` (calc_data_integrity(): Anteile, SPY-Flag, Flags
+#     LAST_ROW_INCOMPLETE / LABEL_AHEAD_OF_TICKER_DATA) plus Logzeilen.
+# UNVERAENDERT (Test: tests/test_data_integrity.py, Golden-Fixture aus v5.47.0): price, volRatio,
+# _dataAsOf, closes/volumes, alle Scores, Leaderboards, Regime, DCE, Track-Record, Breadth,
+# KV-Push, get_last_trading_day(), validate_data_freshness(). KEIN Gate, KEINE Korrektur,
+# KEIN Abbruch, KEIN Unterdruecken von TR oder Public-Output. LABEL_AHEAD_OF_TICKER_DATA ist
+# nur ein Beobachtungsflag (Ursache offen, D27). Die beiden Ticker-Felder stehen bewusst NUR
+# im Ticker-Dict (nicht in scored/top20/_core-Listen, nicht im Prompt).
 # v5.47.0 (01.10.2026): SUITE №72, P1 #3 Schritt 1 (Axel-Entscheidung 01.10.2026) —
 # Earnings-Zustand sichtbar machen (Befund D16: earningsDTE = None heisst "nicht
 # abgefragt", nicht "keine Earnings"; 116 von 200 abgefragten Daten sind
@@ -1740,6 +1755,69 @@ def validate_data_freshness(results):
         log.warning(f"  ⚠ Viele veraltete Daten — möglicher Feiertag oder Datenproblem!")
 
     return str(last_trading_day)
+
+
+# D26-Diagnose (v5.48.0): Schwelle fuer die Lauf-Flags (Anteil der US-Ticker, in %).
+# Archiv (182 Snapshots, 06.10.2026): LAST_ROW_INCOMPLETE 26 Laeufe bei 91,8-97,5 %, alle
+# uebrigen <= 7,9 %, dazwischen kein Lauf; LABEL_AHEAD (seit 13.09.) 11 Laeufe bei 100 %,
+# uebrige <= 2,6 %. 50 % liegt in beiden Faellen in der Mitte der Luecke.
+DATA_INTEGRITY_FLAG_SHARE_PCT = 50.0
+
+
+def calc_data_integrity(results, last_trading_day):
+    """D26-Diagnose (v5.48.0) — REIN BEOBACHTEND, reine Funktion (veraendert `results` nicht).
+
+    Fasst je Lauf zusammen:
+      lastRowIncomplete.us / .nonUs  Anteil der Ticker mit `_lastRowIncomplete == True`
+                                     (US = homeMarket 'US', ohne SPY; Nicht-US getrennt, weil dort die
+                                     unvollstaendige Zeile laenger bleibt und kein Lauf-Flag ausloest)
+      lastRowIncomplete.spy          SPY-Flag (True/False/None)
+      labelAheadOfTickerData.us      Anteil der US-Ticker mit `_dataAsOf != last_trading_day`
+    flags (nur Beobachtung, KEINE Ursachenaussage):
+      LAST_ROW_INCOMPLETE            SPY-Flag gesetzt ODER US-Anteil >= DATA_INTEGRITY_FLAG_SHARE_PCT
+      LABEL_AHEAD_OF_TICKER_DATA     US-Anteil >= DATA_INTEGRITY_FLAG_SHARE_PCT
+    Es gibt weder Gate noch Korrektur; die Funktion wird in main() nur protokolliert und in
+    meta.data_integrity abgelegt. Jede Ausnahme -> leeres Ergebnis ohne Flags."""
+    out = {
+        "schema": "data_integrity/1",
+        "lastRowIncomplete": {
+            "us":    {"n": 0, "of": 0, "sharePct": None},
+            "nonUs": {"n": 0, "of": 0, "sharePct": None},
+            "spy":   None,
+        },
+        "labelAheadOfTickerData": {"us": {"n": 0, "of": 0, "sharePct": None}},
+        "flags": [],
+    }
+    try:
+        us = out["lastRowIncomplete"]["us"]
+        non = out["lastRowIncomplete"]["nonUs"]
+        ahead = out["labelAheadOfTickerData"]["us"]
+        ltd = str(last_trading_day)[:10] if last_trading_day else None
+        for r in (results or []):
+            if not isinstance(r, dict):
+                continue
+            flag = r.get("_lastRowIncomplete")
+            if r.get("sym") == "SPY":
+                out["lastRowIncomplete"]["spy"] = flag if isinstance(flag, bool) else None
+                continue
+            is_us = (r.get("homeMarket") or "US") == "US"
+            grp = us if is_us else non
+            if isinstance(flag, bool):
+                grp["of"] += 1
+                grp["n"] += 1 if flag else 0
+            if is_us and ltd and r.get("_dataAsOf"):
+                ahead["of"] += 1
+                ahead["n"] += 1 if str(r["_dataAsOf"])[:10] != ltd else 0
+        for g in (us, non, ahead):
+            g["sharePct"] = round(100.0 * g["n"] / g["of"], 1) if g["of"] else None
+        if out["lastRowIncomplete"]["spy"] is True or \
+                (us["sharePct"] is not None and us["sharePct"] >= DATA_INTEGRITY_FLAG_SHARE_PCT):
+            out["flags"].append("LAST_ROW_INCOMPLETE")
+        if ahead["sharePct"] is not None and ahead["sharePct"] >= DATA_INTEGRITY_FLAG_SHARE_PCT:
+            out["flags"].append("LABEL_AHEAD_OF_TICKER_DATA")
+    except Exception:
+        return {"schema": "data_integrity/1", "flags": []}
+    return out
 
 # ── TICKER UNIVERSUM ──────────────────────────────────────────────────────────
 # Phase C (24.09.2026): Einzige Quelle der Wahrheit fuer alle statischen
@@ -6743,6 +6821,38 @@ def _derive_home_market(ticker: str) -> str:
     return "US"
 
 
+def _last_row_diag(hist_df):
+    """D26-Diagnose (v5.48.0, rein beobachtend, aendert nichts an hist_df).
+    Rueckgabe (incomplete, last_close_date):
+      incomplete      True, wenn Close der LETZTEN Zeile NaN ist (yfinance-Zeile mit Datum/Volumen,
+                      aber ohne Kurse); False sonst; None, wenn nicht bestimmbar.
+      last_close_date 'YYYY-MM-DD' der letzten Zeile mit gueltigem Close; None, wenn nicht bestimmbar.
+    Praeziser als `_bars_raw - bars >= 1`: das zaehlt auch NaN-Zeilen mitten in der Historie.
+    Jede Ausnahme -> (None, None); die Diagnose darf nie einen Ticker oder Lauf verhindern."""
+    try:
+        if hist_df is None or len(hist_df) == 0:
+            return None, None
+        col = None
+        if "Close" in hist_df.columns:
+            col = hist_df["Close"]
+        else:
+            for c in hist_df.columns:
+                if (c[0] if isinstance(c, tuple) else str(c)) == "Close":
+                    col = hist_df[c]
+                    break
+        if col is None:
+            return None, None
+        if hasattr(col, "columns"):          # MultiIndex-Rest: erste Close-Spalte
+            col = col.iloc[:, 0]
+        last = col.iloc[-1]
+        incomplete = bool(last != last)       # NaN-Test ohne pandas-Import
+        valid = col.dropna()
+        last_close_date = valid.index[-1].strftime("%Y-%m-%d") if len(valid) > 0 else None
+        return incomplete, last_close_date
+    except Exception:
+        return None, None
+
+
 def process_ticker(ticker, hist_df):
     """Berechnet alle Indikatoren für einen Ticker."""
     try:
@@ -6901,6 +7011,8 @@ def process_ticker(ticker, hist_df):
                 pattern_entry = {"pattern": {"ok": False, "reason": str(_pe_err)[:200]},
                                   "entry":   {"ok": False, "reason": str(_pe_err)[:200]}}
 
+        _d26_incomplete, _d26_last_close = _last_row_diag(hist_df)   # v5.48.0, nur beobachtend
+
         result = {
             "sym":           ticker,
             "price":         price,
@@ -6957,6 +7069,9 @@ def process_ticker(ticker, hist_df):
             "avgVol20":      round(avg_vol20) if avg_vol20 else None,  # NEU (21.07.2026): Absolutvolumen-Filter
             "bars":          len(closes),
             "_bars_raw":     len(hist_df) if hist_df is not None else 0,
+            # D26-Diagnose (v5.48.0, rein beobachtend; beeinflusst keine Berechnung):
+            "_lastRowIncomplete": _d26_incomplete,
+            "_lastCloseDate":     _d26_last_close,
             "hvp":           calc_hv_percentile(closes),
             "hv10":          calc_hv_percentile(closes, window=10, lookback=90),
             "updated":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -11149,6 +11264,23 @@ def main():
     last_trading_day = validate_data_freshness(results)
     log.info(f"  Referenz-Handelstag: {last_trading_day}")
 
+    # D26-Diagnose (v5.48.0, REIN BEOBACHTEND): kein Gate, keine Korrektur, kein Abbruch.
+    # Ein Fehler in der Diagnose darf den Produktionslauf nie beeintraechtigen.
+    try:
+        data_integrity = calc_data_integrity(results, last_trading_day)
+        _di_lr = data_integrity["lastRowIncomplete"]
+        _di_ah = data_integrity["labelAheadOfTickerData"]["us"]
+        log.info(f"  [D26-DIAG] Unvollstaendige Letztzeile — US: {_di_lr['us']['n']}/{_di_lr['us']['of']} "
+                 f"({_di_lr['us']['sharePct']} %) · SPY: {_di_lr['spy']} · "
+                 f"Nicht-US: {_di_lr['nonUs']['n']}/{_di_lr['nonUs']['of']} · "
+                 f"Label vor Ticker-Daten (US): {_di_ah['n']}/{_di_ah['of']} ({_di_ah['sharePct']} %)")
+        if data_integrity["flags"]:
+            log.warning(f"  ⚠ [D26-DIAG] Beobachtung: {data_integrity['flags']} — rein diagnostisch, "
+                        f"keine Daten wurden veraendert (s. v5.48.0).")
+    except Exception as _di_err:
+        log.warning(f"  [D26-DIAG] Diagnose uebersprungen (nicht kritisch): {_di_err}")
+        data_integrity = {"schema": "data_integrity/1", "flags": [], "error": str(_di_err)[:120]}
+
     # ── Breadth-Oszillator (McClellan, SUITE.md Backlog #12, 27.07.2026) ──────
     log.info(f"\n📊 Breadth-Oszillator (McClellan)...")
     # MCM-Regime (bereits berechnet) für Breadth-Archiv verwenden — NICHT Ticker-Markov
@@ -11232,6 +11364,7 @@ def main():
             "errors":       len(errors),
             "tickers_ok":   len(results),
             "last_trading_day": str(get_last_trading_day()),
+            "data_integrity":   data_integrity,   # v5.48.0: D26-Diagnose, rein beobachtend
         },
         "market": {
             "dixGex":     dix_gex,
