@@ -1,6 +1,36 @@
-# Workflow-Version: v1.6 (vorheriger, unversionierter Stand = implizit v1.0)
+# Workflow-Version: v1.7b (vorheriger, unversionierter Stand = implizit v1.0)
 #
 # CHANGELOG (neueste zuerst):
+# v1.7b (19.11.2026, Claude + Axel, Kostenstrang A "Workflow-Schalter"):
+#     (Ein erster Entwurf "v1.7" mit reinem ODER aus Eingabe und Variable
+#     wurde nach Review verworfen und nie committet.)
+#     Verdrahtet USE_BATCH_API (generate_public_recommendations.js ab v1.31:
+#     Batch-Pfad mit Sync-Fallback, 10-min-Wartezeit, Schutz gegen 0 Erfolge)
+#     im Step "Generate Public Recommendations". Entscheidung je Ausloeser:
+#       schedule:           Repository-Variable USE_BATCH_API ('true' = Batch).
+#       workflow_dispatch:  neue Eingabe `use_batch_api` mit drei Werten:
+#                           'auto'  (Default) = wie der Nachtlauf, also Variable;
+#                           'true'  = Batch nur fuer diesen Lauf;
+#                           'false' = synchron nur fuer diesen Lauf, auch wenn
+#                                     die Variable 'true' ist.
+#       andere Ereignisse:  synchron.
+#     Begruendung 'auto' als Default: ko-cron-trigger und ko-watchdog starten
+#     den Workflow per REST-Dispatch OHNE Eingaben ({"ref":"main"}); GitHub
+#     setzt dann den Default ein. Diese Laeufe ersetzen den Nachtlauf und
+#     sollen sich deshalb wie er verhalten. Ein manuelles 'false' wird nie
+#     von der Variable ueberstimmt (Review-Befund 19.11.2026 zur ersten
+#     Fassung mit reinem ODER).
+#     Gross-/Kleinschreibung: GitHub vergleicht Strings in Expressions ohne
+#     Beachtung der Gross-/Kleinschreibung; eine Variable 'TRUE' oder 'True'
+#     wirkt daher wie 'true'. An den Generator geht immer genau 'true' oder
+#     'false' (der Generator selbst prueft === 'true').
+#     Aktivierung/Rueckschalten des Nachtlaufs ueber die Variable (Settings ->
+#     Secrets and variables -> Actions -> Variables), ohne Commit und ohne
+#     zweiten Lauf in derselben Nacht (s. Lauf 390). Der Step protokolliert
+#     Modus, Ausloeser, Eingabe und Variable per printf; die Werte kommen
+#     ueber Umgebungsvariablen in die Shell, nicht per Expression ins Skript. Keine Aenderung an Cron, Timeout
+#     (45 min; Budget s. v1.31), anderen Steps, Secrets oder Ausgabepfaden.
+#     Ohne gesetzte Variable und ohne Eingabe 'true': Verhalten wie v1.6.
 # v1.6 (29.09.2026, Claude + Axel): Snapshots nur noch PRIVAT archivieren.
 #     Befund (belegt am Snapshot 2026-09-29_01.json.gz): der bisher ins
 #     OEFFENTLICHE Repo committete master_market_data enthielt interne Felder,
@@ -167,6 +197,15 @@ on:
         options:
           - 'false'
           - 'true'
+      use_batch_api:
+        description: 'Public Digest per Anthropic Message Batches (v1.31): auto = wie Nachtlauf (Repository-Variable USE_BATCH_API), true/false = nur dieser Lauf'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - 'auto'
+          - 'false'
+          - 'true'
 
 jobs:
   aggregate:
@@ -277,7 +316,20 @@ jobs:
           # Code-Fix am selben Handelstag, wie hier am 13.09.2026 noetig)
           # wird jetzt ueber das "Run workflow"-Dropdown moeglich.
           FORCE_REGENERATE: ${{ github.event.inputs.force_regenerate == 'true' && 'true' || 'false' }}
+          # NEU (v1.7b, 19.11.2026): Batch-Modus je Ausloeser, s. Changelog v1.7b.
+          # Vollstaendig geklammert; Ergebnis ist immer 'true' oder 'false'.
+          USE_BATCH_API: ${{ ((github.event_name == 'schedule' && vars.USE_BATCH_API == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_batch_api == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_batch_api == 'auto' && vars.USE_BATCH_API == 'true')) && 'true' || 'false' }}
+          # NEU (v1.7b): nur fuer die Protokollzeile, ueber Umgebungsvariablen
+          # statt direkter Expression-Interpolation im Skript.
+          DIGEST_TRIGGER: ${{ github.event_name }}
+          DIGEST_INPUT_USE_BATCH_API: ${{ github.event.inputs.use_batch_api }}
+          DIGEST_VAR_USE_BATCH_API: ${{ vars.USE_BATCH_API }}
         run: |
+          printf "Digest-Modus: USE_BATCH_API=%s (Ausloeser=%s, Eingabe='%s', Variable='%s')\n" \
+            "$USE_BATCH_API" \
+            "$DIGEST_TRIGGER" \
+            "$DIGEST_INPUT_USE_BATCH_API" \
+            "$DIGEST_VAR_USE_BATCH_API"
           node uiq-suite/scripts/generate_public_recommendations.js
           echo "Exit Code: $?"
 
